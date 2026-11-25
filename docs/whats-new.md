@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **`s100 --version` prints one line.** A nightly build's version, with its
+  "(nightly build, unsupported)" note, is longer than 80 columns, and when
+  the output was redirected it wrapped onto a second line, which broke
+  scripts that read it, such as the container image's smoke test. `--version`
+  and `-v` now print the version as one line whatever the width.
+
 - **SoundCharts keeps its files in your profile on a new Linux account.**
   When `~/.config` or `~/.local/share` didn't exist yet, or `XDG_CONFIG_HOME`
   or `XDG_DATA_HOME` named a new folder, SoundCharts' settings, Library,

@@ -35,9 +35,11 @@ internal static class CliRunner
         }
 
         var updateTask = updateChecker.CheckAsync();
-        var exitCode = CliApp
-            .Build(version.DisplayVersion, commandConsole)
-            .Run(args);
+        var exitCode = args is ["--version"] or ["-v"]
+            ? WriteVersion(version, commandConsole, standardOutput)
+            : CliApp
+                .Build(version.DisplayVersion, commandConsole)
+                .Run(args);
 
         try
         {
@@ -72,6 +74,20 @@ internal static class CliRunner
         }
 
         return exitCode;
+    }
+
+    /// <summary>
+    /// Writes the version as one plain line. Spectre.Console's own version
+    /// option wraps it at the console's width, 80 columns when the output is
+    /// redirected, which split a nightly's version over two lines and broke
+    /// scripts that read it.
+    /// </summary>
+    private static int WriteVersion(CliVersionInfo version, IAnsiConsole? commandConsole, TextWriter? standardOutput)
+    {
+        var writer = commandConsole?.Profile.Out.Writer ?? standardOutput ?? Console.Out;
+        writer.WriteLine(version.DisplayVersion);
+        writer.Flush();
+        return 0;
     }
 
     private static async Task<int> WriteSkillAsync(
