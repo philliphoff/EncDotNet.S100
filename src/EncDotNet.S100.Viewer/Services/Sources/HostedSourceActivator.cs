@@ -107,7 +107,10 @@ internal sealed class HostedSourceActivator : IDisposable
                     return;
                 lock (_lock)
                 {
-                    if (_disposed)
+                    // A newer change replaced this one: with no debounce its
+                    // delay had already ended when it was cancelled, and its
+                    // continuation can run after the newer one's.
+                    if (_disposed || !ReferenceEquals(_debounceCts, cts))
                         return;
                     _views = bounds;
                 }
