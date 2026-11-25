@@ -2,6 +2,7 @@ using System.Diagnostics;
 using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Scripting.LuaCSharp.Diagnostics;
 using Lua;
+using Lua.Runtime;
 
 namespace EncDotNet.S100.Scripting.LuaCSharp;
 
@@ -35,6 +36,71 @@ internal sealed class LuaCSharpLuaContext : ILuaContext
         // The source is its own chunk name, as for Lua's load(): errors show
         // it as [string "first line..."].
         SyncBridge.Execute(_state, source, source, CancellationToken.None);
+    }
+
+    /// <inheritdoc />
+    public void Execute(string source, string chunkName)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrEmpty(source);
+        ArgumentException.ThrowIfNullOrEmpty(chunkName);
+
+        // '@' tells Lua to show the name as is, as for a file.
+        SyncBridge.Execute(_state, source, "@" + chunkName, CancellationToken.None);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Uses Lua-CSharp's host hook (<c>LuaState.SetHook</c> with the
+    /// <c>l</c> mask), which coroutines inherit when they are created. The
+    /// chunk is read from the innermost Lua function on the running thread's
+    /// call stack, the one the line belongs to.
+    /// </remarks>
+    public bool TrySetLineHook(Action<string, int>? hook)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (hook is null)
+        {
+            _state.SetHook(null!, string.Empty, 0);
+            return true;
+        }
+
+        // Consecutive lines are mostly in the same chunk, so the last name
+        // is kept rather than trimmed again for every line.
+        string? lastChunk = null, lastName = null;
+        _state.SetHook(new LuaFunction("linehook", (context, _) =>
+        {
+            if (context.GetArgument(1).TryRead<double>(out var line)
+                && CurrentChunk(context.State) is { } chunk)
+            {
+                if (!ReferenceEquals(chunk, lastChunk))
+                {
+                    lastChunk = chunk;
+                    lastName = chunk.Length > 0 && chunk[0] is '@' or '=' ? chunk[1..] : chunk;
+                }
+
+                hook(lastName!, (int)line);
+            }
+
+            return new ValueTask<int>(context.Return());
+        }), "l", 0);
+        return true;
+    }
+
+    // The chunk name of the innermost Lua function on the thread's call
+    // stack, the one running the line, with Lua's '@' or '=' prefix.
+    private static string? CurrentChunk(LuaState state)
+    {
+        var frames = state.GetCallStackFrames();
+        for (var i = frames.Length - 1; i >= 0; i--)
+        {
+            if (frames[i].Function is LuaClosure closure)
+            {
+                return closure.Proto.ChunkName;
+            }
+        }
+
+        return null;
     }
 
     /// <inheritdoc />

@@ -233,6 +233,59 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         return new LuaPortrayalSession(lua, provider, _productTag, _anchorProvider, _spatialReferences);
     }
 
+    /// <summary>
+    /// Opens a session that portrays chosen features with a line hook
+    /// installed and returns, for each feature, its drawing instructions and
+    /// the lines of the catalogue's rule files that ran
+    /// (<see cref="LuaTraceSession.Trace"/>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The session runs on <paramref name="traceEngine"/>, not on the engine
+    /// this executor renders with, so a map drawn by an engine without a line
+    /// hook can still be traced. Both engines run the same rules over the same
+    /// features. Pass the LuaCSharp engine (<c>LuaEngineFactory.CreateForTracing</c>
+    /// in the <c>EncDotNet.S100</c> package).
+    /// </para>
+    /// <para>
+    /// Rendering never installs the hook: <see cref="ExecuteAsync"/> and
+    /// <see cref="OpenSessionAsync"/> run without it.
+    /// </para>
+    /// </remarks>
+    /// <param name="traceEngine">An engine whose contexts support <see cref="ILuaContext.TrySetLineHook"/>.</param>
+    /// <param name="mariner">The mariner settings, for the context parameters.</param>
+    /// <param name="cancellationToken">Cancels loading the rules.</param>
+    /// <returns>The session; the caller disposes it.</returns>
+    /// <exception cref="NotSupportedException"><paramref name="traceEngine"/> has no line hook.</exception>
+    public async Task<LuaTraceSession> OpenTraceSessionAsync(
+        ILuaEngine traceEngine, MarinerSettings mariner, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(traceEngine);
+        ArgumentNullException.ThrowIfNull(mariner);
+        cancellationToken.ThrowIfCancellationRequested();
+        var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
+        var provider = _providerFactory.Create(mariner);
+        var lua = traceEngine.CreateContext();
+        try
+        {
+            if (!lua.TrySetLineHook(null))
+            {
+                throw new NotSupportedException(
+                    $"The Lua engine {traceEngine.GetType().Name} has no line hook, so it can't trace rules.");
+            }
+
+            Prepare(lua, provider, mariner, luaSources);
+        }
+        catch
+        {
+            lua.Dispose();
+            throw;
+        }
+
+        var session = new LuaPortrayalSession(lua, provider, _productTag, _anchorProvider, _spatialReferences);
+        return new LuaTraceSession(session, lua, luaSources.Keys);
+    }
+
     private (IReadOnlyList<EmittedInstruction> Emitted, ILuaDataProvider Provider) ExecuteRawCore(
         MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources, CancellationToken cancellationToken)
     {
@@ -331,7 +384,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
             throw new InvalidOperationException(
                 $"{_productTag} portrayal catalogue is missing required rule file 'main.lua'.");
         }
-        ExecuteScript(lua, mainSource, "main.lua");
+        ExecuteScript(lua, mainSource, "main.lua", chunkName: "main.lua");
 
         // 4. Run the provider's post-load shims/patches, in order.
         var shimIndex = 0;
@@ -402,11 +455,18 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         }
     }
 
-    private void ExecuteScript(ILuaContext lua, string source, string what)
+    private void ExecuteScript(ILuaContext lua, string source, string what, string? chunkName = null)
     {
         try
         {
-            lua.Execute(source);
+            if (chunkName is null)
+            {
+                lua.Execute(source);
+            }
+            else
+            {
+                lua.Execute(source, chunkName);
+            }
         }
         catch (Exception ex)
         {

@@ -41,7 +41,9 @@ object? sum = lua.Call("add", 2, 3);
   sets globals, and calls functions. `SetModuleLoader` supplies the source for
   Lua `require()` calls, for example from a portrayal catalogue's rule files.
   `CallCancellable` stops a running call when its `CancellationToken` is
-  cancelled.
+  cancelled. `TrySetLineHook` installs a hook called before each new line of
+  Lua runs, with the chunk's name and the line number; this engine supports
+  it, MoonSharp doesn't.
 - `LuaEngineKind` and `LuaEngineKinds` (namespace `EncDotNet.S100.Scripting`)
   name the engines, for a host that lets the user choose one.
   `LuaEngineFactory` in the [`EncDotNet.S100`](../EncDotNet.S100/README.md)
@@ -56,6 +58,16 @@ Host functions are .NET delegates passed to `SetGlobal`. The common
 `Func`/`Action` shapes over `double`, `string` and reference types are called
 directly; any other delegate works through `Delegate.DynamicInvoke`, which is
 slower. A missing or `nil` argument becomes the parameter type's default.
+
+The line hook uses Lua-CSharp's `LuaState.SetHook` with the `l` mask. It
+names the chunk of the innermost Lua function on the running thread's call
+stack: a module is named after `require`'s argument with `.lua` added, for
+example `TOPMAR02.lua`, and a chunk run by `Execute(source, chunkName)` after
+`chunkName`. Coroutines created after the hook is installed inherit it.
+Nothing is installed until a caller asks, so rendering pays nothing for it;
+`LuaRuleExecutor.OpenTraceSessionAsync` in
+[`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md) uses it to record
+which lines of a portrayal rule ran.
 
 An error description from `DescribeError` ends with the Lua stack, whose lines
 give the chunk and line, for example `PortrayalAPI.lua:121`. Module chunks are
