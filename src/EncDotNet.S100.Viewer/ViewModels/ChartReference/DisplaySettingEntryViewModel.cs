@@ -114,7 +114,7 @@ internal sealed class DisplaySettingEntryViewModel : ReferenceEntryViewModel
         Current = _currentValue is { } value
             ? string.Format(CultureInfo.CurrentCulture, Strings.Reference_Current, value)
             : null;
-        _currentNumber = mariner is not null && ProbeOutcomes.TryNumber(ReferenceTargets.Value(mariner, _setting.Code), out var n) ? n : null;
+        _currentNumber = mariner is not null && ProbeParts.TryNumber(ReferenceTargets.Value(mariner, _setting.Code), out var n) ? n : null;
         OnPropertyChanged(nameof(CanChange));
         OnPropertyChanged(nameof(BeforeAfterNote));
         Relabel();
@@ -123,7 +123,7 @@ internal sealed class DisplaySettingEntryViewModel : ReferenceEntryViewModel
     // A number's pairs say the values either side of the one set now.
     private void Relabel()
     {
-        if (IsToggle || !ProbeOutcomes.TryNumber(_setting.Default, out var probedAt))
+        if (IsToggle || !ProbeParts.TryNumber(_setting.Default, out var probedAt))
             return;
         var now = _currentNumber ?? probedAt;
         foreach (var pair in BeforeAfter.SelectMany(g => g.Pairs))
@@ -144,7 +144,7 @@ internal sealed class DisplaySettingEntryViewModel : ReferenceEntryViewModel
         if (Index.Probes is not { } probes)
             return [];
         var isToggle = Toggle(setting.Default) is not null;
-        var isNumber = ProbeOutcomes.TryNumber(setting.Default, out var probedAt);
+        var isNumber = ProbeParts.TryNumber(setting.Default, out var probedAt);
         if (!isToggle && !isNumber)
             return [];
         var branching = new HashSet<string>(setting.ConditionedFeatureTypes, StringComparer.OrdinalIgnoreCase);

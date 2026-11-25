@@ -69,7 +69,7 @@ internal sealed class ReferenceGlyphTile : ViewModelBase
         ArgumentNullException.ThrowIfNull(open);
         if (outcome is null)
             return new ReferenceGlyphTile(null, null, null, Strings.Reference_NotProbed, open);
-        var part = ProbeOutcomes.MainPart(outcome);
+        var part = ProbeValues.MainPart(outcome);
         return Of(part, index.Spec, index, open);
     }
 
@@ -80,7 +80,7 @@ internal sealed class ReferenceGlyphTile : ViewModelBase
     /// <param name="open">Opens the tile's entry.</param>
     public static ReferenceGlyphTile Of(string? part, SpecRef spec, ChartReferenceIndex index, Action<ReferenceKey> open)
     {
-        var lead = ProbeOutcomes.GlyphOf(part, spec);
+        var lead = ProbeParts.GlyphOf(part, spec);
         if (lead is null)
             return new ReferenceGlyphTile(part, null, null, Strings.Reference_NothingDrawn, open);
         var isItem = lead.Kind != LeadGlyphKind.Area;

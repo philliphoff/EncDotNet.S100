@@ -36,7 +36,7 @@ internal sealed class ReferenceNavigator
     public const int MaxCrumbs = 4;
 
     private readonly List<ReferenceKey> _history = [];
-    private readonly List<ReferenceFeatureContext?> _features = [];
+    private readonly List<ReferenceFeature?> _features = [];
     private int _position = -1;
 
     /// <summary>
@@ -55,11 +55,11 @@ internal sealed class ReferenceNavigator
     public ReferenceKey? Current => _position >= 0 ? _history[_position] : null;
 
     /// <summary>
-    /// The feature <see cref="Current"/> was opened from (R13c, #1722), or
-    /// <see langword="null"/>: an attribute entry opened with one shows the
-    /// symbol each value gives it.
+    /// The picked feature <see cref="Current"/> was opened from (Open in
+    /// reference, F1), or <see langword="null"/> (R13b, #1721). Back and
+    /// forward keep each entry's own.
     /// </summary>
-    public ReferenceFeatureContext? CurrentFeature => _position >= 0 ? _features[_position] : null;
+    public ReferenceFeature? CurrentFeature => _position >= 0 ? _features[_position] : null;
 
     /// <summary>Whether there is an entry to go back to.</summary>
     public bool CanGoBack => _position > 0;
@@ -93,16 +93,17 @@ internal sealed class ReferenceNavigator
     /// right dock to it. A new entry drops any forward history.
     /// </summary>
     /// <param name="key">The entry.</param>
-    public void Open(ReferenceKey key) => Open(key, feature: null);
+    public void Open(ReferenceKey key) => Open(key, null);
 
     /// <summary>
-    /// Shows <paramref name="key"/> opened from <paramref name="feature"/>
-    /// (R13c, #1722), and switches the right dock to it. The entry already
-    /// shown, opened from another feature, takes the new one in place.
+    /// Shows <paramref name="key"/> in the Reference tab, opened from
+    /// <paramref name="feature"/>, and switches the right dock to it. A new
+    /// entry drops any forward history; the entry already shown, opened from
+    /// another feature, takes that feature.
     /// </summary>
     /// <param name="key">The entry.</param>
-    /// <param name="feature">The feature it is opened from, or <see langword="null"/>.</param>
-    public void Open(ReferenceKey key, ReferenceFeatureContext? feature)
+    /// <param name="feature">The picked feature it is opened from, or <see langword="null"/>.</param>
+    public void Open(ReferenceKey key, ReferenceFeature? feature)
     {
         ArgumentException.ThrowIfNullOrEmpty(key.Code);
         if (Current is not { } current || !SameEntry(current, key))
@@ -124,7 +125,7 @@ internal sealed class ReferenceNavigator
             _position = _history.Count - 1;
             Changed?.Invoke(this, EventArgs.Empty);
         }
-        else if (!Equals(_features[_position], feature))
+        else if (_features[_position] != feature)
         {
             _features[_position] = feature;
             Changed?.Invoke(this, EventArgs.Empty);

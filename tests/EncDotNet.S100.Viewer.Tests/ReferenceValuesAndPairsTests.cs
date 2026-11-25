@@ -88,7 +88,7 @@ public sealed class ReferenceValuesAndPairsTests : IDisposable
         ChartReferenceServiceTests.Fixture f,
         ChartReferenceGlyphCache cache,
         ReferenceKey key,
-        ReferenceFeatureContext? feature = null,
+        ReferenceFeature? feature = null,
         ViewerSettingsService? settings = null)
     {
         Assert.True(index.TryGet(key, out var entry));
@@ -124,12 +124,10 @@ public sealed class ReferenceValuesAndPairsTests : IDisposable
         Assert.NotSame(terms, report.FeatureTerms);
         report.FeatureTerms!.Open(colour.NameKey!.Value);
         Assert.Equal(Key(ReferenceKind.Attribute, "colour"), nav.Current);
-        var feature = Assert.IsType<ReferenceFeatureContext>(nav.CurrentFeature);
+        var feature = Assert.IsType<ReferenceFeature>(nav.CurrentFeature);
         Assert.Equal("LateralBeacon", feature.FeatureType);
         Assert.True(feature.IsPick);
-        Assert.Equal("3", feature.ValueOf("colour"));
-        // An S-57 cell's pick doesn't report its geometry; the probe's first primitive (Point) stands for it.
-        Assert.True(feature.Primitive is null or "Point");
+        Assert.Equal("3", ProbeValues.Values(terms.ReadyIndex(S101)!, feature, "colour"));
 
         using var tab = new ReferenceViewModel(nav, f.Service, cache, post: a => Dispatcher.UIThread.Post(a));
         using var host = ViewHost.Show(new ReferenceView { DataContext = tab }, 360, 1400);
@@ -193,7 +191,7 @@ public sealed class ReferenceValuesAndPairsTests : IDisposable
         tab.Entry!.Terms.Open(Key(ReferenceKind.Attribute, "colour"));
         await tab.Loading;
 
-        Assert.Equal(new ReferenceFeatureContext("LateralBeacon"), nav.CurrentFeature);
+        Assert.Equal(ReferenceFeature.TypeOnly("LateralBeacon"), nav.CurrentFeature);
         var entry = Assert.IsType<AttributeEntryViewModel>(tab.Entry);
         Assert.True(entry.HasValueSymbols);
         // No pick, so no value is the feature's own.
@@ -206,33 +204,6 @@ public sealed class ReferenceValuesAndPairsTests : IDisposable
         Assert.Null(nav.CurrentFeature);
         tab.Entry!.Terms.Open(Key(ReferenceKind.Symbol, "BCNLAT21"));
         Assert.Null(nav.CurrentFeature);
-    }
-
-    [Fact]
-    public void The_navigator_keeps_each_entrys_feature_and_takes_a_new_one_in_place()
-    {
-        var nav = new ReferenceNavigator();
-        var changed = 0;
-        nav.Changed += (_, _) => changed++;
-        var colour = Key(ReferenceKind.Attribute, "colour");
-        var beacon = new ReferenceFeatureContext("LateralBeacon", new Dictionary<string, string> { ["colour"] = "3" }, "Point");
-
-        nav.Open(colour, beacon);
-        nav.Open(colour, new ReferenceFeatureContext("LateralBeacon", new Dictionary<string, string> { ["colour"] = "3" }, "Point"));
-        Assert.Equal(1, changed);
-        nav.Open(colour, new ReferenceFeatureContext("LateralBuoy"));
-        Assert.Equal((1, 2), (nav.History.Count, changed));
-        Assert.Equal("LateralBuoy", nav.CurrentFeature!.FeatureType);
-
-        nav.Open(Key(ReferenceKind.Symbol, "BCNLAT21"));
-        Assert.Null(nav.CurrentFeature);
-        Assert.True(nav.Back());
-        Assert.Equal("LateralBuoy", nav.CurrentFeature!.FeatureType);
-
-        Assert.Same(beacon, ReferenceFeatureContext.For(colour, beacon));
-        Assert.Same(beacon, ReferenceFeatureContext.For(Key(ReferenceKind.FeatureType, "lateralbeacon"), beacon));
-        Assert.Null(ReferenceFeatureContext.For(Key(ReferenceKind.FeatureType, "LateralBuoy"), beacon));
-        Assert.Null(ReferenceFeatureContext.For(Key(ReferenceKind.Symbol, "BCNLAT21"), beacon));
     }
 
     [AvaloniaFact]
@@ -311,7 +282,7 @@ public sealed class ReferenceValuesAndPairsTests : IDisposable
         var index = (await f.Service.GetIndexAsync(S101, TestContext.Current.CancellationToken))!.WithProbes(null);
         Assert.Null(index.Probes);
         using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
-        var feature = new ReferenceFeatureContext("LateralBeacon", new Dictionary<string, string> { ["colour"] = "3" }, "Point");
+        var feature = new ReferenceFeature("LateralBeacon", [new PickAttribute { Code = "colour", RawValue = "3" }], S100GeometryType.Point);
 
         var colour = Assert.IsType<AttributeEntryViewModel>(Entry(index, f, cache, Key(ReferenceKind.Attribute, "colour"), feature));
         Assert.False(colour.HasValueSymbols);
@@ -345,20 +316,20 @@ public sealed class ReferenceValuesAndPairsTests : IDisposable
     }
 
     [Fact]
-    public void Probe_values_match_lists_numbers_and_no_value()
+    public void Probe_parts_match_values_exactly_and_name_their_glyphs()
     {
         var input = new ProbeInput(ProbeInputKind.Attribute, "colour", ["3,4,3", "3", "4", null]);
-        Assert.Equal(0, ProbeOutcomes.ValueOf(input, "3, 4,3"));
-        Assert.Equal(1, ProbeOutcomes.ValueOf(input, "3"));
-        Assert.Equal(3, ProbeOutcomes.ValueOf(input, null));
-        Assert.Equal(-1, ProbeOutcomes.ValueOf(input, "5", nearest: false));
+        Assert.Equal(0, ProbeParts.ExactValue(input, "3, 4,3"));
+        Assert.Equal(1, ProbeParts.ExactValue(input, "3"));
+        Assert.Equal(3, ProbeParts.ExactValue(input, null));
+        // An enumeration's code never stands for another: colour 5 isn't the probed 4.
+        Assert.Equal(-1, ProbeParts.ExactValue(input, "5"));
 
-        var depth = new ProbeInput(ProbeInputKind.Attribute, "valueOfSounding", ["29.9", "30", "30.1", null]);
-        Assert.Equal(2, ProbeOutcomes.ValueOf(depth, "42"));
-        Assert.Equal(0, ProbeOutcomes.ValueOf(depth, "12.5"));
-
-        Assert.Equal("symbol:BCNLAT21", ProbeOutcomes.MainPart(new ProbeOutcome { Parts = ["symbol:QUESMRK1", "symbol:BCNLAT21", "text:Bn 1"] }));
-        Assert.Equal("colour:DEPVS", ProbeOutcomes.MainPart(new ProbeOutcome { Parts = ["line:DEPCNT02", "colour:DEPVS"] }));
-        Assert.Null(ProbeOutcomes.MainPart(new ProbeOutcome { Parts = ["text:1"] }));
+        Assert.True(ProbeParts.IsDefault("symbol:QUESMRK1"));
+        Assert.False(ProbeParts.IsDefault("symbol:BCNLAT21"));
+        Assert.Equal(Key(ReferenceKind.Symbol, "BCNLAT21"), ProbeParts.GlyphOf("symbol:BCNLAT21", S101)!.Key);
+        Assert.Equal(LeadGlyphKind.Area, ProbeParts.GlyphOf("colour:DEPVS", S101)!.Kind);
+        Assert.Equal("DEPVS", ProbeParts.GlyphOf("colour:DEPVS", S101)!.AreaToken);
+        Assert.Null(ProbeParts.GlyphOf("text:1", S101));
     }
 }

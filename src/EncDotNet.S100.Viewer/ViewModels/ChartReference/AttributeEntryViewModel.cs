@@ -39,7 +39,7 @@ internal sealed class AttributeEntryViewModel : ReferenceEntryViewModel
                 .OrderBy(l => l.Name, StringComparer.CurrentCulture),
         ];
         ValueSymbols = ValueSymbolsOf(attribute);
-        if (ValueSymbols.Count > 0 && Index.TryGet(new ReferenceKey(Index.Spec, ReferenceKind.FeatureType, context.Feature!.FeatureType), out var feature))
+        if (ValueSymbols.Count > 0 && FeatureTypeOf(context.Feature) is { } feature)
             ValueSymbolsHeading = string.Format(CultureInfo.CurrentCulture, Strings.Reference_ValueSymbolsHeading, ChartReferenceRowViewModel.NameOf(feature));
     }
 
@@ -80,39 +80,43 @@ internal sealed class AttributeEntryViewModel : ReferenceEntryViewModel
     protected override IEnumerable<ReferenceGlyphTile> Tiles =>
         ValueSymbols.SelectMany(v => (ReferenceGlyphTile[])[v.Simplified, v.PaperChart]);
 
+    // The feature type a feature names: by its code, or by its S-57 acronym.
+    private FeatureTypeEntry? FeatureTypeOf(ReferenceFeature? feature) =>
+        feature is null ? null : PickTerms.FeatureType(Index, feature.FeatureType);
+
     // One row per listed value, then per value the probe tried that isn't a
     // listed value of its own (a list such as red, green, red; no value).
     private List<ReferenceValueSymbols> ValueSymbolsOf(AttributeEntry attribute)
     {
         if (Context.Feature is not { } feature
-            || Index.Probes?.Find(feature.FeatureType) is not { } probe
-            || ProbeOutcomes.InputOf(probe, ProbeInputKind.Attribute, attribute.Code) is not (>= 0 and var input))
+            || FeatureTypeOf(feature) is not { } type
+            || Index.Probes?.Find(type.Code) is not { } probe
+            || ProbeParts.InputOf(probe, ProbeInputKind.Attribute, attribute.Code) is not (>= 0 and var input))
         {
             return [];
         }
 
         var mariner = Context.Settings?.BuildMarinerSettings();
-        var baseline = ProbeOutcomes.Baseline(
+        var baseline = ProbeValues.IndexesOf(
             probe,
+            Index,
             feature,
-            mariner is null ? null : code => ReferenceTargets.Value(mariner, code),
-            code => Index.TryGet(new ReferenceKey(Index.Spec, ReferenceKind.Attribute, code), out var e) && e is AttributeEntry { ListedValues.Count: > 0 });
-        var style = ProbeOutcomes.InputOf(probe, ProbeInputKind.ContextParameter, ProbeOutcomes.SimplifiedSymbols);
-        var on = style >= 0 ? ProbeOutcomes.ValueOf(probe.Inputs[style], "true") : -1;
-        var off = style >= 0 ? ProbeOutcomes.ValueOf(probe.Inputs[style], "false") : -1;
+            mariner is null ? null : code => ReferenceTargets.Value(mariner, code));
+        var style = ProbeValues.StyleInput(probe);
+        var on = style >= 0 ? ProbeValues.SettingValue(probe.Inputs[style], on: true) : -1;
+        var off = style >= 0 ? ProbeValues.SettingValue(probe.Inputs[style], on: false) : -1;
         var values = probe.Inputs[input];
-        var own = feature.IsPick ? ProbeOutcomes.ValueOf(values, feature.ValueOf(attribute.Code), nearest: false) : -1;
+        var own = feature.IsPick ? ProbeParts.ExactValue(values, ProbeValues.Values(Index, feature, attribute.Code)) : -1;
         var enumeration = attribute.ListedValues.Count > 0;
 
         ReferenceGlyphTile Tile(int value, int styleValue)
         {
             if (value < 0)
                 return ReferenceGlyphTile.Of(outcome: null, Index, Context.Open);
-            var combination = (int[])baseline.Clone();
-            combination[input] = value;
+            var combination = (int?[])baseline.Clone();
             if (style >= 0 && styleValue >= 0)
                 combination[style] = styleValue;
-            return ReferenceGlyphTile.Of(probe.OutcomeOf(combination), Index, Context.Open);
+            return ReferenceGlyphTile.Of(ProbeValues.OutcomeFor(probe, combination, input, value), Index, Context.Open);
         }
 
         ReferenceValueSymbols Row(string title, string? definition, int value) =>
@@ -122,7 +126,7 @@ internal sealed class AttributeEntryViewModel : ReferenceEntryViewModel
         var shown = new HashSet<int>();
         foreach (var listed in attribute.ListedValues)
         {
-            var value = ProbeOutcomes.ValueOf(values, listed.Code, nearest: false);
+            var value = ProbeParts.ExactValue(values, listed.Code);
             if (value >= 0)
                 shown.Add(value);
             rows.Add(Row(new ReferenceListedValue(listed.Code, listed.Label, listed.Definition).Title, listed.Definition, value));

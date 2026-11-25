@@ -177,7 +177,11 @@ public static partial class RuleConditionText
             ? entry as AttributeEntry
             : null;
 
-    private static TermText AttributeName(AttributeEntry? attribute, string? code) =>
+    /// <summary>An attribute's name as a term, in sentence case; a code the catalogue doesn't name, in words.</summary>
+    /// <param name="attribute">The attribute's entry, or <see langword="null"/>.</param>
+    /// <param name="code">The attribute code, for one without an entry.</param>
+    /// <returns>The name.</returns>
+    public static TermText AttributeName(AttributeEntry? attribute, string? code) =>
         attribute is not null ? TermText.Term(SentenceCase(attribute.Name), attribute.Key) : Words(code);
 
     // A code the catalogue doesn't name, in words: "depthRangeMinimumValue"
@@ -190,14 +194,24 @@ public static partial class RuleConditionText
         return char.ToUpperInvariant(words[0]) + words[1..];
     }
 
-    private static TermText SettingName(ChartReferenceIndex index, string? id) =>
+    /// <summary>A display setting's name as a term, in sentence case; an id the index doesn't hold, as it is.</summary>
+    /// <param name="index">The index.</param>
+    /// <param name="id">The context parameter id.</param>
+    /// <returns>The name.</returns>
+    public static TermText SettingName(ChartReferenceIndex index, string? id) =>
         id is { Length: > 0 } && index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.DisplaySetting, id), out var entry)
             ? TermText.Term(SentenceCase(entry.Name), entry.Key)
             : TermText.Plain(id);
 
-    // A listed value's label in running text: "Red" as "red", and
-    // "Stake, Pole, Perch, Post" as "stake, pole, perch or post".
-    private static TermText ValueLabel(AttributeEntry? attribute, string? value)
+    /// <summary>
+    /// A listed value's label in running text, as a term: "Red" as "red", and
+    /// "Stake, Pole, Perch, Post" as "stake, pole, perch or post". A code the
+    /// attribute doesn't list stays as it is.
+    /// </summary>
+    /// <param name="attribute">The attribute's entry, or <see langword="null"/>.</param>
+    /// <param name="value">One listed value's code.</param>
+    /// <returns>The label.</returns>
+    public static TermText ValueLabel(AttributeEntry? attribute, string? value)
     {
         if (value is null)
             return TermText.Empty;

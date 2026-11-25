@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.ChartReference;
@@ -162,11 +163,11 @@ internal static class ReferencePairFinder
     /// <returns>The pairs, or none when the rule doesn't test it.</returns>
     public static IReadOnlyList<(string Before, string After)> Toggle(FeatureTypeProbe probe, string setting)
     {
-        var input = ProbeOutcomes.InputOf(probe, ProbeInputKind.ContextParameter, setting);
+        var input = ProbeParts.InputOf(probe, ProbeInputKind.ContextParameter, setting);
         if (input < 0)
             return [];
-        var off = ProbeOutcomes.ValueOf(probe.Inputs[input], "false");
-        var on = ProbeOutcomes.ValueOf(probe.Inputs[input], "true");
+        var off = ProbeValues.SettingValue(probe.Inputs[input], on: false);
+        var on = ProbeValues.SettingValue(probe.Inputs[input], on: true);
         if (off < 0 || on < 0)
             return [];
         return [.. Pairs(probe, input, off, on).Select(p => (p.Before, p.After))];
@@ -192,7 +193,7 @@ internal static class ReferencePairFinder
             double low = double.MinValue, high = double.MaxValue;
             for (var i = 0; i < values.Values.Count; i++)
             {
-                if (!ProbeOutcomes.TryNumber(values.Values[i], out var n))
+                if (!ProbeParts.TryNumber(values.Values[i], out var n))
                     continue;
                 if (n < value && n >= value - MaxStep && n > low)
                     (below, low) = (i, n);
@@ -225,9 +226,9 @@ internal static class ReferencePairFinder
             other[input] = to;
             if (probe.OutcomeOf(other) is not { IsError: false } then)
                 continue;
-            var before = ProbeOutcomes.MainPart(variant.Outcome);
-            var after = ProbeOutcomes.MainPart(then);
-            if (before is null || after is null || before == after || ProbeOutcomes.IsDefault(before) || ProbeOutcomes.IsDefault(after))
+            var before = ProbeValues.MainPart(variant.Outcome);
+            var after = ProbeValues.MainPart(then);
+            if (before is null || after is null || before == after || ProbeParts.IsDefault(before) || ProbeParts.IsDefault(after))
                 continue;
             if (seen.Add((before, after)))
                 pairs.Add((before, after));
@@ -235,4 +236,88 @@ internal static class ReferencePairFinder
 
         return pairs;
     }
+}
+
+/// <summary>
+/// What value symbols and before/after pairs (R13c, #1722) read from a probe
+/// besides <see cref="ProbeValues"/>: an input by its code, a value by exact
+/// match, and the glyph a drawn part is shown by.
+/// </summary>
+internal static class ProbeParts
+{
+    /// <summary>The position of an input in <see cref="FeatureTypeProbe.Inputs"/>, or -1.</summary>
+    /// <param name="probe">The probe.</param>
+    /// <param name="kind">The input's kind.</param>
+    /// <param name="code">The attribute code or display setting id.</param>
+    public static int InputOf(FeatureTypeProbe probe, ProbeInputKind kind, string code)
+    {
+        ArgumentNullException.ThrowIfNull(probe);
+        for (var i = 0; i < probe.Inputs.Count; i++)
+        {
+            if (probe.Inputs[i].Kind == kind && string.Equals(probe.Inputs[i].Code, code, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// The probed value that is <paramref name="value"/> exactly, a list
+    /// compared item by item; <see langword="null"/> is no value.
+    /// </summary>
+    /// <param name="input">The input.</param>
+    /// <param name="value">The value, or <see langword="null"/> for none.</param>
+    /// <returns>Its index in <see cref="ProbeInput.Values"/>, or -1.</returns>
+    public static int ExactValue(ProbeInput input, string? value)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        var wanted = Normalise(value);
+        for (var i = 0; i < input.Values.Count; i++)
+        {
+            if (string.Equals(Normalise(input.Values[i]), wanted, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>Whether a value is a number, read invariantly.</summary>
+    /// <param name="text">The value.</param>
+    /// <param name="number">The number.</param>
+    public static bool TryNumber(string? text, out double number) =>
+        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number);
+
+    /// <summary>Whether a part is the catalogue's default symbol, drawn when nothing else fits.</summary>
+    /// <param name="part">A part, as <see cref="ProbeOutcome.Parts"/> writes it.</param>
+    public static bool IsDefault(string? part) =>
+        part is not null && ProbeValues.Split(part) is ("symbol", var id) && LeadGlyph.DefaultSymbols.Contains(id);
+
+    /// <summary>
+    /// The glyph a part is shown by: a point symbol, area fill or line style is
+    /// its item; a colour fill is a patch, cached by its token.
+    /// </summary>
+    /// <param name="part">The part, or <see langword="null"/>.</param>
+    /// <param name="spec">The product.</param>
+    /// <returns>The glyph, or <see langword="null"/> for a part with none.</returns>
+    public static LeadGlyph? GlyphOf(string? part, SpecRef spec)
+    {
+        if (part is null)
+            return null;
+        var (kind, id) = ProbeValues.Split(part);
+        if (kind == "colour" && id.Length > 0)
+            return new LeadGlyph(LeadGlyphKind.Area, new ReferenceKey(spec, ReferenceKind.AreaFill, part), Tokens: [id]);
+        if (ProbeValues.KeyOf(spec, part) is not { } key)
+            return null;
+        var glyph = key.Kind switch
+        {
+            ReferenceKind.Symbol => LeadGlyphKind.Symbol,
+            ReferenceKind.LineStyle => LeadGlyphKind.LineStyle,
+            _ => LeadGlyphKind.AreaFill,
+        };
+        return new LeadGlyph(glyph, key, id);
+    }
+
+    // "3, 4,3" and "3,4,3" are the same list.
+    private static string? Normalise(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : string.Join(',', value.Split(',', StringSplitOptions.TrimEntries));
 }

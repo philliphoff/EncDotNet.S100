@@ -157,6 +157,33 @@ public sealed class SourceDatasetTests
     }
 
     [Fact]
+    public async Task Quick_view_changes_apply_in_order_so_the_last_one_wins()
+    {
+        // With no debounce, each change's continuation is already due when
+        // the next arrives; an older one finishing last mustn't win (#1747's
+        // CI caught the two-map test above failing this way).
+        var views = new FakeViewportSet { View = Ocean };
+        var processor = new FakeHostedProcessor();
+        using var activator = new HostedSourceActivator(
+            processor, SourceActivation.BelowViewportSpan(5), views, visible: true, debounce: TimeSpan.Zero);
+
+        for (int round = 0; round < 50; round++)
+        {
+            for (int i = 0; i < 20; i++)
+            {
+                views.Publish(Harbour);
+                views.Publish(Ocean);
+            }
+
+            await WaitUntilAsync(() => activator.State == SourceRunState.WaitingForZoom && !processor.IsActive);
+            // Let any older continuation still queued run: it must not turn the source back on.
+            await Task.Delay(5, TestContext.Current.CancellationToken);
+            Assert.False(processor.IsActive, $"round {round}: an older view won");
+            Assert.Equal(SourceRunState.WaitingForZoom, activator.State);
+        }
+    }
+
+    [Fact]
     public void With_no_map_only_a_source_that_always_runs_is_in_range()
     {
         var always = HostedSourceActivator.AreaInRange(SourceActivation.Always, [], out var alwaysInRange);

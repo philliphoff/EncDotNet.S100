@@ -57,7 +57,6 @@ internal sealed class ReferenceTerms
     private readonly Func<SpecRef, ChartReferenceArtwork?>? _artwork;
     private readonly ConcurrentDictionary<string, ChartReferenceIndex> _ready;
     private readonly Action<ReferenceKey> _open;
-    private readonly Action<ReferenceKey, ReferenceFeatureContext?>? _openFrom;
     private readonly Func<bool> _simplified;
 
     /// <summary>Creates the terms.</summary>
@@ -76,14 +75,13 @@ internal sealed class ReferenceTerms
         IS100ExaminerLinkBuilder? examiner = null,
         IUrlOpener? urls = null,
         Func<bool>? simplifiedSymbols = null)
-        : this(glyphs, open, null, indexes, artwork, examiner, urls, simplifiedSymbols ?? (static () => false), new(StringComparer.OrdinalIgnoreCase))
+        : this(glyphs, open, indexes, artwork, examiner, urls, simplifiedSymbols ?? (static () => false), new(StringComparer.OrdinalIgnoreCase))
     {
     }
 
     private ReferenceTerms(
         ChartReferenceGlyphCache glyphs,
         Action<ReferenceKey> open,
-        Action<ReferenceKey, ReferenceFeatureContext?>? openFrom,
         Func<SpecRef, Task<ChartReferenceIndex?>>? indexes,
         Func<SpecRef, ChartReferenceArtwork?>? artwork,
         IS100ExaminerLinkBuilder? examiner,
@@ -95,7 +93,6 @@ internal sealed class ReferenceTerms
         ArgumentNullException.ThrowIfNull(open);
         Glyphs = glyphs;
         _open = open;
-        _openFrom = openFrom;
         _indexes = indexes;
         _artwork = artwork;
         Examiner = examiner;
@@ -133,13 +130,14 @@ internal sealed class ReferenceTerms
         var terms = new ReferenceTerms(
             glyphs,
             navigator.Open,
-            navigator.Open,
             spec => service.GetIndexAsync(spec),
             service.GetArtwork,
             examiner,
             urls,
-            simplifiedSymbols ?? (static () => false),
-            new(StringComparer.OrdinalIgnoreCase));
+            simplifiedSymbols)
+        {
+            OpenFromFeature = navigator.Open,
+        };
         service.Changed += (_, e) => terms.Forget(e.Spec);
         return terms;
     }
@@ -157,31 +155,34 @@ internal sealed class ReferenceTerms
         var ready = new ConcurrentDictionary<string, ChartReferenceIndex>(_ready, StringComparer.OrdinalIgnoreCase);
         ready[index.Spec.Name] = index;
         Func<SpecRef, ChartReferenceArtwork?>? art = artwork is null ? _artwork : spec => SameSpec(spec, index.Spec) ? artwork : _artwork?.Invoke(spec);
-        return new ReferenceTerms(Glyphs, open, null, _indexes, art, Examiner, Urls, _simplified, ready);
+        return new ReferenceTerms(Glyphs, open, _indexes, art, Examiner, Urls, _simplified, ready) { OpenFromFeature = OpenFromFeature };
     }
 
     /// <summary>
-    /// These terms for a picked feature (R13c, #1722): an attribute's term,
-    /// and the feature type's, open their entries with
+    /// These terms for a picked feature (R13c, #1722): a click on an
+    /// attribute's term, or the feature type's, opens its entry from
     /// <paramref name="feature"/>, so an attribute shows the symbol each value
-    /// gives it. Terms that open nowhere a feature can be carried stay as they are.
+    /// gives the feature and highlights its own. Other terms open as before.
     /// </summary>
-    /// <param name="feature">The feature.</param>
-    public ReferenceTerms ForFeature(ReferenceFeatureContext feature)
+    /// <param name="feature">The picked feature.</param>
+    /// <returns>The terms; these terms when they can't open from a feature.</returns>
+    public ReferenceTerms ForFeature(ReferenceFeature feature)
     {
         ArgumentNullException.ThrowIfNull(feature);
-        if (_openFrom is not { } openFrom)
+        if (OpenFromFeature is not { } open)
             return this;
         return new ReferenceTerms(
             Glyphs,
-            key => openFrom(key, ReferenceFeatureContext.For(key, feature)),
-            openFrom,
+            key => open(key, key.Kind is ReferenceKind.Attribute or ReferenceKind.FeatureType ? feature : null),
             _indexes,
             _artwork,
             Examiner,
             Urls,
             _simplified,
-            _ready);
+            _ready)
+        {
+            OpenFromFeature = open,
+        };
     }
 
     /// <summary>A plain set of terms over one index, for hosts that build none (tests, the study page).</summary>
@@ -197,6 +198,23 @@ internal sealed class ReferenceTerms
     /// <summary>Opens <paramref name="key"/>'s entry.</summary>
     /// <param name="key">The entry.</param>
     public void Open(ReferenceKey key) => _open(key);
+
+    /// <summary>
+    /// Opens an entry from a picked feature (R13b, #1721), so it can show the
+    /// feature's own values; <see langword="null"/> opens without the feature.
+    /// </summary>
+    public Action<ReferenceKey, ReferenceFeature?>? OpenFromFeature { get; init; }
+
+    /// <summary>Opens <paramref name="key"/>'s entry from a picked feature: Open in reference and F1.</summary>
+    /// <param name="key">The entry.</param>
+    /// <param name="feature">The picked feature, or <see langword="null"/>.</param>
+    public void Open(ReferenceKey key, ReferenceFeature? feature)
+    {
+        if (OpenFromFeature is { } open)
+            open(key, feature);
+        else
+            _open(key);
+    }
 
     /// <summary>
     /// What <paramref name="key"/>'s term says, when its index is ready;
