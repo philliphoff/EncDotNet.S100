@@ -99,4 +99,41 @@ public class MapToolControllerTests
 
         Assert.Equal(1, notifications);
     }
+
+    private static MapToolContext Context() => new(
+        new Mapsui.UI.Avalonia.MapControl(), _ => { }, _ => { }, _ => { }, () => { }, _ => null, _ => null);
+
+    [AvaloniaFact]
+    public void Initialize_with_another_maps_context_moves_the_active_tool_to_it()
+    {
+        // Split map (#1732): the tools follow the active map.
+        var c = new MapToolController();
+        var tool = new StubTool("a");
+        c.Register(tool);
+        c.Initialize(Context());
+        c.Activate("a");
+        Assert.Equal(1, tool.ActivationCount);
+
+        c.Initialize(Context());
+
+        Assert.Equal(1, tool.DeactivationCount);
+        Assert.Equal(2, tool.ActivationCount);
+        Assert.Equal("a", c.ActiveToolId);
+    }
+
+    [AvaloniaFact]
+    public void Initialize_with_the_same_context_does_nothing()
+    {
+        var c = new MapToolController();
+        var tool = new StubTool("a");
+        c.Register(tool);
+        var context = Context();
+        c.Initialize(context);
+        c.Activate("a");
+
+        c.Initialize(context);
+
+        Assert.Equal(1, tool.ActivationCount);
+        Assert.Equal(0, tool.DeactivationCount);
+    }
 }

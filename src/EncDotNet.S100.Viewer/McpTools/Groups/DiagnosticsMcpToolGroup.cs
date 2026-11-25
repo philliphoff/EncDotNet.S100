@@ -54,7 +54,7 @@ internal sealed class DiagnosticsMcpToolGroup : IViewerMcpToolGroup
             harness.Metrics,
             _renderActivity,
             () => GetProcessMetricsTool.DescribeEnvironment(settings, harness.RenderCacheDirectory),
-            () => EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.GetTileCacheMemory().Tiles,
+            EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.GetTileCacheMemory,
             () => EncDotNet.S100.Core.Scheduling.WorkScheduler.Shared.GetStats(),
             harness.Planner is { } planner ? planner.Stats.Snapshot : null));
         yield return PerfHarnessMcpAdapters.Create(new FlingTool(_viewport, harness.Settle.MarkTrigger));

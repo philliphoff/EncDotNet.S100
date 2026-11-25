@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -47,7 +46,6 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     private ViewerSettingsService? _viewerSettingsService;
     private ValidationOverlayService? _validationOverlay;
     private RenderActivityMonitor? _renderActivityMonitor;
-    private ViewSettleMonitor? _settleMonitor;
     private Map? _renderActivityMap;
     private EventHandler? _renderActivityRefreshHandler;
     private DynamicSourceHost? _dynamicSourceOverlayHost;
@@ -66,6 +64,8 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     private IMarinerSettingsProvider? _routeMariner;
     private ITimeFormatProvider? _routeTimeFormat;
     private float _routeCheckLegendReserve;
+    private MapInteractionController? _interaction;
+    private MapToolContext? _toolContext;
     private bool _disposed;
 
     /// <summary>
@@ -75,15 +75,21 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     /// <param name="id">The view's stable id.</param>
     /// <param name="pane">The pane holding the map control.</param>
     /// <param name="services">The application services.</param>
-    public MapView(MapViewId id, MapPane pane, IServiceProvider services)
+    /// <param name="planner">The map's own demand planner (one per map, #1728).</param>
+    public MapView(
+        MapViewId id,
+        MapPane pane,
+        IServiceProvider services,
+        EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner planner)
     {
         ArgumentNullException.ThrowIfNull(pane);
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(planner);
 
         Id = id;
         Pane = pane;
         _services = services;
-        Planner = services.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>();
+        Planner = planner;
 
         // The host sets up S-100 through the public mapControl.AddS100 entry
         // point (the same one the MapHost sample uses), sharing the DI
@@ -143,22 +149,76 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     public RenderActivityMonitor? RenderActivity => _renderActivityMonitor;
 
     /// <summary>
+    /// The Library coverage outlines' Legend section source (legends D8), or
+    /// <see langword="null"/> before <see cref="Attach"/>. The window adds the
+    /// active map's to the Legend, so a split shows one entry (D27).
+    /// </summary>
+    public ILegendSectionSource? LibraryCoverageLegend => _libraryCoverageController;
+
+    /// <summary>Whether any of the map's layers is still fetching.</summary>
+    /// <returns>True while a layer is busy.</returns>
+    public bool IsBusy()
+    {
+        // Snapshot the layer collection defensively: it may be mutated on
+        // the UI thread while this runs on a threadpool thread driving an MCP
+        // request.
+        if (_renderActivityMap is not { } map)
+            return false;
+        foreach (var layer in map.Layers.ToArray())
+        {
+            if (layer.Busy) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The tile half of the settled signal behind the MCP <c>await_settled</c>
+    /// tool (map rendering slice 1), from a snapshot of the map's layers.
+    /// </summary>
+    /// <returns>The map's tile settle state.</returns>
+    public EncDotNet.S100.Rendering.Engine.TileSettleState EvaluateSettle() =>
+        EncDotNet.S100.Renderers.Mapsui.MapsuiChartLayers.EvaluateSettle(
+            _renderActivityMap?.Layers.ToArray() ?? []);
+
+    /// <summary>Asks the map to repaint.</summary>
+    public void RefreshGraphics() => _renderActivityMap?.RefreshGraphics();
+
+    /// <summary>
+    /// Hands the map tools this map's context, so they work in it: the
+    /// window calls it for the active map (#1732, D12 lands in slice 6).
+    /// </summary>
+    public void BindTools()
+    {
+        if (_viewModel is not null && _toolContext is not null && !_disposed)
+            _viewModel.MapTools.Tools.Initialize(_toolContext);
+    }
+
+    /// <summary>
+    /// Writes this map's scale, overscale and depth basis to the status bar,
+    /// as when it becomes the active map (#1732, D6).
+    /// </summary>
+    public void RefreshStatusReadouts() => _interaction?.RefreshStatusReadouts();
+
+    /// <summary>
     /// Wires the overlays, probes, interaction and map tools to the map.
     /// </summary>
     /// <param name="viewModel">The window's view-model.</param>
     /// <param name="loader">The dataset loader.</param>
     /// <param name="pickService">The pick service.</param>
-    /// <param name="navigation">The zoom buttons and compass that drive this map.</param>
+    /// <param name="isActive">Whether this is the active map, which writes the status bar's scale (#1732, D6).</param>
+    /// <param name="label">The map's label while split ("Map 1"), for the status bar's lat/lon (D7); null otherwise.</param>
     public void Attach(
         MainViewModel viewModel,
         IDatasetLoaderService loader,
         IPickService pickService,
-        MapNavigationControls navigation)
+        Func<bool> isActive,
+        Func<string?> label)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickService);
-        ArgumentNullException.ThrowIfNull(navigation);
+        ArgumentNullException.ThrowIfNull(isActive);
+        ArgumentNullException.ThrowIfNull(label);
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_viewModel is not null)
             throw new InvalidOperationException("The map view is already attached.");
@@ -194,42 +254,20 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             mapForBackColor.BackColor = new Mapsui.Styles.Color(170, 211, 223);
         }
 
-        // Wire the render-activity monitor that backs the MCP
-        // 'await_render_idle' / 'get_render_stats' tools. The
-        // InstrumentedMapControl feeds paint stats through the static
-        // RenderActivityHub.Sink; here we additionally feed Mapsui's
-        // graphics-refresh signal as activity and expose a layer-busy
-        // probe so idle is not reported while an async fetch is pending.
+        // The render-activity monitor that backs the MCP 'await_render_idle' /
+        // 'get_render_stats' tools hears every map: the InstrumentedMapControl
+        // feeds paint stats through the static RenderActivityHub.Sink, and
+        // Mapsui's graphics-refresh signal counts as activity. The busy probe
+        // and the settle probe are the window's (MapViewProbes), over every
+        // map or the active one.
         if (mapControl.Map is { } activityMap)
         {
             var monitor = services.GetRequiredService<RenderActivityMonitor>();
             _renderActivityMonitor = monitor;
             _renderActivityMap = activityMap;
             RenderActivityHub.Sink = monitor;
-
-            monitor.BusyProbe = () =>
-            {
-                // Snapshot the layer collection defensively: it may be
-                // mutated on the UI thread while this runs on a threadpool
-                // thread driving an MCP request.
-                foreach (var layer in activityMap.Layers.ToArray())
-                {
-                    if (layer.Busy) return true;
-                }
-                return false;
-            };
-
             _renderActivityRefreshHandler = (_, _) => monitor.NotifyActivity();
             activityMap.RefreshGraphicsRequest += _renderActivityRefreshHandler;
-
-            // The tile half of the settled signal behind the MCP await_settled
-            // tool (map rendering slice 1). Read on the MCP request's thread from
-            // a snapshot of the layers; inert until a harness turns tracking on.
-            var settle = services.GetRequiredService<ViewSettleMonitor>();
-            _settleMonitor = settle;
-            settle.TileProbe = () => EncDotNet.S100.Renderers.Mapsui.MapsuiChartLayers.EvaluateSettle(
-                activityMap.Layers.ToArray());
-            settle.RequestRedraw = activityMap.RefreshGraphics;
         }
 
         // The background vector-snapshot / scene / tile renderers repaint through
@@ -266,7 +304,7 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         // Enable trackpad pan/pinch/rotate gestures, single/double-tap pick,
         // long-press pick, mouse lat/lon readout, scale-bar/compass viewport
         // sync, and the zoom in/out overlay buttons.
-        var interactionController = new MapInteractionController(
+        var interactionController = _interaction = new MapInteractionController(
             viewModel,
             pickService,
             loader,
@@ -274,17 +312,19 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         {
             DepthBasis = services.GetService<DepthBasisService>(),
             Viewport = Host,
+            IsActiveMap = isActive,
+            MapLabel = label,
             ReferenceMenu = services.GetService<ChartReference.ReferenceTerms>() is { } terms
                 ? new ChartReference.MapReferenceMenu(terms)
                 : null,
         };
         interactionController.Attach(
             mapControl,
-            navigation.ZoomIn,
-            navigation.ZoomOut,
-            navigation.ZoomToExtent,
+            Pane.ZoomInButton,
+            Pane.ZoomOutButton,
+            Pane.ZoomToExtentButton,
             Pane.ScaleBar,
-            navigation.Compass);
+            Pane.CompassRose);
         interactionController.PlainTapped += (_, tap) => _libraryCoverageController?.HandleTap(tap);
 
         // Wire the map-tool controller to the map: tools are registered with
@@ -340,7 +380,7 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         // Attach the registry to the accessor so view-models resolved
         // before window construction (e.g. LayerStackViewModel as a
         // singleton) start seeing dynamic sources.
-        services.GetRequiredService<DynamicSources.DynamicFeatureSourceRegistryAccessor>().Current = host;
+        services.GetRequiredService<DynamicSources.DynamicFeatureSourceRegistryAccessor>().Attach(host);
 
         foreach (var source in services.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>())
         {
@@ -410,8 +450,8 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             appearance,
             () => services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current,
             UiThread.RunOrPost);
-        // Legends D8: its outline styles show as the Legend tab's Library coverage section.
-        services.GetRequiredService<LegendService>().AddSource(_libraryCoverageController);
+        // Legends D8: its outline styles show as the Legend tab's Library
+        // coverage section; the window adds the active map's (D27: one entry).
 
         // Chart-wide water level adjustment (#1132): the edge of the adjusted area.
         _adjustedAreaBoundary = new AdjustedAreaBoundaryController(
@@ -485,7 +525,7 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         var viewModel = _viewModel!;
         var tools = viewModel.MapTools.Tools;
 
-        var context = new MapToolContext(
+        var context = _toolContext = new MapToolContext(
             mapControl: Pane.MapControl,
             addLayer: Host.AddToolLayer,
             removeLayer: Host.RemoveToolLayer,
@@ -495,8 +535,8 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             latLonToScreen: LatLonToScreen);
 
         // Tools (pick, measure) were registered by the view-model in its
-        // constructor; here we just hand them an Avalonia-aware context.
-        tools.Initialize(context);
+        // constructor; the window hands them the active map's context
+        // (BindTools), so they work in the map the user is in (#1732).
 
         // Hand the same controller to the interaction controller so pointer
         // events are offered to the active tool first.
@@ -710,18 +750,10 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         _validationOverlay?.Dispose();
         _validationOverlay = null;
 
-        // Detach render-activity wiring so the static hub does not
-        // outlive the view and a torn-down map is not probed.
-        RenderActivityHub.Sink = null;
+        // Detach this map's render-activity wiring; the window clears the
+        // static hub and the probes with the last map (MapViewProbes).
         if (_renderActivityMonitor is not null)
         {
-            _renderActivityMonitor.BusyProbe = null;
-            if (_settleMonitor is not null)
-            {
-                _settleMonitor.TileProbe = null;
-                _settleMonitor.RequestRedraw = null;
-                _settleMonitor = null;
-            }
             if (_renderActivityMap is not null && _renderActivityRefreshHandler is not null)
             {
                 _renderActivityMap.RefreshGraphicsRequest -= _renderActivityRefreshHandler;
@@ -754,11 +786,7 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         foreach (var reg in _dynamicSourceRegistrations) reg.Dispose();
         _dynamicSourceRegistrations.Clear();
         if (_dynamicSourceOverlayHost is not null)
-        {
-            var registry = services.GetRequiredService<DynamicSources.DynamicFeatureSourceRegistryAccessor>();
-            if (ReferenceEquals(registry.Current, _dynamicSourceOverlayHost))
-                registry.Current = null;
-        }
+            services.GetRequiredService<DynamicSources.DynamicFeatureSourceRegistryAccessor>().Detach(_dynamicSourceOverlayHost);
         _dynamicSourceOverlayHost?.Dispose();
         _dynamicSourceOverlayHost = null;
         _pickHighlightController?.Dispose();
@@ -769,8 +797,6 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         _extentIndicatorController = null;
         _amlOutlineController?.Dispose();
         _amlOutlineController = null;
-        if (_libraryCoverageController is not null)
-            services.GetService<LegendService>()?.RemoveSource(_libraryCoverageController);
         _libraryCoverageController?.Dispose();
         _libraryCoverageController = null;
         _adjustedAreaBoundary?.Dispose();
@@ -782,18 +808,3 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         Host.Dispose();
     }
 }
-
-/// <summary>
-/// The zoom buttons and compass that drive a <see cref="MapView"/>. They sit
-/// in the window's overlay column for now; the split (#1727) moves them into
-/// each pane.
-/// </summary>
-/// <param name="ZoomIn">The zoom-in button.</param>
-/// <param name="ZoomOut">The zoom-out button.</param>
-/// <param name="ZoomToExtent">The zoom-to-extent button.</param>
-/// <param name="Compass">The compass rose.</param>
-internal sealed record MapNavigationControls(
-    Button ZoomIn,
-    Button ZoomOut,
-    Button ZoomToExtent,
-    CompassRoseView Compass);

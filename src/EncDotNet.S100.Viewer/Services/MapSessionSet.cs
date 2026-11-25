@@ -39,6 +39,7 @@ internal sealed class MapSessionSet
     private IReadOnlyList<MapDatasetId>? _order;
     private MarinerSettings? _mariner;
     private DateTime? _time;
+    private MapViewId? _readerId;
 
     /// <summary>Creates an empty set.</summary>
     /// <param name="logger">Logs failures on sessions other than the primary.</param>
@@ -54,13 +55,40 @@ internal sealed class MapSessionSet
     /// </summary>
     public IMapDatasetSession? Primary => _members.Count == 0 ? null : _members[0].Session;
 
+    /// <summary>
+    /// The session the map's readers use: the layer stack, the Legend, picks
+    /// and the overscale cells read the active map of a split (#1732, D6).
+    /// It's the session of the view <see cref="SetReader"/> named, once that
+    /// view is in the set, and the <see cref="Primary"/> otherwise.
+    /// </summary>
+    public IMapDatasetSession? Reader => ReaderMember()?.Session;
+
+    /// <summary>Raised after <see cref="Reader"/> changes.</summary>
+    public event EventHandler? ReaderChanged;
+
+    /// <summary>
+    /// Names the view whose session <see cref="Reader"/> is (the active map);
+    /// <see langword="null"/> for the primary.
+    /// </summary>
+    /// <param name="id">The view, or <see langword="null"/>.</param>
+    public void SetReader(MapViewId? id)
+    {
+        var before = Reader;
+        _readerId = id;
+        if (!ReferenceEquals(before, Reader))
+            ReaderChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private Member? ReaderMember() =>
+        _members.FirstOrDefault(m => m.Id == _readerId) ?? (_members.Count == 0 ? null : _members[0]);
+
     /// <summary>Every session, primary first.</summary>
     public IReadOnlyList<IMapDatasetSession> Sessions => _members.Select(m => m.Session).ToArray();
 
     /// <summary>The views whose sessions are in the set, primary first.</summary>
     public IReadOnlyList<MapViewId> Views => _members.Select(m => m.Id).ToArray();
 
-    /// <summary>Raised when the primary session's layers change.</summary>
+    /// <summary>Raised when the <see cref="Reader"/> session's layers change.</summary>
     public event EventHandler? LayersChanged;
 
     /// <summary>Raised when a render on the primary session starts.</summary>
@@ -99,11 +127,14 @@ internal sealed class MapSessionSet
         if (_members.Any(m => m.Id == id))
             throw new InvalidOperationException($"The map '{id}' already has a session.");
 
+        var readerBefore = Reader;
         var member = new Member(this, id, session, viewport);
         _members.Add(member);
         member.Subscribe();
         if (_members.Count == 1)
             PrimaryChanged?.Invoke(this, EventArgs.Empty);
+        if (!ReferenceEquals(readerBefore, Reader))
+            ReaderChanged?.Invoke(this, EventArgs.Empty);
 
         await CatchUpAsync(member, presentation, cancellationToken).ConfigureAwait(true);
     }
@@ -121,6 +152,7 @@ internal sealed class MapSessionSet
             return null;
 
         var member = _members[index];
+        var readerBefore = Reader;
         _members.RemoveAt(index);
         member.Unsubscribe();
         if (_datasetOrder.Count > 0)
@@ -137,6 +169,8 @@ internal sealed class MapSessionSet
 
         if (index == 0)
             PrimaryChanged?.Invoke(this, EventArgs.Empty);
+        if (!ReferenceEquals(readerBefore, Reader))
+            ReaderChanged?.Invoke(this, EventArgs.Empty);
         return member.Session;
     }
 
@@ -424,6 +458,8 @@ internal sealed class MapSessionSet
 
     private bool IsPrimary(Member member) => _members.Count > 0 && ReferenceEquals(_members[0], member);
 
+    private bool IsReader(Member member) => ReferenceEquals(ReaderMember(), member);
+
     private sealed class DatasetState(MapDataset dataset, int? minimumDisplayScale, int? maximumDisplayScale)
     {
         public MapDataset Dataset { get; set; } = dataset;
@@ -461,7 +497,7 @@ internal sealed class MapSessionSet
 
         private void OnLayersChanged(object? sender, EventArgs e)
         {
-            if (set.IsPrimary(this))
+            if (set.IsReader(this))
                 set.LayersChanged?.Invoke(set, e);
         }
 

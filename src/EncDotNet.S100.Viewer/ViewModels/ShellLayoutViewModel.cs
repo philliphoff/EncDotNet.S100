@@ -411,6 +411,7 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     private void OnRightDockShownChanged()
     {
         OnPropertyChanged(nameof(IsRightDockShown));
+        OnPropertyChanged(nameof(IsRightDockDocked));
         OnPropertyChanged(nameof(IsRightDockNarrowFolded));
         OnPropertyChanged(nameof(IsRightDockOverlaid));
         OnPropertyChanged(nameof(IsRightDockPanelVisible));
@@ -421,6 +422,26 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
 
     /// <summary>Whether the right dock's panel is shown: open and not folded.</summary>
     public bool IsRightDockShown => IsRightDockOpen && !IsRightDockFolded;
+
+    private bool _isMapSplit;
+
+    /// <summary>
+    /// Whether the map is split into panes (#1732). While split, the right
+    /// dock opens over the map rather than in its column, so it never takes
+    /// a pane's room or folds one (D17).
+    /// </summary>
+    public bool IsMapSplit
+    {
+        get => _isMapSplit;
+        set
+        {
+            if (SetProperty(ref _isMapSplit, value))
+                OnPropertyChanged(nameof(IsRightDockDocked));
+        }
+    }
+
+    /// <summary>Whether the shown right dock takes its column beside the map: not while the map is split (D17).</summary>
+    public bool IsRightDockDocked => IsRightDockShown && !_isMapSplit;
 
     /// <summary>Whether the folded dock's edge tab is shown.</summary>
     public bool IsRightDockEdgeTabVisible => IsRightDockOpen && IsRightDockFolded;

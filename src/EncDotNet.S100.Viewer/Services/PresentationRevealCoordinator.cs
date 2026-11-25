@@ -14,6 +14,11 @@ namespace EncDotNet.S100.Viewer.Services;
 /// layers remain owned by the injected <see cref="DatasetLoaderService"/>.
 /// </para>
 /// <para>
+/// It listens to every map's viewport (<see cref="IMapViewportSet"/>), so
+/// panning a map of a split that isn't the active one reveals its cells too
+/// (#1732); each map's session reveals against its own viewport.
+/// </para>
+/// <para>
 /// Viewport changes are debounced (trailing edge) so a single pan/zoom gesture
 /// coalesces into one reveal pass, and the pass is marshalled to the UI thread
 /// because it composes the map layer stack.
@@ -23,7 +28,7 @@ internal sealed class PresentationRevealCoordinator : IDisposable
 {
     private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(200);
 
-    private readonly IMapViewportNotifier _notifier;
+    private readonly IMapViewportSet _viewports;
     private readonly IUiDispatcher _uiDispatcher;
     private readonly DatasetLoaderService _loader;
     private readonly object _sync = new();
@@ -31,18 +36,18 @@ internal sealed class PresentationRevealCoordinator : IDisposable
     private bool _disposed;
 
     public PresentationRevealCoordinator(
-        IMapViewportNotifier notifier,
+        IMapViewportSet viewports,
         IUiDispatcher uiDispatcher,
         DatasetLoaderService loader)
     {
-        ArgumentNullException.ThrowIfNull(notifier);
+        ArgumentNullException.ThrowIfNull(viewports);
         ArgumentNullException.ThrowIfNull(uiDispatcher);
         ArgumentNullException.ThrowIfNull(loader);
 
-        _notifier = notifier;
+        _viewports = viewports;
         _uiDispatcher = uiDispatcher;
         _loader = loader;
-        _notifier.ViewportChanged += OnViewportChanged;
+        _viewports.ViewportsChanged += OnViewportsChanged;
     }
 
     public void Dispose()
@@ -50,7 +55,7 @@ internal sealed class PresentationRevealCoordinator : IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        _notifier.ViewportChanged -= OnViewportChanged;
+        _viewports.ViewportsChanged -= OnViewportsChanged;
         lock (_sync)
         {
             _debounceCts?.Cancel();
@@ -59,8 +64,13 @@ internal sealed class PresentationRevealCoordinator : IDisposable
         }
     }
 
-    private void OnViewportChanged(object? sender, MapViewportSnapshot snapshot)
+    private void OnViewportsChanged(object? sender, IReadOnlyList<MapViewViewport> viewports)
     {
+        // Each session reveals against its own map's viewport; the first is
+        // the fallback for a map not laid out yet.
+        if (viewports.Count == 0)
+            return;
+        var snapshot = viewports[0].Snapshot;
         CancellationTokenSource cts;
         lock (_sync)
         {

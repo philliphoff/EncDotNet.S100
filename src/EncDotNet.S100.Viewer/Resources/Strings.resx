@@ -10546,4 +10546,48 @@
   <data name="Tooltip_SignatureUnverifiedNoneOn" xml:space="preserve">
     <value>Signatures match the data, but no scheme administrator is trusted yet. Add one in Settings, Keys and certificates.</value>
   </data>
+  <data name="SplitMap_PaneLabelFormat" xml:space="preserve">
+    <value>Map {0}</value>
+    <comment>A map pane's label in reading order (split map D19), e.g. Map 1</comment>
+  </data>
+  <data name="SplitMap_Toggle" xml:space="preserve">
+    <value>Split map</value>
+    <comment>Title-bar button and split menu item: shows a second map pane or closes the others (D1)</comment>
+  </data>
+  <data name="SplitMap_MenuTooltip" xml:space="preserve">
+    <value>Split map options</value>
+    <comment>Tooltip of the chevron beside the title-bar split button</comment>
+  </data>
+  <data name="SplitMap_CloseOthers" xml:space="preserve">
+    <value>Close other maps</value>
+    <comment>Split menu: closes every pane but the active one (D3)</comment>
+  </data>
+  <data name="SplitMap_Swap" xml:space="preserve">
+    <value>Swap maps</value>
+    <comment>Split menu: swaps the panes' places</comment>
+  </data>
+  <data name="Menu_SplitMap" xml:space="preserve">
+    <value>Split Map</value>
+    <comment>View › Split Map (⌘\) (D1)</comment>
+  </data>
+  <data name="Tooltip_SplitMap" xml:space="preserve">
+    <value>Split the map (⌘\)</value>
+    <comment>Title-bar split button tooltip</comment>
+  </data>
+  <data name="Tooltip_SplitMapCtrl" xml:space="preserve">
+    <value>Split the map (Ctrl+\)</value>
+    <comment>Title-bar split button tooltip on Windows and Linux</comment>
+  </data>
+  <data name="SplitMap_ClosePaneFormat" xml:space="preserve">
+    <value>Close {0}</value>
+    <comment>Tooltip and name of a pane header's close button, e.g. Close Map 2</comment>
+  </data>
+  <data name="SplitMap_FoldedStripFormat" xml:space="preserve">
+    <value>{0} · folded</value>
+    <comment>The folded pane strip's vertical label (D17), e.g. Map 1 · folded</comment>
+  </data>
+  <data name="SplitMap_UnfoldFormat" xml:space="preserve">
+    <value>Show {0}</value>
+    <comment>Tooltip and name of a folded pane strip, e.g. Show Map 1</comment>
+  </data>
 </root>

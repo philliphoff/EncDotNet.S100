@@ -48,7 +48,10 @@ internal sealed class StatusBarViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _mouseLatText, value))
+            {
                 OnPropertyChanged(nameof(IsMouseLatLonVisible));
+                OnPropertyChanged(nameof(IsMouseMapLabelVisible));
+            }
         }
     }
 
@@ -66,6 +69,43 @@ internal sealed class StatusBarViewModel : ViewModelBase
 
     /// <summary>True when the cursor is over the map and a lat/long is shown.</summary>
     public bool IsMouseLatLonVisible => _mouseLatText.Length > 0;
+
+    private string _mouseMapLabel = string.Empty;
+    /// <summary>
+    /// The label of the map under the pointer ("Map 1") while the map is
+    /// split, shown before the lat/lon (#1732, D7); empty with one map.
+    /// </summary>
+    public string MouseMapLabel
+    {
+        get => _mouseMapLabel;
+        set
+        {
+            if (SetProperty(ref _mouseMapLabel, value))
+                OnPropertyChanged(nameof(IsMouseMapLabelVisible));
+        }
+    }
+
+    /// <summary>True while the lat/lon is shown with the label of the map under the pointer.</summary>
+    public bool IsMouseMapLabelVisible => _mouseMapLabel.Length > 0 && IsMouseLatLonVisible;
+
+    private string _activeMapLabel = string.Empty;
+    /// <summary>
+    /// The label of the active map ("Map 2") while the map is split: a badge
+    /// before the scale, overscale and DEPTHS, which follow it (#1732, D6);
+    /// empty with one map.
+    /// </summary>
+    public string ActiveMapLabel
+    {
+        get => _activeMapLabel;
+        set
+        {
+            if (SetProperty(ref _activeMapLabel, value))
+                OnPropertyChanged(nameof(IsActiveMapLabelVisible));
+        }
+    }
+
+    /// <summary>True while the map is split and the active map's badge is shown.</summary>
+    public bool IsActiveMapLabelVisible => _activeMapLabel.Length > 0;
 
     private string _mapScaleText = string.Empty;
     /// <summary>

@@ -101,6 +101,27 @@ public sealed class LayoutPersistenceTests : IDisposable
     };
 
     [Fact]
+    public void While_the_map_is_split_the_right_dock_opens_over_it()
+    {
+        // Split map D17: the right dock never takes a pane's room.
+        var vm = CreateViewModel(StandardTabs());
+        vm.Layout.IsRightDockOpen = true;
+        Assert.True(vm.Layout.IsRightDockDocked);
+        var changed = new List<string?>();
+        vm.Layout.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.Layout.IsMapSplit = true;
+
+        Assert.True(vm.Layout.IsRightDockShown);
+        Assert.True(vm.Layout.IsRightDockPanelVisible);
+        Assert.False(vm.Layout.IsRightDockDocked);
+        Assert.Contains(nameof(vm.Layout.IsRightDockDocked), changed);
+
+        vm.Layout.IsMapSplit = false;
+        Assert.True(vm.Layout.IsRightDockDocked);
+    }
+
+    [Fact]
     public void Check_passage_folds_object_information_to_its_edge_tab_and_restores_it()
     {
         var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));

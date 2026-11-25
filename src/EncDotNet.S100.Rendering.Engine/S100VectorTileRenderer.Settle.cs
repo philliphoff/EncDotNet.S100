@@ -47,7 +47,8 @@ public readonly record struct TileSettleState(
 /// <param name="GpuBytes">GPU-resident tile textures.</param>
 /// <param name="Tiles">Raster tiles resident across all layers.</param>
 /// <param name="Layers">Layers with tile state.</param>
-public readonly record struct TileCacheMemory(long RasterBytes, long GpuBytes, int Tiles, int Layers)
+/// <param name="GpuTiles">GPU-resident tile textures; one shared texture counts once (#1717).</param>
+public readonly record struct TileCacheMemory(long RasterBytes, long GpuBytes, int Tiles, int Layers, int GpuTiles)
 {
     /// <summary>Raster plus GPU bytes.</summary>
     public long TotalBytes => RasterBytes + GpuBytes;
@@ -146,7 +147,8 @@ public static partial class S100VectorTileRenderer
             TileMemoryPool.Raster.ResidentBytes,
             TileMemoryPool.Gpu.ResidentBytes,
             TileMemoryPool.Raster.Count,
-            layers);
+            layers,
+            TileMemoryPool.Gpu.Count);
     }
 
     /// <summary>One layer's input to <see cref="Summarise"/>.</summary>

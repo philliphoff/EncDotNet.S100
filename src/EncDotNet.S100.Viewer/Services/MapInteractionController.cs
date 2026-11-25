@@ -78,6 +78,22 @@ internal sealed class MapInteractionController
     /// </summary>
     public ChartReference.MapReferenceMenu? ReferenceMenu { get; init; }
 
+    /// <summary>
+    /// Whether this map is the active one of a split (#1732, D6): only the
+    /// active map writes the status bar's scale, overscale and depth basis,
+    /// and only its pointer moves reach the map tools. Null in hosts with one
+    /// map, where it always is.
+    /// </summary>
+    public Func<bool>? IsActiveMap { get; init; }
+
+    /// <summary>
+    /// The map's label ("Map 1") while the map is split, which prefixes the
+    /// status bar's lat/lon (#1732, D7); null or empty otherwise.
+    /// </summary>
+    public Func<string?>? MapLabel { get; init; }
+
+    private bool IsActive => IsActiveMap?.Invoke() ?? true;
+
     /// <summary>The context menu shown last, while it may still be open.</summary>
     internal ContextMenu? OpenContextMenu { get; private set; }
 
@@ -279,6 +295,22 @@ internal sealed class MapInteractionController
     {
         scaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
         compassRose.UpdateForViewport(viewport.Rotation);
+        if (IsActive)
+            UpdateStatusReadouts(viewport);
+    }
+
+    /// <summary>
+    /// Writes this map's scale, overscale and depth basis to the status bar,
+    /// as when it becomes the active map of a split (#1732, D6).
+    /// </summary>
+    public void RefreshStatusReadouts()
+    {
+        if (_mapControl?.Map?.Navigator is { } nav)
+            UpdateStatusReadouts(nav.Viewport);
+    }
+
+    private void UpdateStatusReadouts(Viewport viewport)
+    {
         _viewModel.StatusBar.MapScaleText = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
         UpdateOverscale(viewport);
         DepthBasis?.Invalidate();
@@ -612,8 +644,9 @@ internal sealed class MapInteractionController
 
         // Forward to active tool (e.g. measure-mode rubber-band update).
         // Move events are advisory: tools may set Handled but we still want
-        // the lat/lon readout updated above.
-        if (_toolController?.OnPointerMoved(e) == true)
+        // the lat/lon readout updated above. The tools work in the active
+        // map of a split (#1732); a move over another map isn't theirs.
+        if (IsActive && _toolController?.OnPointerMoved(e) == true)
         {
             e.Handled = true;
         }
@@ -691,6 +724,7 @@ internal sealed class MapInteractionController
         // Normalize longitude into the canonical [-180, 180] range so that
         // panning past the antimeridian still produces sensible readings.
         lon = ((lon + 540.0) % 360.0) - 180.0;
+        _viewModel.StatusBar.MouseMapLabel = MapLabel?.Invoke() ?? string.Empty;
         _viewModel.StatusBar.MouseLatText = LatLonFormatter.FormatLatitude(lat);
         _viewModel.StatusBar.MouseLonText = LatLonFormatter.FormatLongitude(lon);
     }

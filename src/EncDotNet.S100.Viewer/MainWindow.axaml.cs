@@ -19,7 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace EncDotNet.S100.Viewer;
 
-public partial class MainWindow : ShadUI.Window
+public partial class MainWindow : ShadUI.Window, IMapPaneHost
 {
     private readonly IRecentFilesService _recentFiles;
     private readonly IDatasetLoaderService _loader;
@@ -30,7 +30,19 @@ public partial class MainWindow : ShadUI.Window
     private readonly MainViewModel _viewModel;
     private readonly ILibraryImporter _libraryImporter;
     private readonly CancellationTokenSource _windowLifetimeCancellation = new();
-    private readonly MapView _mapView;
+    private readonly MapViews _mapViews;
+    private readonly MapSplitViewModel _split;
+    private readonly MapViewProbes _mapProbes;
+    private readonly DebouncedSettingsSaver _mapLayoutSaver;
+    private readonly Dictionary<MapViewId, MapView> _paneViews = [];
+    private bool _diPlannerTaken;
+    private bool _closing;
+    private string? _paneLayoutSignature;
+    private float _routeCheckLegendReserve;
+    private EncDotNet.S100.Viewer.Services.Legends.ILegendSectionSource? _activeCoverageLegend;
+
+    /// <summary>The active map (#1730, #1732), or <see langword="null"/> once the window has closed.</summary>
+    private MapView? ActiveView => _mapViews.Active as MapView;
 
     /// <summary>The status-bar width below which the MARKING pill drops its label.</summary>
     private const double AmlMarkingLabelMinWidth = 900;
@@ -146,15 +158,23 @@ public partial class MainWindow : ShadUI.Window
             },
             IsMapKeyScope);
 
-        // The Time HUD and the dock follow the map's width (#712 F5).
-        MapArea.SizeChanged += (_, e) => _viewModel.Layout.MapWidth = e.NewSize.Width;
+        // The dock follows the map area's width (#712 F5); the split folds
+        // panes that don't fit it (#1732, D17).
+        MapArea.SizeChanged += (_, e) =>
+        {
+            _viewModel.Layout.MapWidth = e.NewSize.Width;
+            if (_split is { } split)
+                split.MapAreaWidth = e.NewSize.Width;
+        };
 
         // Legends D9: in a narrow window the right dock opens folded; its edge
         // tab shows it over the map's right edge, and Escape or a map click
         // folds it again.
         _viewModel.Layout.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(ShellLayoutViewModel.IsRightDockOverlaid))
+            if (e.PropertyName is nameof(ShellLayoutViewModel.IsRightDockOverlaid)
+                or nameof(ShellLayoutViewModel.IsRightDockDocked)
+                or nameof(ShellLayoutViewModel.IsRightDockPanelVisible))
                 ApplyRightDockOverlay();
         };
         AddHandler(KeyDownEvent, (_, e) =>
@@ -166,18 +186,42 @@ public partial class MainWindow : ShadUI.Window
             RoutingStrategies.Tunnel, handledEventsToo: true);
         SizeChanged += (_, e) => _viewModel.Layout.WindowWidth = e.NewSize.Width;
 
-        // The one map (#1729): a MapView owns the map host over the pane's
-        // control, its overlays, interaction and probes. Hand the loader the
-        // host now that the Mapsui control exists, and seed catalogues / build
-        // the pipeline factory from CLI options. The loader subscribes to its
-        // own settings dependencies internally.
-        _mapView = new MapView(new MapViewId("map-1"), InitialMapPane, App.Services);
-        var mapHost = _mapView.Host;
-        // Registering the view makes it the active map (#1730): the map
-        // capability accessors and the window-level viewport notifier bind
-        // to it, the image renderer (the MCP readiness gate) last.
-        var mapViews = App.Services.GetRequiredService<MapViews>();
-        mapViews.Add(_mapView);
+        // The maps (#1729, #1730, #1732): a MapView per pane owns the map host
+        // over the pane's control, its overlays, interaction and probes.
+        // Registering a view with MapViews binds the map capability accessors
+        // and the window-level viewport notifier to the active one.
+        _mapViews = App.Services.GetRequiredService<MapViews>();
+        _mapProbes = new MapViewProbes(
+            _mapViews,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>(),
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor>());
+        var settingsForLayout = App.Services.GetRequiredService<ViewerSettings>();
+        // As with the window placement (#825), automation runs neither read
+        // nor write the saved split, so an agent's maps don't depend on the
+        // user's last session.
+        var persistMapLayout = options?.Ephemeral != true
+            && !settingsForLayout.IsReadOnly
+            && !settingsForLayout.McpConfiguredFromCommandLine;
+        _mapLayoutSaver = new DebouncedSettingsSaver(
+            save: () =>
+            {
+                if (_closing || !persistMapLayout)
+                    return;
+                _split!.WriteTo(settingsForLayout.MapLayout ??= new MapLayoutSettings());
+                try { settingsForLayout.Save(); } catch { /* best-effort */ }
+            },
+            dispatch: action => Dispatcher.UIThread.Post(action));
+        _split = new MapSplitViewModel(_mapViews, this, _mapLayoutSaver.RequestSave);
+        _split.LayoutChanged += (_, _) => ApplyPaneLayout();
+        _mapViews.ActiveChanged += (_, _) => OnActiveMapChanged();
+        SplitMapControls.DataContext = _split;
+        // View › Split Map: ⌘\ is the macOS menu item's; Ctrl+\ elsewhere (D1).
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.OemPipe, KeyModifiers.Control),
+            Command = _split.ToggleSplitCommand,
+        });
+
         // Let the feedback reporter capture the whole application window.
         App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;
         // Render-state controller bridges MCP / scripted callers to the
@@ -192,21 +236,28 @@ public partial class MainWindow : ShadUI.Window
         // shows) without exposing MainViewModel directly.
         App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
             new ViewerUiController(_viewModel.Layout);
-        // The loader drives every map's dataset session (#1731).
-        _loader.Initialize(mapViews, options);
+        // The loader drives every map's dataset session (#1731), following
+        // the maps as they're added and removed.
+        _loader.Initialize(_mapViews, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
-        _viewModel.Datasets.ZoomDispatcher = mapHost.ZoomToExtent;
-        // Wire the map's overlays, probes, interaction and tools, in the
-        // order they stack on the map.
-        _mapView.Attach(
-            _viewModel,
-            _loader,
-            _pickService,
-            new MapNavigationControls(ZoomInButton, ZoomOutButton, ZoomToExtentButton, CompassRose));
+        _viewModel.Datasets.ZoomDispatcher = extent => ActiveView?.Host.ZoomToExtent(extent);
+        // Open the maps: the saved split with each pane's view (D2), or one
+        // map. A view set on the command line wins over the saved views.
+        _split.Restore(
+            persistMapLayout ? settingsForLayout.MapLayout : null,
+            restoreViews: options?.HasExplicitViewport != true);
 
         Closed += (_, _) =>
         {
+            // Save the panes and their views while the maps still exist (D2).
+            if (!_closing && persistMapLayout)
+            {
+                _split.WriteTo(settingsForLayout.MapLayout ??= new MapLayoutSettings());
+                try { settingsForLayout.Save(); } catch { /* best-effort */ }
+            }
+            _closing = true;
+            _mapLayoutSaver.Dispose();
             _windowLifetimeCancellation.Cancel();
             _windowLifetimeCancellation.Dispose();
             App.Services.GetRequiredService<DatasetProcessorOwner>().Dispose();
@@ -223,11 +274,15 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current = null;
             App.Services.GetRequiredService<IAppScreenshotProvider>().Target = null;
             // Removing the last view clears the map capability accessors,
-            // the image renderer first.
-            mapViews.Remove(_mapView);
-            // The view detaches its probes, overlays and dynamic sources and
-            // disposes the map host.
-            _mapView.Dispose();
+            // the image renderer first, and the probes. Each view detaches its
+            // overlays and dynamic sources and disposes its map host.
+            foreach (var view in _paneViews.Values.ToArray())
+            {
+                _mapViews.Remove(view);
+                view.Dispose();
+            }
+            _paneViews.Clear();
+            _mapProbes.Dispose();
         };
         DataContext = _viewModel;
 
@@ -239,6 +294,7 @@ public partial class MainWindow : ShadUI.Window
             openDatasetAsync: OpenDatasetAsync,
             openExchangeSetAsync: OpenExchangeSetAsync,
             openExchangeSetZipAsync: OpenExchangeSetZipAsync,
+            split: _split,
             libraryImporter: _libraryImporter);
 
         // Open Recent replays exchange sets through the same progress UI.
@@ -545,7 +601,7 @@ public partial class MainWindow : ShadUI.Window
         // Harbour-scale resolution (~web-mercator zoom 13): close enough to
         // see the own-ship and its surroundings without losing context.
         const double resolution = 156543.03392804097 / (1 << 13);
-        _mapView.Host.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
+        ActiveView?.Host.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
         return true;
     }
 
@@ -684,7 +740,7 @@ public partial class MainWindow : ShadUI.Window
             var extent = new MRect(minX, minY, maxX, maxY);
             if (extent.Width > 0 && extent.Height > 0)
             {
-                _mapView.Host.SetViewportToExtent(extent);
+                ActiveView?.Host.SetViewportToExtent(extent);
             }
             return;
         }
@@ -695,7 +751,7 @@ public partial class MainWindow : ShadUI.Window
             // Standard web-mercator resolution (metres/pixel) at a given
             // 256-pixel-tile zoom level: 156543.03392804097 / 2^zoom.
             var resolution = 156543.03392804097 / Math.Pow(2, zoom);
-            _mapView.Host.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
+            ActiveView?.Host.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
         }
     }
 
@@ -778,10 +834,13 @@ public partial class MainWindow : ShadUI.Window
         RouteCheckLegend.LayoutUpdated += (_, _) =>
         {
             // From the map's bottom edge to the legend's top.
+            // The legend's parent ends at the map area's bottom edge, as each pane does.
             var reserve = RouteCheckLegend.IsEffectivelyVisible && routeCheckLegend.IsVisible && RouteCheckLegend.Bounds.Height > 0
-                ? (float)(MapArea.Bounds.Height - RouteCheckLegend.Bounds.Y)
+                ? (float)(MapWindowOverlays.Bounds.Height - RouteCheckLegend.Bounds.Y)
                 : 0f;
-            _mapView.SetRouteCheckLegendReserve(reserve);
+            _routeCheckLegendReserve = reserve;
+            foreach (var view in _paneViews.Values)
+                view.SetRouteCheckLegendReserve(reserve);
         };
     }
 
@@ -790,7 +849,7 @@ public partial class MainWindow : ShadUI.Window
     /// editor, measure and range &amp; bearing keys.
     /// </summary>
     private bool IsMapKeyScope(Visual visual) =>
-        ReferenceEquals(visual, _mapView.Pane.MapControl) || ReferenceEquals(visual, MapArea);
+        visual is EncDotNet.S100.Viewer.Diagnostics.InstrumentedMapControl || ReferenceEquals(visual, MapArea);
 
     private async Task OpenDatasetAsync()
     {
@@ -1008,7 +1067,7 @@ public partial class MainWindow : ShadUI.Window
         if (result.PendingTerminal is not { } pending || notification.IsDismissed)
             return;
 
-        if (_mapView.RenderActivity is { } renderActivity)
+        if (ActiveView?.RenderActivity is { } renderActivity)
         {
             try
             {
@@ -1047,7 +1106,7 @@ public partial class MainWindow : ShadUI.Window
         var extent = new MRect(minX, minY, maxX, maxY);
         if (extent.Width > 0 && extent.Height > 0)
         {
-            _mapView.Host.ZoomToExtent(extent, durationMilliseconds: 250);
+            ActiveView?.Host.ZoomToExtent(extent, durationMilliseconds: 250);
         }
     }
 
@@ -1091,10 +1150,12 @@ public partial class MainWindow : ShadUI.Window
                 break;
         }
 
-        var extent = unionSlot[0] ?? _mapView.Pane.MapControl.Map.Extent;
+        if (ActiveView is not { } view)
+            return;
+        var extent = unionSlot[0] ?? view.Pane.MapControl.Map.Extent;
         if (extent is null || extent.Width <= 0 || extent.Height <= 0) return;
 
-        _mapView.Host.ZoomToExtent(extent, durationMilliseconds: 250);
+        view.Host.ZoomToExtent(extent, durationMilliseconds: 250);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
@@ -1205,7 +1266,10 @@ public partial class MainWindow : ShadUI.Window
     /// </summary>
     private void ApplyRightDockOverlay()
     {
-        var overlaid = _viewModel.Layout.IsRightDockOverlaid;
+        // While split, the shown dock opens over the map too, so it never
+        // takes a pane's room (#1732, D17); it covers part of the rightmost pane.
+        var overlaid = _viewModel.Layout.IsRightDockOverlaid
+            || (_viewModel.Layout.IsMapSplit && _viewModel.Layout.IsRightDockShown);
         Avalonia.Controls.Grid.SetColumn(RightDockPanel, overlaid ? 2 : 4);
         RightDockPanel.HorizontalAlignment = overlaid
             ? Avalonia.Layout.HorizontalAlignment.Right
@@ -1267,7 +1331,7 @@ public partial class MainWindow : ShadUI.Window
         {
             if (visual is Avalonia.Controls.TextBox)
                 return false;
-            if (visual is Views.TimelineView or Views.TimeHudView || ReferenceEquals(visual, _mapView.Pane.MapControl))
+            if (visual is Views.TimelineView or Views.TimeHudView or EncDotNet.S100.Viewer.Diagnostics.InstrumentedMapControl)
                 return true;
         }
         return false;
