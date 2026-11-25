@@ -73,11 +73,12 @@ public class ViewerDataPathsTests
     public void CacheDirectories_IncludeTheTileCache()
     {
         var withoutBase = new ViewerDataPaths();
-        Assert.Equal(7, withoutBase.CacheDirectories.Count);
+        Assert.Equal(8, withoutBase.CacheDirectories.Count);
         Assert.Contains(withoutBase.CacheDirectories, d => d.EndsWith("tiles"));
+        Assert.Contains(withoutBase.RuleProbeCacheDirectory, withoutBase.CacheDirectories);
 
         var withBase = new ViewerDataPaths(Path.Combine(Path.GetTempPath(), "encdotnet-" + Guid.NewGuid().ToString("N")));
-        Assert.Equal(7, withBase.CacheDirectories.Count);
+        Assert.Equal(8, withBase.CacheDirectories.Count);
         Assert.Contains(withBase.CacheDirectories, d => d.EndsWith("tiles"));
     }
 

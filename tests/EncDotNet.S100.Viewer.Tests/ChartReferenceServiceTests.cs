@@ -63,6 +63,65 @@ public sealed class ChartReferenceServiceTests
     }
 
     [Fact]
+    public async Task The_bundled_S101_index_has_the_committed_probe_results()
+    {
+        using var f = new Fixture("S-101");
+        var ct = TestContext.Current.CancellationToken;
+
+        var index = await f.Service.GetIndexAsync(S101, ct);
+
+        Assert.NotNull(index?.Probes);
+        Assert.Equal(await f.Features.GetCatalogueHashAsync(S101, ct), index.Probes.FeatureCatalogueHash);
+        Assert.NotNull(index.Probes.Find("LateralBeacon"));
+    }
+
+    [Fact]
+    public async Task A_changed_catalogue_is_probed_in_the_background_and_cached()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var cache = Directory.CreateTempSubdirectory("rule-probe-cache-").FullName;
+
+        // The bundled feature catalogue with a comment added: another hash,
+        // so the committed results don't apply.
+        using var features = new FeatureCatalogueManager((string spec) =>
+        {
+            using var bundled = Specification.TryOpenFeatureCatalogue(spec);
+            if (bundled is null) return null;
+            var changed = new MemoryStream();
+            bundled.CopyTo(changed);
+            changed.Write("\n<!-- changed -->\n"u8);
+            changed.Position = 0;
+            return changed;
+        });
+        using var portrayals = new PortrayalCatalogueManager();
+        portrayals.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+        try
+        {
+            using var service = new ChartReferenceService(
+                features, portrayals, () => [], bundledSpecs: ["S-101"], probeCacheDirectory: cache,
+                traceEngine: () => ViewerLuaEngine.Create(EncDotNet.S100.Scripting.LuaEngineKind.LuaCSharp));
+            var ready = new TaskCompletionSource();
+            service.ProbesReady += (_, e) => ready.TrySetResult();
+
+            var first = await service.GetIndexAsync(S101, ct);
+            Assert.NotNull(first);
+            Assert.Null(first.Probes);
+
+            await ready.Task.WaitAsync(TimeSpan.FromMinutes(5), ct);
+            var probed = await service.GetIndexAsync(S101, ct);
+
+            Assert.NotNull(probed?.Probes);
+            Assert.Same(first.FeatureTypes, probed.FeatureTypes);
+            Assert.True(probed.Probes.Matches(await features.GetCatalogueHashAsync(S101, ct), await portrayals.GetCatalogueHashAsync(S101, ct)));
+            Assert.Single(Directory.GetFiles(cache));
+        }
+        finally
+        {
+            Directory.Delete(cache, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Callers_asking_at_once_share_one_build()
     {
         using var f = new Fixture("S-101");
