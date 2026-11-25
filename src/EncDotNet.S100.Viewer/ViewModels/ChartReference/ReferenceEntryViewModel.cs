@@ -30,6 +30,9 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
     /// <summary>The size of each palette's glyph in a symbol entry, in logical pixels.</summary>
     public const int PaletteGlyphSize = 56;
 
+    /// <summary>The size of a value symbol's or a before/after pair's glyph (R13c, #1722), in logical pixels.</summary>
+    public const int TileGlyphSize = 36;
+
     /// <summary>The largest a glyph at chart size gets, in logical pixels.</summary>
     public const int MaxChartGlyphSize = 120;
 
@@ -242,17 +245,27 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
     /// <summary>The colour token a palette's tile is filled with: the chart's deep water.</summary>
     internal const string TileToken = "DEPDW";
 
+    /// <summary>
+    /// The glyph tiles the entry shows besides its lead (R13c, #1722): an
+    /// attribute's value symbols, a display setting's before/after pairs.
+    /// They are drawn with the others, through the host's glyph cache.
+    /// </summary>
+    protected virtual IEnumerable<ReferenceGlyphTile> Tiles => [];
+
     /// <summary>Whether the entry shows its glyph in each palette (a symbol does).</summary>
     protected virtual bool DrawsPalettes => false;
 
     private void DrawGlyphs()
     {
         var artwork = Context.Artwork;
-        if (artwork is null || Lead is not { HasGlyph: true } lead)
+        if (artwork is null)
             return;
         var glyphs = Context.Glyphs;
         var palette = glyphs.Palette;
         var version = Interlocked.Increment(ref _glyphVersion);
+        DrawTiles(artwork, glyphs, palette, version);
+        if (Lead is not { HasGlyph: true } lead)
+            return;
 
         if (glyphs.TryGet(lead.Key, HeroGlyphSize, HeroGlyphSize, out var held))
         {
@@ -314,6 +327,45 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
                         OnPaletteTile(p, new Avalonia.Media.Immutable.ImmutableSolidColorBrush(color));
                 });
         }
+    }
+
+    // Each glyph is drawn once, however many tiles show it.
+    private void DrawTiles(ChartReferenceArtwork artwork, ChartReferenceGlyphCache glyphs, PaletteType palette, int version)
+    {
+        foreach (var group in Tiles.Where(t => t.Lead is not null).GroupBy(t => t.Lead!.Key))
+        {
+            var tiles = group.ToList();
+            var lead = tiles[0].Lead!;
+            if (glyphs.TryGet(lead.Key, TileGlyphSize, TileGlyphSize, out var held))
+            {
+                foreach (var tile in tiles)
+                    tile.Glyph = held;
+                continue;
+            }
+
+            foreach (var tile in tiles)
+                tile.Glyph = null;
+            Track(
+                async () =>
+                {
+                    var row = await artwork.BuildAsync(lead, palette).ConfigureAwait(false);
+                    return glyphs.Palette != palette ? null : glyphs.Get(lead.Key, TileGlyphSize, TileGlyphSize, _ => row);
+                },
+                glyph =>
+                {
+                    if (version != _glyphVersion)
+                        return;
+                    foreach (var tile in tiles)
+                        tile.Glyph = glyph;
+                });
+        }
+    }
+
+    /// <summary>Draws the tiles of a part shown later (Show all), which <see cref="Start"/> didn't draw.</summary>
+    protected void DrawMoreTiles()
+    {
+        if (Context.Artwork is { } artwork)
+            DrawTiles(artwork, Context.Glyphs, Context.Glyphs.Palette, _glyphVersion);
     }
 
     /// <summary>A symbol's size on the chart in logical pixels, at the chart's 0.32 mm per pixel, capped at <see cref="MaxChartGlyphSize"/>.</summary>

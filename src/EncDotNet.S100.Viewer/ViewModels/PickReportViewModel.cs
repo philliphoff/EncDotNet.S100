@@ -47,6 +47,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private Services.Legends.LegendService? _legend;
     private ReferenceTerms? _terms;
     private ChartReferenceIndex? _termIndex;
+    private ReferenceTerms? _featureTerms;
     private FeatureTypeEntry? _featureTypeEntry;
     private int _termVersion;
 
@@ -303,10 +304,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             if (!SetProperty(ref _terms, value))
                 return;
             (OpenInReferenceCommand as RelayCommand)?.NotifyCanExecuteChanged();
+            ForgetFeatureTerms();
             if (_selectedHit is not null)
                 ResolveTerms(_selectedHit);
         }
     }
+
+    /// <summary>
+    /// The terms the pick's view reads (R13c, #1722): <see cref="Terms"/>,
+    /// opening an attribute's or the feature type's entry from the picked
+    /// feature, so the attribute shows the symbol each value gives it.
+    /// </summary>
+    public ReferenceTerms? FeatureTerms =>
+        _featureTerms ??= _terms is { } terms && _selectedHit is { } hit ? terms.ForFeature(ReferenceFeature.Of(hit)) : _terms;
 
     /// <summary>Runs work on the UI thread when an index is read; the default runs it at once.</summary>
     public Action<Action> Post { get; set; } = static a => a();
@@ -938,6 +948,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         RefreshLegendKey();
     }
 
+    private void ForgetFeatureTerms()
+    {
+        _featureTerms = null;
+        OnPropertyChanged(nameof(FeatureTerms));
+    }
+
     private void ApplyHitToDetailFields(PickHit? hit)
     {
         Warnings.Select(hit);
@@ -946,6 +962,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         _termVersion++;
         _termIndex = null;
         _featureTypeEntry = null;
+        ForgetFeatureTerms();
         if (hit is null)
         {
             FeatureType = null;

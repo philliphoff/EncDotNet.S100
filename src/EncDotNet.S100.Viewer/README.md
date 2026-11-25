@@ -1038,9 +1038,18 @@ glyph large and at the size the chart draws it, in millimetres:
   came from (the S-52 Presentation Library, or new in S-101) and the feature
   types that use it, each with its cases;
 - an **attribute** lists its values with their definitions, and the feature
-  types whose symbol it changes;
+  types whose symbol it changes. Opened from a pick, or from a feature type's
+  entry, each value also shows the symbol that feature type gets with it,
+  Simplified and Paper chart, and a pick's own value is highlighted;
 - a **display setting** gives its default and current state, with **Change in
-  Display settings**, and the feature types it changes.
+  Display settings**, before/after pairs by feature type (off then on, or
+  either side of a depth such as the safety contour, the first six with
+  **Show all**), and the feature types it changes.
+
+The value symbols and pairs come from the rule probe results committed with
+the S-101 catalogue (`ChartReferenceIndex.Probes`). Each glyph is a term for
+its symbol. Without probe results the entries list values and feature types
+alone.
 
 Every name in an entry is a **term**, with a dotted underline, and so are the
 attribute, value and setting names in Drawn with ("Colour is red"). Rest the

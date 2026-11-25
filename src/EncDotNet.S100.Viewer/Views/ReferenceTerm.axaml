@@ -46,6 +46,41 @@
             </ControlTemplate>
         </Setter>
     </Style>
+    <!--
+      A glyph that is a term (R13c, #1722): an attribute's value symbol or a display
+      setting's before/after pair, which opens its symbol's entry. Its Text is the
+      symbol's id, its accessible name; the glyph is its content.
+    -->
+    <Style Selector="views|ReferenceTerm.glyph">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Panel>
+                    <Border Name="PART_Border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                    </Border>
+                    <Popup Name="PART_Peek"
+                           IsOpen="{TemplateBinding IsPeekOpen, Mode=TwoWay}"
+                           PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                           Placement="BottomEdgeAlignedLeft"
+                           OverlayDismissEventPassThrough="True"
+                           IsLightDismissEnabled="False">
+                        <views:ReferencePeekView Name="PART_PeekView"
+                                                 DataContext="{TemplateBinding Peek}" />
+                    </Popup>
+                </Panel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="views|ReferenceTerm.glyph:term">
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
     <!-- An inline term keeps its exact width, so punctuation after it sits tight (#1651). -->
     <Style Selector="views|ReferenceTerm.inline /template/ Border#PART_Border">
         <Setter Property="UseLayoutRounding" Value="False" />

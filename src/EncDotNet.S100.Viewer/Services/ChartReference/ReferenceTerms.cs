@@ -158,6 +158,33 @@ internal sealed class ReferenceTerms
         return new ReferenceTerms(Glyphs, open, _indexes, art, Examiner, Urls, _simplified, ready) { OpenFromFeature = OpenFromFeature };
     }
 
+    /// <summary>
+    /// These terms for a picked feature (R13c, #1722): a click on an
+    /// attribute's term, or the feature type's, opens its entry from
+    /// <paramref name="feature"/>, so an attribute shows the symbol each value
+    /// gives the feature and highlights its own. Other terms open as before.
+    /// </summary>
+    /// <param name="feature">The picked feature.</param>
+    /// <returns>The terms; these terms when they can't open from a feature.</returns>
+    public ReferenceTerms ForFeature(ReferenceFeature feature)
+    {
+        ArgumentNullException.ThrowIfNull(feature);
+        if (OpenFromFeature is not { } open)
+            return this;
+        return new ReferenceTerms(
+            Glyphs,
+            key => open(key, key.Kind is ReferenceKind.Attribute or ReferenceKind.FeatureType ? feature : null),
+            _indexes,
+            _artwork,
+            Examiner,
+            Urls,
+            _simplified,
+            _ready)
+        {
+            OpenFromFeature = open,
+        };
+    }
+
     /// <summary>A plain set of terms over one index, for hosts that build none (tests, the study page).</summary>
     /// <param name="context">The entry view's host.</param>
     internal static ReferenceTerms Of(ReferenceEntryContext context)

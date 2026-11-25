@@ -14,13 +14,17 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// settings</b>, and the feature types it changes.
 /// </summary>
 /// <remarks>
-/// The before/after pairs from the rules that branch on it wait for rule
-/// probing (R13).
+/// With probe results (R13a), it also shows before/after pairs from the
+/// rules that branch on it, grouped by feature type (R13c, #1722; see
+/// <see cref="ReferencePairFinder"/>). Without them, it lists the feature
+/// types alone.
 /// </remarks>
 internal sealed class DisplaySettingEntryViewModel : ReferenceEntryViewModel
 {
     private readonly DisplaySettingEntry _setting;
     private string? _current;
+    private double? _currentNumber;
+    private string? _currentValue;
 
     /// <summary>Creates the entry view.</summary>
     /// <param name="setting">The display setting.</param>
@@ -38,6 +42,8 @@ internal sealed class DisplaySettingEntryViewModel : ReferenceEntryViewModel
                 .OrderBy(l => l.Name, StringComparer.CurrentCulture),
         ];
         ChangeCommand = new RelayCommand(() => context.ChangeSetting?.Invoke(setting.Code));
+        IsToggle = Toggle(setting.Default) is not null;
+        BeforeAfter = PairsOf(setting);
         ReadCurrent();
     }
 
@@ -76,14 +82,115 @@ internal sealed class DisplaySettingEntryViewModel : ReferenceEntryViewModel
     /// <summary>Whether a rule branches on it.</summary>
     public bool HasChanges => Changes.Count > 0;
 
+    /// <summary>
+    /// The before/after pairs from the rules that branch on it, grouped by
+    /// feature type (R13c); empty without probe results.
+    /// </summary>
+    public IReadOnlyList<ReferencePairGroup> BeforeAfter { get; }
+
+    /// <summary>Whether there are before/after pairs.</summary>
+    public bool HasBeforeAfter => BeforeAfter.Count > 0;
+
+    /// <summary>Whether it is on or off, rather than a number.</summary>
+    public bool IsToggle { get; }
+
+    /// <summary>"Off, then on", or "Either side of 30 m": how to read the pairs.</summary>
+    public string BeforeAfterNote => IsToggle
+        ? Strings.Reference_PairsOffOn
+        : string.Format(
+            CultureInfo.CurrentCulture,
+            Strings.Reference_PairsEitherSide,
+            _currentValue ?? string.Format(CultureInfo.CurrentCulture, Strings.Reference_Metres, _setting.Default));
+
+    /// <inheritdoc />
+    protected override IEnumerable<ReferenceGlyphTile> Tiles =>
+        BeforeAfter.SelectMany(g => g.Visible).SelectMany(p => (ReferenceGlyphTile[])[p.Before, p.After]);
+
     /// <summary>Reads the current value again, after the settings changed.</summary>
     internal void ReadCurrent()
     {
-        Current = Context.Settings is { } settings && ReferenceTargets.CurrentValue(settings, _setting.Code) is { } value
+        var mariner = Context.Settings?.BuildMarinerSettings();
+        _currentValue = mariner is null ? null : ReferenceTargets.CurrentValue(mariner, _setting.Code);
+        Current = _currentValue is { } value
             ? string.Format(CultureInfo.CurrentCulture, Strings.Reference_Current, value)
             : null;
+        _currentNumber = mariner is not null && ProbeParts.TryNumber(ReferenceTargets.Value(mariner, _setting.Code), out var n) ? n : null;
         OnPropertyChanged(nameof(CanChange));
+        OnPropertyChanged(nameof(BeforeAfterNote));
+        Relabel();
     }
+
+    // A number's pairs say the values either side of the one set now.
+    private void Relabel()
+    {
+        if (IsToggle || !ProbeParts.TryNumber(_setting.Default, out var probedAt))
+            return;
+        var now = _currentNumber ?? probedAt;
+        foreach (var pair in BeforeAfter.SelectMany(g => g.Pairs))
+        {
+            if (pair.Offsets is not { } o)
+                continue;
+            pair.Caption = string.Format(
+                CultureInfo.CurrentCulture,
+                Strings.Reference_PairCaption,
+                o.Attribute,
+                (now - (probedAt - o.Below)).ToString("0.##", CultureInfo.CurrentCulture),
+                (now + (o.Above - probedAt)).ToString("0.##", CultureInfo.CurrentCulture));
+        }
+    }
+
+    private List<ReferencePairGroup> PairsOf(DisplaySettingEntry setting)
+    {
+        if (Index.Probes is not { } probes)
+            return [];
+        var isToggle = Toggle(setting.Default) is not null;
+        var isNumber = ProbeParts.TryNumber(setting.Default, out var probedAt);
+        if (!isToggle && !isNumber)
+            return [];
+        var branching = new HashSet<string>(setting.ConditionedFeatureTypes, StringComparer.OrdinalIgnoreCase);
+        var groups = new List<ReferencePairGroup>();
+        foreach (var probe in probes.FeatureTypes)
+        {
+            // A number's pairs are only from the rules that read it: another
+            // rule's threshold may happen to equal its default.
+            if (!isToggle && !branching.Contains(probe.Code))
+                continue;
+            if (LinkTo(new ReferenceKey(Index.Spec, ReferenceKind.FeatureType, probe.Code)) is not { } link)
+                continue;
+            List<ReferencePair> pairs = isToggle
+                ?
+                [
+                    .. ReferencePairFinder.Toggle(probe, setting.Code)
+                        .Select(p => new ReferencePair(link.Name, Tile(p.Before), Tile(p.After))),
+                ]
+                :
+                [
+                    .. ReferencePairFinder.Either(probe, probedAt)
+                        .Select(p => new ReferencePair(link.Name, Tile(p.Before), Tile(p.After))
+                        {
+                            Offsets = (AttributeName(p.Attribute), p.Below, p.Above),
+                        }),
+                ];
+            if (pairs.Count > 0)
+                groups.Add(new ReferencePairGroup(link, pairs, () => Context.Post(DrawMoreTiles)));
+        }
+
+        return [.. groups.OrderBy(g => g.Feature.Name, StringComparer.CurrentCulture)];
+
+        ReferenceGlyphTile Tile(string part) => ReferenceGlyphTile.Of(part, Index.Spec, Index, Context.Open);
+    }
+
+    private string AttributeName(string code) =>
+        Index.TryGet(new ReferenceKey(Index.Spec, ReferenceKind.Attribute, code), out var entry)
+            ? ChartReferenceRowViewModel.NameOf(entry)
+            : code;
+
+    private static bool? Toggle(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "true" => true,
+        "false" => false,
+        _ => null,
+    };
 
     /// <inheritdoc />
     public override void Close()

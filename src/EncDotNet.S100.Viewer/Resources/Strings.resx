@@ -9869,6 +9869,74 @@
     <value>Feature types it changes</value>
     <comment>Heading of the feature types whose rules branch on a display setting</comment>
   </data>
+  <data name="Reference_NotProbed" xml:space="preserve">
+    <value>Not probed</value>
+    <comment>A value symbol's tile when the rule probe didn't try the value</comment>
+  </data>
+  <data name="Reference_NothingDrawn" xml:space="preserve">
+    <value>Nothing drawn</value>
+    <comment>A value symbol's or pair's tile when the rule drew no symbol, fill or line</comment>
+  </data>
+  <data name="Reference_ValueSymbolsHeading" xml:space="preserve">
+    <value>Drawn for {0}</value>
+    <comment>Heading of an attribute's values with the symbol each gives a feature type; {0} is the feature type's name</comment>
+  </data>
+  <data name="Reference_StyleSimplified" xml:space="preserve">
+    <value>Simplified</value>
+    <comment>Column of an attribute's value symbols with Simplified symbols on</comment>
+  </data>
+  <data name="Reference_StylePaperChart" xml:space="preserve">
+    <value>Paper chart</value>
+    <comment>Column of an attribute's value symbols with Simplified symbols off</comment>
+  </data>
+  <data name="Reference_NoValue" xml:space="preserve">
+    <value>No value</value>
+    <comment>A value symbol row for the attribute left out</comment>
+  </data>
+  <data name="Reference_FeatureValue" xml:space="preserve">
+    <value>This feature</value>
+    <comment>Badge on the picked feature's own value in an attribute's value symbols</comment>
+  </data>
+  <data name="Reference_ValueSymbolsName" xml:space="preserve">
+    <value>{0}: simplified {1}, paper chart {2}</value>
+    <comment>Accessible name of a value symbol row; {0} the value, {1} and {2} the symbols</comment>
+  </data>
+  <data name="Reference_ValueSymbolsNameOwn" xml:space="preserve">
+    <value>{0}: simplified {1}, paper chart {2}, this feature's value</value>
+    <comment>Accessible name of the picked feature's own value symbol row</comment>
+  </data>
+  <data name="Reference_BeforeAfter" xml:space="preserve">
+    <value>Before and after</value>
+    <comment>Heading of a display setting's before/after pairs</comment>
+  </data>
+  <data name="Reference_PairsOffOn" xml:space="preserve">
+    <value>Off, then on</value>
+    <comment>How to read an on/off display setting's before/after pairs</comment>
+  </data>
+  <data name="Reference_PairsEitherSide" xml:space="preserve">
+    <value>Either side of {0}</value>
+    <comment>How to read a number display setting's before/after pairs; {0} is the value now, e.g. 30 m</comment>
+  </data>
+  <data name="Reference_PairCaption" xml:space="preserve">
+    <value>{0} {1} → {2}</value>
+    <comment>Caption of a number display setting's pair; {0} the attribute, {1} and {2} its values either side</comment>
+  </data>
+  <data name="Reference_PairName" xml:space="preserve">
+    <value>{0}: {1}, then {2}</value>
+    <comment>Accessible name of a before/after pair; {0} the feature type, {1} and {2} the symbols</comment>
+  </data>
+  <data name="Reference_PairNameCaption" xml:space="preserve">
+    <value>{0}: {1}, then {2}, {3}</value>
+    <comment>Accessible name of a number setting's pair; {3} is its caption</comment>
+  </data>
+  <data name="Reference_ShowAll" xml:space="preserve">
+    <value>Show all ({0})</value>
+    <comment>Shows every before/after pair of a feature type; {0} is how many</comment>
+  </data>
+  <data name="Reference_ShowAllPairsName" xml:space="preserve">
+    <value>Show all {0} pairs for {1}</value>
+    <comment>Accessible name of Show all; {0} how many, {1} the feature type</comment>
+  </data>
   <data name="Tooltip_ReferenceLink" xml:space="preserve">
     <value>Open this entry</value>
     <comment>Tooltip of a link inside an entry</comment>
