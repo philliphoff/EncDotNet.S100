@@ -42,6 +42,12 @@ internal sealed class ReferenceEntryContext
     /// </summary>
     public ReferenceTerms? Terms { get; init; }
 
+    /// <summary>
+    /// The feature the entry was opened from (R13c, #1722): a pick, or a
+    /// link inside a feature type's entry; <see langword="null"/> for none.
+    /// </summary>
+    public ReferenceFeatureContext? Feature { get; init; }
+
     /// <summary>Opens the settings that change a display setting; <see langword="null"/> hides Change.</summary>
     public Action<string>? ChangeSetting { get; init; }
 }

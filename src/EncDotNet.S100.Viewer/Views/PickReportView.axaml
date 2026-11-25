@@ -12,7 +12,7 @@
              x:Class="EncDotNet.S100.Viewer.Views.PickReportView"
              x:Name="PickRoot"
              x:DataType="vm:PickReportViewModel"
-             views:ReferenceTerm.Terms="{Binding Terms}">
+             views:ReferenceTerm.Terms="{Binding FeatureTerms}">
 
     <!-- F1 with Object information focused opens the feature type's entry (R9, #1678). -->
     <UserControl.KeyBindings>

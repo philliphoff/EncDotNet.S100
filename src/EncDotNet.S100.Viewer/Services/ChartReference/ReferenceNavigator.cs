@@ -36,6 +36,7 @@ internal sealed class ReferenceNavigator
     public const int MaxCrumbs = 4;
 
     private readonly List<ReferenceKey> _history = [];
+    private readonly List<ReferenceFeatureContext?> _features = [];
     private int _position = -1;
 
     /// <summary>
@@ -52,6 +53,13 @@ internal sealed class ReferenceNavigator
 
     /// <summary>The entry shown, or <see langword="null"/> before any is opened.</summary>
     public ReferenceKey? Current => _position >= 0 ? _history[_position] : null;
+
+    /// <summary>
+    /// The feature <see cref="Current"/> was opened from (R13c, #1722), or
+    /// <see langword="null"/>: an attribute entry opened with one shows the
+    /// symbol each value gives it.
+    /// </summary>
+    public ReferenceFeatureContext? CurrentFeature => _position >= 0 ? _features[_position] : null;
 
     /// <summary>Whether there is an entry to go back to.</summary>
     public bool CanGoBack => _position > 0;
@@ -85,17 +93,40 @@ internal sealed class ReferenceNavigator
     /// right dock to it. A new entry drops any forward history.
     /// </summary>
     /// <param name="key">The entry.</param>
-    public void Open(ReferenceKey key)
+    public void Open(ReferenceKey key) => Open(key, feature: null);
+
+    /// <summary>
+    /// Shows <paramref name="key"/> opened from <paramref name="feature"/>
+    /// (R13c, #1722), and switches the right dock to it. The entry already
+    /// shown, opened from another feature, takes the new one in place.
+    /// </summary>
+    /// <param name="key">The entry.</param>
+    /// <param name="feature">The feature it is opened from, or <see langword="null"/>.</param>
+    public void Open(ReferenceKey key, ReferenceFeatureContext? feature)
     {
         ArgumentException.ThrowIfNullOrEmpty(key.Code);
         if (Current is not { } current || !SameEntry(current, key))
         {
             if (_position < _history.Count - 1)
+            {
                 _history.RemoveRange(_position + 1, _history.Count - _position - 1);
+                _features.RemoveRange(_position + 1, _features.Count - _position - 1);
+            }
+
             _history.Add(key);
+            _features.Add(feature);
             if (_history.Count > MaxHistory)
+            {
                 _history.RemoveRange(0, _history.Count - MaxHistory);
+                _features.RemoveRange(0, _features.Count - MaxHistory);
+            }
+
             _position = _history.Count - 1;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+        else if (!Equals(_features[_position], feature))
+        {
+            _features[_position] = feature;
             Changed?.Invoke(this, EventArgs.Empty);
         }
 

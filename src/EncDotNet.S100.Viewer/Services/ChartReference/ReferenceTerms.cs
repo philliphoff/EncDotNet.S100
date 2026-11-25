@@ -57,6 +57,7 @@ internal sealed class ReferenceTerms
     private readonly Func<SpecRef, ChartReferenceArtwork?>? _artwork;
     private readonly ConcurrentDictionary<string, ChartReferenceIndex> _ready;
     private readonly Action<ReferenceKey> _open;
+    private readonly Action<ReferenceKey, ReferenceFeatureContext?>? _openFrom;
     private readonly Func<bool> _simplified;
 
     /// <summary>Creates the terms.</summary>
@@ -75,13 +76,14 @@ internal sealed class ReferenceTerms
         IS100ExaminerLinkBuilder? examiner = null,
         IUrlOpener? urls = null,
         Func<bool>? simplifiedSymbols = null)
-        : this(glyphs, open, indexes, artwork, examiner, urls, simplifiedSymbols ?? (static () => false), new(StringComparer.OrdinalIgnoreCase))
+        : this(glyphs, open, null, indexes, artwork, examiner, urls, simplifiedSymbols ?? (static () => false), new(StringComparer.OrdinalIgnoreCase))
     {
     }
 
     private ReferenceTerms(
         ChartReferenceGlyphCache glyphs,
         Action<ReferenceKey> open,
+        Action<ReferenceKey, ReferenceFeatureContext?>? openFrom,
         Func<SpecRef, Task<ChartReferenceIndex?>>? indexes,
         Func<SpecRef, ChartReferenceArtwork?>? artwork,
         IS100ExaminerLinkBuilder? examiner,
@@ -93,6 +95,7 @@ internal sealed class ReferenceTerms
         ArgumentNullException.ThrowIfNull(open);
         Glyphs = glyphs;
         _open = open;
+        _openFrom = openFrom;
         _indexes = indexes;
         _artwork = artwork;
         Examiner = examiner;
@@ -130,11 +133,13 @@ internal sealed class ReferenceTerms
         var terms = new ReferenceTerms(
             glyphs,
             navigator.Open,
+            navigator.Open,
             spec => service.GetIndexAsync(spec),
             service.GetArtwork,
             examiner,
             urls,
-            simplifiedSymbols);
+            simplifiedSymbols ?? (static () => false),
+            new(StringComparer.OrdinalIgnoreCase));
         service.Changed += (_, e) => terms.Forget(e.Spec);
         return terms;
     }
@@ -152,7 +157,31 @@ internal sealed class ReferenceTerms
         var ready = new ConcurrentDictionary<string, ChartReferenceIndex>(_ready, StringComparer.OrdinalIgnoreCase);
         ready[index.Spec.Name] = index;
         Func<SpecRef, ChartReferenceArtwork?>? art = artwork is null ? _artwork : spec => SameSpec(spec, index.Spec) ? artwork : _artwork?.Invoke(spec);
-        return new ReferenceTerms(Glyphs, open, _indexes, art, Examiner, Urls, _simplified, ready);
+        return new ReferenceTerms(Glyphs, open, null, _indexes, art, Examiner, Urls, _simplified, ready);
+    }
+
+    /// <summary>
+    /// These terms for a picked feature (R13c, #1722): an attribute's term,
+    /// and the feature type's, open their entries with
+    /// <paramref name="feature"/>, so an attribute shows the symbol each value
+    /// gives it. Terms that open nowhere a feature can be carried stay as they are.
+    /// </summary>
+    /// <param name="feature">The feature.</param>
+    public ReferenceTerms ForFeature(ReferenceFeatureContext feature)
+    {
+        ArgumentNullException.ThrowIfNull(feature);
+        if (_openFrom is not { } openFrom)
+            return this;
+        return new ReferenceTerms(
+            Glyphs,
+            key => openFrom(key, ReferenceFeatureContext.For(key, feature)),
+            openFrom,
+            _indexes,
+            _artwork,
+            Examiner,
+            Urls,
+            _simplified,
+            _ready);
     }
 
     /// <summary>A plain set of terms over one index, for hosts that build none (tests, the study page).</summary>

@@ -47,6 +47,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private Services.Legends.LegendService? _legend;
     private ReferenceTerms? _terms;
     private ChartReferenceIndex? _termIndex;
+    private ReferenceTerms? _featureTerms;
     private FeatureTypeEntry? _featureTypeEntry;
     private int _termVersion;
 
@@ -100,7 +101,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         // F1 and Open in reference (R9, #1678): the feature type's entry, in the
         // Reference tab; Object information keeps its pick (D2).
         OpenInReferenceCommand = new RelayCommand(
-            () => { if (FeatureTypeKey is { } key) _terms?.Open(key); },
+            () => { if (FeatureTypeKey is { } key) FeatureTerms?.Open(key); },
             () => FeatureTypeKey is not null && _terms is not null);
 
         // Object Information's selection, for those that follow it without
@@ -185,6 +186,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             AttributeRows.Add(row);
         }
 
+        ForgetFeatureTerms();
         OnPropertyChanged(nameof(HasAttributes));
         OnPropertyChanged(nameof(AttributeCount));
 
@@ -298,8 +300,42 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             if (!SetProperty(ref _terms, value))
                 return;
             (OpenInReferenceCommand as RelayCommand)?.NotifyCanExecuteChanged();
+            ForgetFeatureTerms();
             if (_selectedHit is not null)
                 ResolveTerms(_selectedHit);
+        }
+    }
+
+    /// <summary>
+    /// The terms the pick's view reads (R13c, #1722): <see cref="Terms"/>,
+    /// with the picked feature's type and values once its index is read, so
+    /// an attribute's entry shows the symbol each value gives this feature.
+    /// </summary>
+    public ReferenceTerms? FeatureTerms =>
+        _featureTerms ??= _terms is { } terms && FeatureContext is { } feature ? terms.ForFeature(feature) : _terms;
+
+    /// <summary>
+    /// The picked feature as the chart reference reads it, once its index is
+    /// read: its type and its top-level attributes by the index's codes;
+    /// <see langword="null"/> before then.
+    /// </summary>
+    internal ReferenceFeatureContext? FeatureContext
+    {
+        get
+        {
+            if (_termIndex is not { } index || _featureTypeEntry is not { } type || _selectedHit is not { } hit)
+                return null;
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var attribute in Attributes)
+            {
+                if (attribute.Children.Count > 0 || string.IsNullOrWhiteSpace(attribute.RawValue))
+                    continue;
+                var code = PickTerms.Attribute(index, attribute.Code)?.Code ?? attribute.Code;
+                values.TryAdd(code, attribute.RawValue);
+            }
+
+            var primitive = hit.Geometry == EncDotNet.S100.Features.S100GeometryType.None ? null : hit.Geometry.ToString();
+            return new ReferenceFeatureContext(type.Code, values, primitive);
         }
     }
 
@@ -941,6 +977,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         _termVersion++;
         _termIndex = null;
         _featureTypeEntry = null;
+        ForgetFeatureTerms();
         if (hit is null)
         {
             FeatureType = null;
@@ -1029,12 +1066,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         });
     }
 
+    private void ForgetFeatureTerms()
+    {
+        _featureTerms = null;
+        OnPropertyChanged(nameof(FeatureTerms));
+    }
+
     private void ApplyTerms(PickHit hit, ChartReferenceIndex index)
     {
         _termIndex = index;
         _featureTypeEntry = PickTerms.FeatureType(index, hit.FeatureType);
         foreach (var row in AttributeRows)
             row.Apply(index);
+        ForgetFeatureTerms();
         OnPropertyChanged(nameof(FeatureTypeKey));
         OnPropertyChanged(nameof(HasFeatureTypeEntry));
         RaiseIdentityChanged();

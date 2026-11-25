@@ -250,19 +250,29 @@ internal sealed class ReferenceViewModel : ViewModelBase, IActivityTabContentSig
             }
 
             _names[key] = ChartReferenceRowViewModel.NameOf(entry);
-            Entry = ReferenceEntryViewModel.Create(entry, Context(index));
+            Entry = ReferenceEntryViewModel.Create(entry, Context(index, entry.Key, _navigator.CurrentFeature));
             UpdateCrumbs();
         });
     }
 
-    private ReferenceEntryContext Context(ChartReferenceIndex index) => new()
+    // An entry's links carry the feature it was opened from (R13c, #1722);
+    // a feature type's entry is a feature of its own for the attributes it links to.
+    private ReferenceEntryContext Context(ChartReferenceIndex index, ReferenceKey key, ReferenceFeatureContext? feature)
+    {
+        var from = feature ?? (key.Kind == ReferenceKind.FeatureType ? new ReferenceFeatureContext(key.Code) : null);
+        Action<ReferenceKey> open = from is null ? _navigator.Open : k => _navigator.Open(k, ReferenceFeatureContext.For(k, from));
+        return Context(index, feature, open);
+    }
+
+    private ReferenceEntryContext Context(ChartReferenceIndex index, ReferenceFeatureContext? feature, Action<ReferenceKey> open) => new()
     {
         Index = index,
         Artwork = _service.GetArtwork(index.Spec),
-        Terms = Terms?.With(index, _navigator.Open, _service.GetArtwork(index.Spec)),
+        Terms = Terms?.With(index, open, _service.GetArtwork(index.Spec)),
         Glyphs = _glyphs,
         SimplifiedSymbols = _settings?.SimplifiedSymbols ?? false,
-        Open = _navigator.Open,
+        Feature = feature,
+        Open = open,
         Post = _post,
         Map = _map,
         Settings = _settings,

@@ -120,4 +120,38 @@ internal static partial class Strings
     public static string Reference_NoFurtherCondition => Get(nameof(Reference_NoFurtherCondition));
 
     public static string Tooltip_ReferenceLink => Get(nameof(Tooltip_ReferenceLink));
+
+    public static string Reference_NotProbed => Get(nameof(Reference_NotProbed));
+
+    public static string Reference_NothingDrawn => Get(nameof(Reference_NothingDrawn));
+
+    public static string Reference_ValueSymbolsHeading => Get(nameof(Reference_ValueSymbolsHeading));
+
+    public static string Reference_StyleSimplified => Get(nameof(Reference_StyleSimplified));
+
+    public static string Reference_StylePaperChart => Get(nameof(Reference_StylePaperChart));
+
+    public static string Reference_NoValue => Get(nameof(Reference_NoValue));
+
+    public static string Reference_FeatureValue => Get(nameof(Reference_FeatureValue));
+
+    public static string Reference_ValueSymbolsName => Get(nameof(Reference_ValueSymbolsName));
+
+    public static string Reference_ValueSymbolsNameOwn => Get(nameof(Reference_ValueSymbolsNameOwn));
+
+    public static string Reference_BeforeAfter => Get(nameof(Reference_BeforeAfter));
+
+    public static string Reference_PairsOffOn => Get(nameof(Reference_PairsOffOn));
+
+    public static string Reference_PairsEitherSide => Get(nameof(Reference_PairsEitherSide));
+
+    public static string Reference_PairCaption => Get(nameof(Reference_PairCaption));
+
+    public static string Reference_PairName => Get(nameof(Reference_PairName));
+
+    public static string Reference_PairNameCaption => Get(nameof(Reference_PairNameCaption));
+
+    public static string Reference_ShowAll => Get(nameof(Reference_ShowAll));
+
+    public static string Reference_ShowAllPairsName => Get(nameof(Reference_ShowAllPairsName));
 }

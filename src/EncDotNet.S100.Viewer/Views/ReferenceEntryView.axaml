@@ -71,6 +71,18 @@
             <!-- Back over the toggle's 1 px border. -->
             <Setter Property="Margin" Value="-1,0,0,0" />
         </Style>
+        <!-- The picked feature's own value among an attribute's value symbols (R13c). -->
+        <Style Selector="Border.crValue">
+            <Setter Property="Margin" Value="-4,0,0,0" />
+            <Setter Property="Padding" Value="4,3" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.crValue.crOwn">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
         <!-- An action (Find, Change in Display settings): blue is kept for actions (§4.6). -->
         <Style Selector="Button.crAction">
             <Setter Property="HorizontalAlignment" Value="Left" />
@@ -103,6 +115,36 @@
                            FontStyle="Italic"
                            TextWrapping="Wrap" />
             </StackPanel>
+        </DataTemplate>
+
+        <!-- A glyph an outcome is shown by (R13c): a term that opens its symbol's entry,
+             on the palette's chart background. -->
+        <DataTemplate DataType="cr:ReferenceGlyphTile">
+            <views:ReferenceTerm Classes="glyph"
+                                 Text="{Binding Label}"
+                                 Key="{Binding Key}"
+                                 IsKnown="{Binding IsKnown}"
+                                 Command="{Binding OpenCommand}"
+                                 ToolTip.Tip="{Binding Label}"
+                                 AutomationProperties.AutomationId="Reference.GlyphTerm">
+                <Border Background="{Binding $parent[views:ReferenceEntryView].((cr:ReferenceEntryViewModel)DataContext).Tile}"
+                        CornerRadius="4"
+                        Width="44"
+                        Height="44">
+                    <Panel>
+                        <Image Source="{Binding Glyph}"
+                               IsVisible="{Binding HasLead}"
+                               Width="36"
+                               Height="36"
+                               Stretch="Fill" />
+                        <TextBlock Text="–"
+                                   IsVisible="{Binding !HasLead}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Opacity="0.6" />
+                    </Panel>
+                </Border>
+            </views:ReferenceTerm>
         </DataTemplate>
 
         <!-- C1: a feature type. -->
@@ -252,6 +294,50 @@
         <DataTemplate DataType="cr:AttributeEntryViewModel">
             <StackPanel Spacing="12">
                 <TextBlock Text="{Binding ValueType}" Classes="crCaption" />
+                <!-- Opened from a feature, each value with the symbol it gives that feature type
+                     in both styles, the feature's own value highlighted (R13c). -->
+                <StackPanel Classes="crPart" IsVisible="{Binding HasValueSymbols}">
+                    <TextBlock Text="{Binding ValueSymbolsHeading}" Classes="crHeading" TextWrapping="Wrap" />
+                    <Grid ColumnDefinitions="*,44,44" ColumnSpacing="6">
+                        <TextBlock Grid.Column="1"
+                                   Text="{x:Static loc:Strings.Reference_StyleSimplified}"
+                                   Classes="crCaption"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{x:Static loc:Strings.Reference_StylePaperChart}"
+                                   Classes="crCaption"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding ValueSymbols}" AutomationProperties.AutomationId="Reference.Entry.ValueSymbols">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="cr:ReferenceValueSymbols">
+                                <Border Classes="crValue"
+                                        Classes.crOwn="{Binding IsFeatureValue}"
+                                        Margin="-4,1,0,1"
+                                        AutomationProperties.AutomationId="Reference.Entry.ValueSymbol"
+                                        AutomationProperties.Name="{Binding AccessibleName}">
+                                    <Grid ColumnDefinitions="*,44,44" ColumnSpacing="6">
+                                        <StackPanel Spacing="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{x:Static loc:Strings.Reference_FeatureValue}"
+                                                       IsVisible="{Binding IsFeatureValue}"
+                                                       Foreground="{DynamicResource AccentBrush}"
+                                                       Classes="crCaption" />
+                                            <TextBlock Text="{Binding Definition}"
+                                                       IsVisible="{Binding HasDefinition}"
+                                                       Classes="crCaption"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <ContentControl Grid.Column="1" Content="{Binding Simplified}" VerticalAlignment="Top" />
+                                        <ContentControl Grid.Column="2" Content="{Binding PaperChart}" VerticalAlignment="Top" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
                 <StackPanel Classes="crPart" IsVisible="{Binding HasValues}">
                     <TextBlock Text="{x:Static loc:Strings.Reference_ListedValues}" Classes="crHeading" />
                     <ItemsControl ItemsSource="{Binding Values}" AutomationProperties.AutomationId="Reference.Entry.Values">
@@ -294,6 +380,56 @@
                         <TextBlock Text="{x:Static loc:Strings.Reference_ChangeInSettings}"
                                    Foreground="{DynamicResource AccentBrush}" />
                     </Button>
+                </StackPanel>
+                <!-- Before/after pairs from the rules that branch on it, by feature type (R13c). -->
+                <StackPanel Classes="crPart" IsVisible="{Binding HasBeforeAfter}">
+                    <TextBlock Text="{x:Static loc:Strings.Reference_BeforeAfter}" Classes="crHeading" />
+                    <TextBlock Text="{Binding BeforeAfterNote}" Classes="crCaption" TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{Binding BeforeAfter}" AutomationProperties.AutomationId="Reference.Entry.BeforeAfter">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="cr:ReferencePairGroup">
+                                <StackPanel Spacing="2" Margin="0,4,0,6">
+                                    <ContentControl Content="{Binding Feature}" />
+                                    <ItemsControl ItemsSource="{Binding Visible}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="cr:ReferencePair">
+                                                <StackPanel Spacing="1"
+                                                            Margin="0,0,12,6"
+                                                            AutomationProperties.AutomationId="Reference.Entry.Pair"
+                                                            AutomationProperties.Name="{Binding AccessibleName}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                        <ContentControl Content="{Binding Before}" />
+                                                        <TextBlock Text="→"
+                                                                   Classes="crCaption"
+                                                                   VerticalAlignment="Center" />
+                                                        <ContentControl Content="{Binding After}" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Caption}"
+                                                               IsVisible="{Binding HasCaption}"
+                                                               Classes="crCaption"
+                                                               MaxWidth="120"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Classes="crLink crAction"
+                                            IsVisible="{Binding CanShowAll}"
+                                            AutomationProperties.AutomationId="Reference.ShowAllPairs"
+                                            AutomationProperties.Name="{Binding ShowAllName}"
+                                            Command="{Binding ShowAllCommand}">
+                                        <TextBlock Text="{Binding ShowAllLabel}"
+                                                   Foreground="{DynamicResource AccentBrush}" />
+                                    </Button>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
                 <StackPanel Classes="crPart" IsVisible="{Binding HasChanges}">
                     <TextBlock Text="{x:Static loc:Strings.Reference_ChangesFeatureTypes}" Classes="crHeading" />

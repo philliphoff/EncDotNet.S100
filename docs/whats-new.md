@@ -6,6 +6,21 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Reference entries show the symbol each value and setting gives.** Open an
+  attribute from a pick in Object information, or from a feature type's entry,
+  and each of its values shows the symbol that feature type gets with it, in
+  both Simplified and Paper chart styles. For a pick, the feature's own value
+  is highlighted. A display setting's entry shows before/after pairs, grouped
+  by feature type: Simplified symbols shows each paper-chart symbol beside
+  its simplified form, such as BCNSTK02 and BCNLAT21 for a red stake beacon.
+  Safety contour and safety depth show a pair from either side of the value
+  set now, such as a wreck just shallower and just deeper than the safety
+  contour. Each feature type shows its first six pairs, with **Show all**
+  for the rest. Each glyph opens its symbol's entry and is drawn in the
+  current palette. The pairs come from the probe results committed with the
+  S-101 catalogue; without them, the entries list values and feature types
+  as before ([#1722](https://github.com/philliphoff/EncDotNet.S100/issues/1722)).
+
 - **`s100 --version` prints one line.** A nightly build's version, with its
   "(nightly build, unsupported)" note, is longer than 80 columns, and when
   the output was redirected it wrapped onto a second line, which broke
