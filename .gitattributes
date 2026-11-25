@@ -1,2 +1,7 @@
 # Performance baseline JSONL files are machine-generated.
 tools/EncDotNet.S100.PerfRunner/baselines/**/*.jsonl linguist-generated
+
+# The bundled catalogues are hashed byte for byte: the chart reference's
+# committed probe results (content/*/pc/rule-probes.json) are keyed by those
+# hashes. Check them out as stored (LF), never converted to CRLF.
+src/EncDotNet.S100.Specifications/content/** -text

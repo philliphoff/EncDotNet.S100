@@ -2,6 +2,7 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Scripting;
 
 namespace EncDotNet.S100.Viewer.Services.ChartReference;
 
@@ -24,6 +25,16 @@ namespace EncDotNet.S100.Viewer.Services.ChartReference;
 /// <c>get_chart_reference_entry</c> read it. Nothing here needs the UI, so
 /// the MCP tools work without the activity open.
 /// </para>
+/// <para>
+/// <b>Probe results</b> (R13a). An index comes with the probe results
+/// committed next to a bundled catalogue when their hashes match, or with
+/// results cached on disk for these catalogues. A user-added or changed
+/// catalogue has neither: given a trace engine, the service probes its rules
+/// in the background, caches the results under the catalogues' hashes, swaps
+/// in an index that has them and raises <see cref="ProbesReady"/>. Until
+/// then, and without a trace engine, the index has no
+/// <see cref="ChartReferenceIndex.Probes"/>, as before.
+/// </para>
 /// </remarks>
 internal sealed class ChartReferenceService : IDisposable
 {
@@ -41,6 +52,9 @@ internal sealed class ChartReferenceService : IDisposable
     private readonly Lock _gate = new();
     private readonly Dictionary<SpecRef, Slot> _slots = [];
     private readonly Dictionary<SpecRef, ChartReferenceArtwork> _artwork = [];
+    private readonly Dictionary<SpecRef, CancellationTokenSource> _probes = [];
+    private readonly string? _probeCacheDirectory;
+    private readonly Func<ILuaEngine>? _traceEngine;
     private bool _disposed;
 
     /// <summary>Creates the service and subscribes to both catalogue managers' changes.</summary>
@@ -56,11 +70,21 @@ internal sealed class ChartReferenceService : IDisposable
     /// The products whose catalogues ship with the viewer; defaults to
     /// <see cref="Specifications.Specification.AvailableSpecs"/>.
     /// </param>
+    /// <param name="probeCacheDirectory">
+    /// Where probe results for catalogues without committed ones are cached,
+    /// or <see langword="null"/> for no disk cache.
+    /// </param>
+    /// <param name="traceEngine">
+    /// Makes the LuaCSharp engine that probes rules in the background, or
+    /// <see langword="null"/> to use only committed and cached results.
+    /// </param>
     public ChartReferenceService(
         FeatureCatalogueManager features,
         PortrayalCatalogueManager portrayals,
         Func<IEnumerable<string>> loadedSpecs,
-        IReadOnlyList<string>? bundledSpecs = null)
+        IReadOnlyList<string>? bundledSpecs = null,
+        string? probeCacheDirectory = null,
+        Func<ILuaEngine>? traceEngine = null)
     {
         ArgumentNullException.ThrowIfNull(features);
         ArgumentNullException.ThrowIfNull(portrayals);
@@ -69,6 +93,8 @@ internal sealed class ChartReferenceService : IDisposable
         _portrayals = portrayals;
         _loadedSpecs = loadedSpecs;
         _bundledSpecs = bundledSpecs ?? Specifications.Specification.AvailableSpecs;
+        _probeCacheDirectory = probeCacheDirectory;
+        _traceEngine = traceEngine;
         _features.CataloguesChanged += OnCataloguesChanged;
         _portrayals.CataloguesChanged += OnCataloguesChanged;
     }
@@ -80,6 +106,14 @@ internal sealed class ChartReferenceService : IDisposable
     /// a new index.
     /// </summary>
     public event EventHandler<CataloguesChangedEventArgs>? Changed;
+
+    /// <summary>
+    /// Raised on a worker thread when a background probe of a product's
+    /// rules finishes: the next <see cref="GetIndexAsync"/> for
+    /// <see cref="CataloguesChangedEventArgs.Spec"/> returns an index with
+    /// <see cref="ChartReferenceIndex.Probes"/>.
+    /// </summary>
+    public event EventHandler<CataloguesChangedEventArgs>? ProbesReady;
 
     /// <summary>
     /// Every product with a portrayal catalogue: the products with datasets
@@ -139,7 +173,7 @@ internal sealed class ChartReferenceService : IDisposable
         lock (_gate)
         {
             if (_slots.TryGetValue(spec, out var slot)
-                && slot.Key == key
+                && slot.Key == key.Value.Key
                 && !slot.Build.IsFaulted
                 && !slot.Build.IsCanceled)
             {
@@ -148,8 +182,9 @@ internal sealed class ChartReferenceService : IDisposable
             else
             {
                 // Not bound to the caller's token: the build is shared.
-                build = Task.Run(() => BuildAsync(spec), CancellationToken.None);
-                _slots[spec] = new Slot(key, build);
+                var hashes = key.Value;
+                build = Task.Run(() => BuildAsync(spec, hashes), CancellationToken.None);
+                _slots[spec] = new Slot(hashes.Key, build);
             }
         }
 
@@ -208,19 +243,22 @@ internal sealed class ChartReferenceService : IDisposable
         {
             _slots.Clear();
             _artwork.Clear();
+            foreach (var probe in _probes.Values)
+                probe.Cancel();
+            _probes.Clear();
         }
     }
 
-    private async Task<string?> KeyAsync(SpecRef spec)
+    private async Task<Hashes?> KeyAsync(SpecRef spec)
     {
         var portrayal = await _portrayals.GetCatalogueHashAsync(spec).ConfigureAwait(false);
         if (portrayal is null)
             return null;
         var features = await _features.GetCatalogueHashAsync(spec).ConfigureAwait(false);
-        return $"{IndexFormatVersion}:{features ?? "-"}:{portrayal}";
+        return new Hashes($"{IndexFormatVersion}:{features ?? "-"}:{portrayal}", features, portrayal);
     }
 
-    private async Task<ChartReferenceIndex?> BuildAsync(SpecRef spec)
+    private async Task<ChartReferenceIndex?> BuildAsync(SpecRef spec, Hashes hashes)
     {
         PortrayalCatalogueProvider provider;
         try
@@ -237,7 +275,86 @@ internal sealed class ChartReferenceService : IDisposable
         }
 
         var features = _features.GetCatalogue(spec);
-        return await ChartReferenceIndex.BuildAsync(spec, features, provider).ConfigureAwait(false);
+        var index = await ChartReferenceIndex.BuildAsync(spec, features, provider).ConfigureAwait(false);
+        if (hashes.FeatureCatalogue is not { } fc || features is null || spec.Name is null)
+            return index;
+
+        // The committed results, or ones cached for these catalogues.
+        var probes = await RuleProbeStore.LoadOrProbeAsync(spec.Name, fc, hashes.PortrayalCatalogue, _probeCacheDirectory, probe: null)
+            .ConfigureAwait(false);
+        if (probes is not null)
+            return index.WithProbes(probes);
+
+        if (_traceEngine is not null && RuleProber.Supports(spec.Name))
+            StartProbe(spec, hashes, index, features, provider);
+        return index;
+    }
+
+    /// <summary>
+    /// Probes the rules of catalogues without committed or cached results,
+    /// on a worker thread, and swaps in an index with the results when the
+    /// catalogues are still the same.
+    /// </summary>
+    private void StartProbe(
+        SpecRef spec, Hashes hashes, ChartReferenceIndex index, FeatureCatalogue features, PortrayalCatalogueProvider provider)
+    {
+        var cancellation = new CancellationTokenSource();
+        lock (_gate)
+        {
+            if (_disposed)
+                return;
+            if (_probes.Remove(spec, out var previous))
+                previous.Cancel();
+            _probes[spec] = cancellation;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var probes = await RuleProbeStore.LoadOrProbeAsync(
+                    spec.Name!,
+                    hashes.FeatureCatalogue!,
+                    hashes.PortrayalCatalogue,
+                    _probeCacheDirectory,
+                    ct => RuleProber.ProbeAsync(
+                        index,
+                        features,
+                        provider,
+                        _traceEngine!(),
+                        hashes.FeatureCatalogue!,
+                        hashes.PortrayalCatalogue,
+                        // Half the cores: the map keeps drawing meanwhile.
+                        new RuleProberOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2) },
+                        cancellationToken: ct),
+                    cancellation.Token).ConfigureAwait(false);
+                if (probes is null)
+                    return;
+
+                lock (_gate)
+                {
+                    if (cancellation.IsCancellationRequested || !_slots.TryGetValue(spec, out var slot) || slot.Key != hashes.Key)
+                        return;
+                    _slots[spec] = new Slot(hashes.Key, Task.FromResult<ChartReferenceIndex?>(index.WithProbes(probes)));
+                }
+
+                ProbesReady?.Invoke(this, new CataloguesChangedEventArgs(spec));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // The reference works without probe results; a later build tries again.
+            }
+            finally
+            {
+                // Cancel is only called under the gate, so it can't meet a disposed source.
+                lock (_gate)
+                {
+                    if (_probes.TryGetValue(spec, out var current) && current == cancellation)
+                        _probes.Remove(spec);
+                    cancellation.Dispose();
+                }
+            }
+        }, CancellationToken.None);
     }
 
     private void OnCataloguesChanged(object? sender, CataloguesChangedEventArgs e)
@@ -248,6 +365,8 @@ internal sealed class ChartReferenceService : IDisposable
             // hashes and starts another.
             _slots.Remove(e.Spec);
             _artwork.Remove(e.Spec);
+            if (_probes.Remove(e.Spec, out var probe))
+                probe.Cancel();
         }
 
         Changed?.Invoke(this, e);
@@ -257,6 +376,9 @@ internal sealed class ChartReferenceService : IDisposable
         SpecName.TryNormalize(spec, out var name) ? new SpecRef(name, default) : null;
 
     private sealed record Slot(string Key, Task<ChartReferenceIndex?> Build);
+
+    /// <summary>An index's cache key and the catalogue hashes it's made from.</summary>
+    private readonly record struct Hashes(string Key, string? FeatureCatalogue, string PortrayalCatalogue);
 }
 
 /// <summary>A product the Chart reference can describe.</summary>

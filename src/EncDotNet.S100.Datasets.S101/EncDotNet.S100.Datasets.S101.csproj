@@ -4,6 +4,8 @@
     <InternalsVisibleTo Include="EncDotNet.S100.Pipelines.Tests" />
     <InternalsVisibleTo Include="EncDotNet.S100.Datasets.S101.Tests" />
     <InternalsVisibleTo Include="EncDotNet.S100.Datasets.S125" />
+    <!-- The chart reference prober (R13a) runs synthetic features through the S-101 host shims. -->
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.Pipelines" />
   </ItemGroup>
 
   <ItemGroup>

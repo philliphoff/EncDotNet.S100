@@ -77,6 +77,49 @@ cache the result in the local application-data folder, unless
 | [`Skill/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tools/EncDotNet.S100.Cli/Skill) | Guidance that `s100 --skill` adds to the generated command reference. |
 | [`tests/EncDotNet.S100.Cli.Tests`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/EncDotNet.S100.Cli.Tests) | Tests for every command. |
 
+## Maintainer commands
+
+### `reference probe`
+
+`s100 reference probe --spec S-101` runs each feature type's portrayal rule
+over the values it reads and writes what each combination draws, and which
+conditions held, to
+`src/EncDotNet.S100.Specifications/content/S101/pc/rule-probes.json`. The
+chart reference uses the file for its variant tables (symbol dictionary
+design note §7, R13a). Commit the file.
+
+Run it from the repository whenever a bundled S-101 feature or portrayal
+catalogue changes, not on every build:
+
+```bash
+dotnet run --project tools/EncDotNet.S100.Cli -c Release -- reference probe --spec S-101
+```
+
+- **Keyed by hashes.** The file records the content hashes of the feature
+  and portrayal catalogues it was probed from. `RuleProberTests` fails when
+  they don't match the bundled catalogues, and tells you to re-run the
+  command. SoundCharts reads the file only when they match; for a catalogue
+  the user adds or changes, it probes the rules in the background and caches
+  the results under that catalogue's hashes.
+- **What's probed.** Each feature type's rule runs on synthetic features in
+  a LuaCSharp trace session, whichever engine draws the map. Enumerations
+  take the values the rule's conditions test, plus no value; numbers take
+  values at and either side of each threshold and of the display settings the
+  rule reads; display settings the rule branches on take `true` and `false`.
+  At most 512 combinations per feature type (`--cap`): past that, the inputs
+  tested least lose values first, and the feature type is marked partial.
+- **Output.** Compact JSON, one feature type per line, the same bytes for the
+  same catalogues. For S-101 it takes about 5 seconds on 4 cores and writes
+  about 240 KB.
+
+| Option | Default | What it does |
+|---|---|---|
+| `--spec <SPEC>` | `S-101` | The product whose bundled catalogues are probed. Only S-101 is supported; XSLT products aren't probed. |
+| `-o`, `--output <FILE>` | the file next to the bundled catalogue | Writes somewhere else: `.json`, or `.json.gz` to compress. |
+| `--cap <COUNT>` | `512` | The most combinations per feature type. |
+| `--parallel <COUNT>` | the processor count | How many Lua sessions run at once. The output doesn't depend on it. |
+| `--feature-type <CODE>` | every feature type | Probes only this feature type; repeat it for more. For trying the prober out. |
+
 ## Add or change a command
 
 1. Add or edit the command class in `Commands/`. Give every option a
