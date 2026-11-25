@@ -127,23 +127,24 @@
                                  Command="{Binding OpenCommand}"
                                  ToolTip.Tip="{Binding Label}"
                                  AutomationProperties.AutomationId="Reference.GlyphTerm">
-                <Border Background="{Binding $parent[views:ReferenceEntryView].((cr:ReferenceEntryViewModel)DataContext).Tile}"
-                        CornerRadius="4"
-                        Width="44"
-                        Height="44">
-                    <Panel>
+                <Panel>
+                    <Border Background="{Binding $parent[views:ReferenceEntryView].((cr:ReferenceEntryViewModel)DataContext).Tile}"
+                            IsVisible="{Binding HasLead}"
+                            CornerRadius="4"
+                            Width="44"
+                            Height="44">
                         <Image Source="{Binding Glyph}"
-                               IsVisible="{Binding HasLead}"
                                Width="36"
                                Height="36"
                                Stretch="Fill" />
-                        <TextBlock Text="–"
-                                   IsVisible="{Binding !HasLead}"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Opacity="0.6" />
-                    </Panel>
-                </Border>
+                    </Border>
+                    <!-- Not probed, or nothing drawn: a dash where the glyph would be. -->
+                    <TextBlock Text="–"
+                               IsVisible="{Binding !HasLead}"
+                               Width="44"
+                               TextAlignment="Center"
+                               Opacity="0.6" />
+                </Panel>
             </views:ReferenceTerm>
         </DataTemplate>
 
@@ -298,7 +299,7 @@
                      in both styles, the feature's own value highlighted (R13c). -->
                 <StackPanel Classes="crPart" IsVisible="{Binding HasValueSymbols}">
                     <TextBlock Text="{Binding ValueSymbolsHeading}" Classes="crHeading" TextWrapping="Wrap" />
-                    <Grid ColumnDefinitions="*,44,44" ColumnSpacing="6">
+                    <Grid ColumnDefinitions="*,72,72" ColumnSpacing="4">
                         <TextBlock Grid.Column="1"
                                    Text="{x:Static loc:Strings.Reference_StyleSimplified}"
                                    Classes="crCaption"
@@ -318,7 +319,7 @@
                                         Margin="-4,1,0,1"
                                         AutomationProperties.AutomationId="Reference.Entry.ValueSymbol"
                                         AutomationProperties.Name="{Binding AccessibleName}">
-                                    <Grid ColumnDefinitions="*,44,44" ColumnSpacing="6">
+                                    <Grid ColumnDefinitions="*,72,72" ColumnSpacing="4">
                                         <StackPanel Spacing="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
                                             <TextBlock Text="{x:Static loc:Strings.Reference_FeatureValue}"
@@ -330,8 +331,8 @@
                                                        Classes="crCaption"
                                                        TextWrapping="Wrap" />
                                         </StackPanel>
-                                        <ContentControl Grid.Column="1" Content="{Binding Simplified}" VerticalAlignment="Top" />
-                                        <ContentControl Grid.Column="2" Content="{Binding PaperChart}" VerticalAlignment="Top" />
+                                        <ContentControl Grid.Column="1" Content="{Binding Simplified}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <ContentControl Grid.Column="2" Content="{Binding PaperChart}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
