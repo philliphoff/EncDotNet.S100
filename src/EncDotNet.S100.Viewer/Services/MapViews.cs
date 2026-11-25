@@ -77,6 +77,15 @@ internal sealed class MapViews : IMapViewportSet
     /// <summary>Raised after <see cref="Active"/> changes, once the accessors are rebound.</summary>
     public event EventHandler? ActiveChanged;
 
+    /// <summary>Raised after a map is added, once it is in <see cref="All"/> (and active when it's the first).</summary>
+    public event EventHandler<IMapViewCapabilities>? ViewAdded;
+
+    /// <summary>
+    /// Raised after a map is removed, before its owner tears it down, once
+    /// another map is active.
+    /// </summary>
+    public event EventHandler<IMapViewCapabilities>? ViewRemoved;
+
     /// <inheritdoc />
     public IReadOnlyList<MapViewViewport> Current
     {
@@ -118,6 +127,7 @@ internal sealed class MapViews : IMapViewportSet
             OnActiveChanged();
         if (view.Viewport.Current is not null)
             ViewportsChanged?.Invoke(this, viewports);
+        ViewAdded?.Invoke(this, view);
     }
 
     /// <summary>
@@ -151,6 +161,7 @@ internal sealed class MapViews : IMapViewportSet
             OnActiveChanged();
         if (view.Viewport.Current is not null)
             ViewportsChanged?.Invoke(this, viewports);
+        ViewRemoved?.Invoke(this, view);
         return true;
     }
 

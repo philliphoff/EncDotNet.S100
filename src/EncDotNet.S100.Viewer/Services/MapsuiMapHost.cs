@@ -68,7 +68,7 @@ internal sealed class MapsuiMapHost :
             });
     }
 
-    /// <inheritdoc />
+    /// <summary>The map's dataset-layer session, which owns and drives the dataset band.</summary>
     public MapsuiDatasetLayerSession DatasetSession => _session.Session;
 
     public void SetBasemapLayer(ILayer? layer) => _session.Layers.SetBasemapLayer(layer);

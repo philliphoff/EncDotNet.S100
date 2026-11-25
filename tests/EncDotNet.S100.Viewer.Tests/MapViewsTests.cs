@@ -206,6 +206,10 @@ public sealed class MapViewsTests
         public IMapViewportNotifier Viewport => Notifier;
 
         public DemandPlanner Planner { get; } = new();
+
+        public FakeMapDatasetSession Session { get; } = new();
+
+        public IMapDatasetSession DatasetSession => Session;
     }
 
     internal sealed class FakeNotifier : IMapViewportNotifier

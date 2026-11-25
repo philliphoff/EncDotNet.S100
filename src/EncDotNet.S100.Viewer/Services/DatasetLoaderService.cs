@@ -49,7 +49,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// or before the map control exists) disables the wait.
     /// </summary>
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
-    private readonly IMapViewportNotifier _viewportNotifier;
     private readonly ILogger _logger;
 
     private readonly Dictionary<MapDatasetId, DatasetEntry> _processorEntries = [];
@@ -64,16 +63,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     // Entries ReloadEntriesAsync is opening again after a catalogue change.
     private readonly HashSet<DatasetEntry> _redraws = [];
 
-    private IMapLayerCollection? _layerCollection;
-    private MapsuiDatasetLayerSession? _mapSession;
-    private IMapViewportController? _viewport;
+    // Every map's dataset session (split map, #1731): the loader keeps one
+    // dataset model and drives them all; dataset state is read back from the
+    // primary one.
+    private readonly MapSessionSet _sessions;
+    private MapViews? _views;
     private MapPresentationState _presentation;
 
     private MapPresentationState CurrentPresentation =>
         Volatile.Read(ref _presentation);
 
     /// <inheritdoc />
-    public bool IsInitialized => _layerCollection is not null && _viewport is not null;
+    public bool IsInitialized => _views is not null && _sessions.Primary is not null;
 
     public DatasetLoaderService(
         ViewerSettings settings,
@@ -86,7 +87,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         GlobalTimeService globalTime,
         INotificationService notifications,
         DatasetProcessorOwner processorOwner,
-        IMapViewportNotifier viewportNotifier,
         IRenderActivityMonitor? renderActivityMonitor,
         TimeRefreshProgress? timeProgress,
         CellSceneStore? cellScenes,
@@ -103,7 +103,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ArgumentNullException.ThrowIfNull(globalTime);
         ArgumentNullException.ThrowIfNull(notifications);
         ArgumentNullException.ThrowIfNull(processorOwner);
-        ArgumentNullException.ThrowIfNull(viewportNotifier);
 
         _settings = settings;
         _timeProgress = timeProgress;
@@ -116,9 +115,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _globalTime = globalTime;
         _notifications = notifications;
         _processorOwner = processorOwner;
-        _viewportNotifier = viewportNotifier;
         _renderActivityMonitor = renderActivityMonitor;
         _logger = logger ?? (ILogger)NullLogger.Instance;
+        _sessions = new MapSessionSet(_logger);
         _cellScenes = CellScenesEnabled ? cellScenes : null;
         _sources = sources;
     }
@@ -169,10 +168,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         get
         {
             var layers = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
-            if (_mapSession is null)
+            if (_sessions.Primary is not { } session)
                 return layers;
 
-            foreach (var snapshot in _mapSession.GetDatasets())
+            foreach (var snapshot in session.GetDatasets())
             {
                 if (_sessionEntries.TryGetValue(snapshot.Dataset.Id, out var entry))
                     layers[entry] = snapshot.Layers;
@@ -182,15 +181,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     }
 
     public IReadOnlyList<ILayer> CurrentStackedLayers =>
-        _mapSession?.GetStackedLayers() ?? [];
+        _sessions.Primary?.GetStackedLayers() ?? [];
 
     public Task<IReadOnlyList<S100Pick>> PickAsync(GeographicPickQuery query, CancellationToken cancellationToken = default) =>
-        _mapSession is null
+        _sessions.Primary is not { } session
             ? Task.FromResult<IReadOnlyList<S100Pick>>([])
-            : _mapSession.Query.PickAsync(query, cancellationToken);
+            : session.Query.PickAsync(query, cancellationToken);
 
     public IReadOnlyList<LayerStackEntry> CurrentStackEntries =>
-        _mapSession?.GetLayerStackEntries() ?? [];
+        _sessions.Primary?.GetLayerStackEntries() ?? [];
 
     public event Action? LayerStackChanged;
 
@@ -275,49 +274,78 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             .Show();
     }
 
-    public void Initialize(
-        IMapLayerCollection layerCollection,
-        IMapViewportController viewport,
-        ViewerCommandSettings? options)
+    public void Initialize(MapViews views, ViewerCommandSettings? options)
     {
-        ArgumentNullException.ThrowIfNull(layerCollection);
-        ArgumentNullException.ThrowIfNull(viewport);
-        if (_layerCollection is not null)
+        ArgumentNullException.ThrowIfNull(views);
+        if (_views is not null)
             throw new InvalidOperationException("DatasetLoaderService has already been initialized.");
 
-        _layerCollection = layerCollection;
-        _mapSession = layerCollection.DatasetSession
-            ?? throw new InvalidOperationException(
-                "The map layer collection must provide a Mapsui dataset session.");
-        _mapSession.LayersChanged += OnSessionLayersChanged;
-        _mapSession.DatasetRenderFailed += OnDatasetRenderFailed;
+        _views = views;
+        _sessions.LayersChanged += OnSessionLayersChanged;
+        _sessions.PrimaryChanged += OnSessionLayersChanged;
+        _sessions.DatasetRenderFailed += OnDatasetRenderFailed;
         if (_timeProgress is { } progress)
         {
-            _mapSession.DatasetRenderStarted += (_, e) =>
+            _sessions.DatasetRenderStarted += (_, e) =>
             {
                 if (e.Kind == MapSessionRenderKind.TimeRefresh)
                     progress.Started(e.DatasetId.Value);
             };
-            _mapSession.DatasetRenderCompleted += (_, e) =>
+            _sessions.DatasetRenderCompleted += (_, e) =>
             {
                 if (e.Kind == MapSessionRenderKind.TimeRefresh)
                     progress.Finished(e.DatasetId.Value);
             };
-            _mapSession.DatasetRenderFailed += (_, e) =>
+            _sessions.DatasetRenderFailed += (_, e) =>
             {
                 if (e.Kind == MapSessionRenderKind.TimeRefresh)
                     progress.Finished(e.DatasetId.Value);
             };
         }
-        _mapSession.SetMarinerSettings(CurrentPresentation.Mariner);
-        _globalTime.AttachTo(_mapSession);
+        _sessions.SetMarinerSettings(CurrentPresentation.Mariner);
         _globalTime.CurrentTimeChanged +=
             time => _ = ReRenderAtTimeAsync(time, CancellationToken.None);
         _globalTime.RangeChanged += OnGlobalRangeChanged;
-        _viewport = viewport;
+        views.ViewAdded += (_, view) => AddView(view);
+        views.ViewRemoved += (_, view) => RemoveView(view);
+        foreach (var view in views.All)
+            AddView(view);
 
         _catalogues.Initialize(options?.FeatureCatalogues, options?.PortrayalCatalogues);
 
+    }
+
+    /// <summary>
+    /// Starts driving a map's session: it catches up to the datasets, order,
+    /// settings and time the other maps show (split map, #1731).
+    /// </summary>
+    private void AddView(IMapViewCapabilities view)
+    {
+        var session = view.DatasetSession;
+        // Attach first, so the session has the app's clock before it renders.
+        _globalTime.AttachTo(session);
+        _ = ObserveCatchUpAsync(
+            view.Id,
+            _sessions.AddAsync(view.Id, session, view.Viewport, CurrentPresentation));
+    }
+
+    private async Task ObserveCatchUpAsync(MapViewId id, Task adding)
+    {
+        try
+        {
+            await adding.ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogWarning(ex, "Catching map {Map} up to the loaded datasets failed", id);
+        }
+    }
+
+    /// <summary>Stops driving a map's session and takes the datasets off its map.</summary>
+    private void RemoveView(IMapViewCapabilities view)
+    {
+        if (_sessions.Remove(view.Id) is { } session)
+            _globalTime.Detach(session);
     }
 
     public async Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default)
@@ -450,7 +478,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             _processorEntries[entry.Id] = entry;
             _sessionEntries[entry.Id] = entry;
             var wasKnownBySession = afterStored?.WasKnownBySession
-                ?? _mapSession!.GetDataset(entry.Id) is not null;
+                ?? _sessions.Primary!.GetDataset(entry.Id) is not null;
 
             ApplyPostRegistrationPolicies(entry, processor, spec, wasKnownBySession);
 
@@ -471,7 +499,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             var mapDataset = entry.MapDataset
                 ?? throw new InvalidOperationException(
                     "A loaded entry must expose renderer-neutral dataset state.");
-            _mapSession!.SetDataset(
+            _sessions.SetDataset(
                 mapDataset,
                 entry.MinimumDisplayScale,
                 entry.MaximumDisplayScale);
@@ -522,7 +550,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 // load and "win" the viewport.
                 if (!fromExchangeSet && !isSource && !redraw && !SuppressAutoZoom)
                 {
-                    _viewport!.ZoomToExtent(result.Extent);
+                    _views?.Active?.ViewportController.ZoomToExtent(result.Extent);
                 }
             }
 
@@ -742,12 +770,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         var start = Stopwatch.GetTimestamp();
         MapsuiDatasetResult? result = null;
+        StoredCellScene? stored = null;
         using (var activity = EncDotNet.S100.Viewer.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.scene_read"))
         {
             // The read and decode run off the UI thread; binding the layers
             // (partitioning each scene and building its spatial index) runs on
             // the work scheduler at the load's priority.
-            var stored = await _cellScenes.TryReadAsync(key, token).ConfigureAwait(true);
+            stored = await _cellScenes.TryReadAsync(key, token).ConfigureAwait(true);
             activity?.SetTag("s100.cell.scene.hit", stored is not null);
             if (stored is not null)
             {
@@ -762,14 +791,22 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (result is null || !IsCurrentLoad(entry, loadGeneration) || entry.MapDataset is not { } mapDataset)
             return new StoredPublish(key, Published: false, WasKnownBySession: false);
 
-        var wasKnownBySession = _mapSession!.GetDataset(entry.Id) is not null;
+        var wasKnownBySession = _sessions.Primary!.GetDataset(entry.Id) is not null;
         _sessionEntries[entry.Id] = entry;
         try
         {
-            _mapSession.SetDataset(mapDataset, entry.MinimumDisplayScale, entry.MaximumDisplayScale);
+            _sessions.SetDataset(mapDataset, entry.MinimumDisplayScale, entry.MaximumDisplayScale);
             ProjectSessionState(entry);
             SubscribeEntry(entry);
-            if (!await _mapSession.PublishStoredAsync(entry.Id, result, token).ConfigureAwait(true)
+            // Each other map draws its own copy of the stored scene.
+            if (!await _sessions.PublishStoredAsync(
+                    entry.Id,
+                    result,
+                    ct => WorkScheduler.Shared.RunAsync(
+                        WorkStage.Scene,
+                        _ => MapsuiDatasetRenderer.FromStoredScene(stored!),
+                        ct),
+                    token).ConfigureAwait(true)
                 || !IsCurrentLoad(entry, loadGeneration))
             {
                 if (IsCurrentLoad(entry, loadGeneration))
@@ -873,7 +910,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
 
         _sessionEntries.Remove(entry.Id);
-        _mapSession?.RemoveDataset(entry.Id, removeProcessor: false);
+        _sessions.RemoveDataset(entry.Id);
         entry.IsLoaded = false;
         entry.Info = null;
     }
@@ -1344,15 +1381,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public async Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken)
     {
         using var __cmd = ViewerObservability.BeginCommand("timeline.scrub");
-        _mapSession?.SetCurrentTime(t);
-        if (_mapSession is not null)
+        _sessions.SetCurrentTime(t);
+        if (_sessions.Primary is not null)
         {
             // The Timeline shows "Drawing … · N of M layers ready" until the
             // latest refresh returns (#709); a superseded one returns quietly.
             var generation = _timeProgress?.Begin(t);
             try
             {
-                await _mapSession.RefreshTimeAsync(
+                await _sessions.RefreshTimeAsync(
                     CurrentPresentation,
                     cancellationToken).ConfigureAwait(true);
             }
@@ -1373,17 +1410,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         cancellationToken.ThrowIfCancellationRequested();
 
         using var __cmd = ViewerObservability.BeginCommand("presentation.apply");
-        _mapSession?.SetMarinerSettings(presentation.Mariner);
+        _sessions.SetMarinerSettings(presentation.Mariner);
         Volatile.Write(ref _presentation, presentation);
-        // Re-portray only the cells currently in view; off-view cells are
-        // deferred and re-portrayed lazily as they scroll in (see
-        // RefreshRevealedAsync). A null viewport (map not laid out yet) falls back
-        // to re-portraying everything.
-        if (_mapSession is not null
-            && await _mapSession.RefreshAsync(
-                presentation,
-                ToMercatorViewport(_viewportNotifier.Current),
-                cancellationToken).ConfigureAwait(true))
+        // Re-portray only the cells currently in each map's view; off-view
+        // cells are deferred and re-portrayed lazily as they scroll in (see
+        // RefreshRevealedAsync). A map with no viewport yet (not laid out)
+        // re-portrays everything.
+        if (await _sessions.RefreshAsync(presentation, cancellationToken).ConfigureAwait(true))
         {
             _notifications.Create(Strings.Toast_Success)
                 .WithSeverity(NotificationSeverity.Success)
@@ -1402,51 +1435,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         using var __cmd = ViewerObservability.BeginCommand("presentation.depthAdjustment");
         Volatile.Write(ref _presentation, presentation);
-        if (_mapSession is null)
-            return true;
-
-        return await _mapSession.RefreshDepthAdjustedAsync(
-            presentation,
-            ToMercatorViewport(_viewportNotifier.Current),
-            cancellationToken).ConfigureAwait(true);
+        return await _sessions.RefreshDepthAdjustedAsync(presentation, cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>
     /// Re-portrays cells that a prior viewport-gated presentation change deferred
-    /// as off-view and that now intersect <paramref name="snapshot"/>. Must be
-    /// invoked on the UI thread (it composes the map layer stack). A no-op when
-    /// the map is not initialized or the snapshot cannot be projected.
+    /// as off-view and that now intersect each map's viewport;
+    /// <paramref name="snapshot"/> stands in for a map whose viewport isn't
+    /// known yet. Must be invoked on the UI thread (it composes the map layer
+    /// stacks).
     /// </summary>
-    public async Task RefreshRevealedAsync(MapViewportSnapshot? snapshot)
-    {
-        if (_mapSession is null)
-            return;
-        if (ToMercatorViewport(snapshot) is not { } viewport)
-            return;
-
-        await _mapSession.RefreshRevealedAsync(viewport).ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Projects a lat/lon viewport snapshot to an EPSG:3857 rectangle for the
-    /// session's extent-based refresh gate, or <see langword="null"/> when the
-    /// snapshot is absent or degenerate.
-    /// </summary>
-    private static Mapsui.MRect? ToMercatorViewport(MapViewportSnapshot? snapshot)
-    {
-        if (snapshot is null
-            || snapshot.LongitudeSpanDegrees <= 0
-            || snapshot.LatitudeSpanDegrees <= 0)
-        {
-            return null;
-        }
-
-        var (minX, minY) = Mapsui.Projections.SphericalMercator.FromLonLat(
-            snapshot.MinLongitude, snapshot.MinLatitude);
-        var (maxX, maxY) = Mapsui.Projections.SphericalMercator.FromLonLat(
-            snapshot.MaxLongitude, snapshot.MaxLatitude);
-        return new Mapsui.MRect(minX, minY, maxX, maxY);
-    }
+    public Task RefreshRevealedAsync(MapViewportSnapshot? snapshot) =>
+        _sessions.RefreshRevealedAsync(snapshot);
 
     private async Task<MapsuiDatasetResult?> RenderAndReplaceAsync(
         DatasetEntry entry,
@@ -1473,7 +1473,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (!OwnsProcessor(entry, processor))
             return Task.CompletedTask;
 
-        _mapSession!.ClearLayers(entry.Id);
+        _sessions.ClearLayers(entry.Id);
         onApplied?.Invoke();
         ApplyEntryState(entry);
         return Task.CompletedTask;
@@ -1490,7 +1490,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (!OwnsProcessor(entry, processor))
             return null;
 
-        var result = await _mapSession!.RenderAsync(
+        var result = await _sessions.RenderAsync(
             entry.Id,
             presentation ?? CurrentPresentation,
             cancellationToken).ConfigureAwait(true);
@@ -1519,7 +1519,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             entry.PropertyChanged -= OnEntryPropertyChanged;
         // The loader owns the processor and retires it once; the map removes
         // the dataset without retiring it (split map, #1728).
-        _processorOwner.Retire([entry.Id], () => _mapSession?.RemoveDataset(entry.Id, removeProcessor: false));
+        _processorOwner.Retire([entry.Id], () => _sessions.RemoveDataset(entry.Id));
         _processorEntries.Remove(entry.Id);
         _sessionEntries.Remove(entry.Id);
         _subLayersDecided.RemoveWhere(decided => decided.Dataset == entry.Id);
@@ -1564,7 +1564,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // state are rebuilt once rather than once per evicted cell. The loader
         // retires the processors once (#1728).
         var ids = entries.Select(entry => entry.Id).ToArray();
-        _processorOwner.Retire(ids, () => _mapSession?.RemoveDatasets(ids, preserveState: true, removeProcessor: false));
+        _processorOwner.Retire(ids, () => _sessions.RemoveDatasets(ids, preserveState: true));
         foreach (var entry in entries)
         {
             _processorEntries.Remove(entry.Id);
@@ -1595,7 +1595,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             // flag and time state, as a lazy-load eviction does, then open
             // them again with the current catalogues.
             var ids = loaded.Select(entry => entry.Id).ToArray();
-            _processorOwner.Retire(ids, () => _mapSession?.RemoveDatasets(ids, preserveState: true, removeProcessor: false));
+            _processorOwner.Retire(ids, () => _sessions.RemoveDatasets(ids, preserveState: true));
             foreach (var entry in loaded)
             {
                 _processorEntries.Remove(entry.Id);
@@ -1614,11 +1614,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries)
     {
         ArgumentNullException.ThrowIfNull(orderedEntries);
-        if (_mapSession is null) return;
-
         // The Viewer list is top-first; the reusable session and Mapsui dataset
         // band use bottom-to-top paint order.
-        _mapSession.SetOrder(
+        _sessions.SetOrder(
             orderedEntries
                 .Reverse()
                 .Select(entry => entry.Id)
@@ -1652,10 +1650,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public IReadOnlyList<OverscaleCellInput> GetOverscaleCells()
     {
         List<OverscaleCellInput>? cells = null;
-        if (_mapSession is null)
+        if (_sessions.Primary is not { } session)
             return [];
 
-        foreach (var snapshot in _mapSession.GetDatasets())
+        foreach (var snapshot in session.GetDatasets())
         {
             if (snapshot.MaximumDisplayScale is not int compilationScale
                 || compilationScale <= 0
@@ -1678,7 +1676,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
     private void ProjectSessionState(DatasetEntry entry)
     {
-        var snapshot = _mapSession?.GetDataset(entry.Id);
+        var snapshot = _sessions.Primary?.GetDataset(entry.Id);
         if (snapshot is null)
             return;
 
@@ -1775,15 +1773,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
     private void ApplyEntryState(DatasetEntry entry)
     {
-        if (_mapSession is null || entry.MapDataset is not { } dataset)
+        if (_sessions.Primary is not { } primary || entry.MapDataset is not { } dataset)
             return;
 
-        _mapSession.SetDataset(
+        _sessions.SetDataset(
             dataset,
             entry.MinimumDisplayScale,
             entry.MaximumDisplayScale);
         entry.ContentMaxVisibleResolution =
-            _mapSession.GetDataset(entry.Id)?.ContentMaxVisibleResolution;
+            primary.GetDataset(entry.Id)?.ContentMaxVisibleResolution;
     }
 
     private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1813,7 +1811,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     // layers.
     private async Task RenderViewingGroupsAsync(DatasetEntry entry)
     {
-        if (_mapSession is null || !_processorOwner.TryAcquire(entry.Id, out var lease))
+        if (_sessions.Primary is null || !_processorOwner.TryAcquire(entry.Id, out var lease))
             return;
         IDatasetProcessor processor;
         using (lease)
@@ -1854,7 +1852,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
     private void OnSessionLayersChanged(object? sender, EventArgs e)
     {
-        foreach (var snapshot in _mapSession?.GetDatasets() ?? [])
+        foreach (var snapshot in _sessions.Primary?.GetDatasets() ?? [])
         {
             if (_sessionEntries.TryGetValue(snapshot.Dataset.Id, out var entry))
                 ProjectSessionState(entry);
@@ -1875,8 +1873,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
     private void EnsureInitialized()
     {
-        if (_layerCollection is null || _viewport is null)
-            throw new InvalidOperationException("DatasetLoaderService.Initialize must be called before LoadAsync.");
+        if (!IsInitialized)
+            throw new InvalidOperationException("DatasetLoaderService.Initialize must be called, with a map, before LoadAsync.");
     }
 
     private long BeginLoad(DatasetEntry entry)
@@ -1904,9 +1902,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         _processorEntries.Remove(entry.Id);
         _sessionEntries.Remove(entry.Id);
-        _mapSession?.RemoveDataset(
-            entry.Id,
-            removeProcessor: false);
+        _sessions.RemoveDataset(entry.Id);
         UnsubscribeSubLayers(entry);
         entry.SubLayers.Clear();
         if (_subscribedEntries.Remove(entry))

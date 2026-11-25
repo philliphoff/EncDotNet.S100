@@ -26,4 +26,7 @@ internal interface IMapViewCapabilities
 
     /// <summary>This map's demand planner.</summary>
     DemandPlanner Planner { get; }
+
+    /// <summary>This map's dataset session, which the dataset loader drives with every other map's.</summary>
+    IMapDatasetSession DatasetSession { get; }
 }

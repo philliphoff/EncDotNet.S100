@@ -57,8 +57,8 @@ public class MapCapabilityBoundaryTests
         var pickConstructors = typeof(PickFeaturesTool).GetConstructors();
 
         Assert.NotNull(initialize);
-        Assert.Equal(typeof(IMapLayerCollection), initialize!.GetParameters()[0].ParameterType);
-        Assert.Equal(typeof(IMapViewportController), initialize.GetParameters()[1].ParameterType);
+        // The loader drives every map's session through the registry (#1731).
+        Assert.Equal(typeof(MapViews), initialize!.GetParameters()[0].ParameterType);
         Assert.Equal(
             typeof(ICapabilityAccessor<IMapViewportController>),
             setViewportConstructor.GetParameters()[0].ParameterType);
