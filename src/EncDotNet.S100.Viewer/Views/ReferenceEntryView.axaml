@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:cr="using:EncDotNet.S100.Viewer.ViewModels.ChartReference"
-             xmlns:crs="using:EncDotNet.S100.Viewer.Services.ChartReference"
+             xmlns:crs="using:EncDotNet.S100.Datasets.Pipelines.Reference"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
              x:Class="EncDotNet.S100.Viewer.Views.ReferenceEntryView"

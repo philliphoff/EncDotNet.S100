@@ -1,23 +1,22 @@
 using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
-using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 
-namespace EncDotNet.S100.Viewer.Services.ChartReference;
+namespace EncDotNet.S100.Datasets.Pipelines.Reference;
 
 /// <summary>
 /// Reads the catalogue artwork a Chart reference tile needs, the palettes,
 /// symbols, line styles and area fills, from one product's portrayal
-/// catalogue, and makes the legend row <see cref="ChartReferenceGlyphCache"/>
+/// catalogue, and makes the legend row a glyph cache (the viewer's, or the CLI's HTML export)
 /// draws for a <see cref="LeadGlyph"/> (#1637).
 /// </summary>
 /// <remarks>
 /// Each asset is read once and kept. The methods may be called from any
 /// thread; reads run on the caller's.
 /// </remarks>
-internal sealed class ChartReferenceArtwork
+public sealed class ChartReferenceArtwork
 {
     // S-52's dash and dot patterns, in millimetres: a 3.6 mm dash with a
     // 1.8 mm gap, and a 0.6 mm dot with a 1.2 mm gap.
