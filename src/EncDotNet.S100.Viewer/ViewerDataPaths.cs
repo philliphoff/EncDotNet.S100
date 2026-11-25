@@ -34,11 +34,11 @@ internal sealed class ViewerDataPaths
     internal const string CacheDirEnvironmentVariable = "S100_CACHE_DIR";
 
     private static readonly string DefaultSettingsDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        ViewerUserFolders.ApplicationData,
         "EncDotNet.S100.Viewer");
 
     private static readonly string DefaultLocalDataDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        ViewerUserFolders.LocalApplicationData,
         "EncDotNet.S100");
 
     private readonly string? _baseDirectory;

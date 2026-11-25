@@ -72,7 +72,7 @@ internal static partial class UncleanShutdownSentinel
     /// between runs.
     /// </summary>
     public static string DefaultDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        ViewerUserFolders.ApplicationData,
         "EncDotNet.S100.Viewer",
         "crash-markers");
 

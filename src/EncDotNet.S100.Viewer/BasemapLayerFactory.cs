@@ -87,7 +87,7 @@ internal static class BasemapLayerFactory
         try
         {
             var cacheDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                ViewerUserFolders.LocalApplicationData,
                 "EncDotNet.S100.Viewer", "TileCache", "osm");
             var cache = new FileCache(cacheDir, "png");
             var source = KnownTileSources.Create(

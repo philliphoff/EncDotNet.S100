@@ -22,6 +22,25 @@ public class ViewerDataPathsTests
     }
 
     [Fact]
+    public void Default_LocationsAreAbsolutePathsInTheUsersFolders()
+    {
+        // GetFolderPath returns "" for a folder that doesn't exist yet (a new
+        // Linux account's ~/.config or ~/.local/share), which made these paths
+        // relative to wherever SoundCharts was started. ViewerUserFolders asks
+        // without verifying, so they're always rooted in the user's folders.
+        var paths = new ViewerDataPaths();
+
+        Assert.True(Path.IsPathRooted(ViewerUserFolders.ApplicationData), ViewerUserFolders.ApplicationData);
+        Assert.True(Path.IsPathRooted(ViewerUserFolders.LocalApplicationData), ViewerUserFolders.LocalApplicationData);
+        Assert.Equal(Path.Combine(ViewerUserFolders.ApplicationData, "EncDotNet.S100.Viewer", "settings.json"), paths.SettingsFilePath);
+        Assert.Equal(Path.Combine(ViewerUserFolders.ApplicationData, "EncDotNet.S100.Viewer", "tide-stations.json.gz"), paths.TideStationsFilePath);
+        Assert.StartsWith(ViewerUserFolders.LocalApplicationData, paths.CacheStoreDirectory, StringComparison.Ordinal);
+        Assert.Equal(
+            Path.Combine(ViewerUserFolders.ApplicationData, "EncDotNet.S100.Viewer", "crash-markers"),
+            EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.DefaultDirectory);
+    }
+
+    [Fact]
     public void BaseDirectory_ReRootsEveryLocation()
     {
         var baseDir = Path.Combine(Path.GetTempPath(), "encdotnet-test-" + Guid.NewGuid().ToString("N"));
