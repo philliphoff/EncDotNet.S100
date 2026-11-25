@@ -3,7 +3,6 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
-using EncDotNet.S100.Viewer.Services.ChartReference;
 
 namespace EncDotNet.S100.Viewer.Views;
 
