@@ -183,6 +183,12 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
         HeroGlyph = null;
         OnPropertyChanged(nameof(Tile));
         DrawGlyphs();
+        OnReloadGlyphs();
+    }
+
+    /// <summary>Called by <see cref="ReloadGlyphs"/>: an entry with glyphs of its own draws them again.</summary>
+    protected virtual void OnReloadGlyphs()
+    {
     }
 
     /// <summary>Reads what is drawn in view again, after the map moved; only a feature type shows it.</summary>

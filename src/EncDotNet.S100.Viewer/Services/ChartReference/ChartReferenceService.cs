@@ -116,6 +116,19 @@ internal sealed class ChartReferenceService : IDisposable
     public event EventHandler<CataloguesChangedEventArgs>? ProbesReady;
 
     /// <summary>
+    /// Whether a background probe of <paramref name="spec"/>'s rules is
+    /// running, so its feature type entries say "Working out variants…"
+    /// until <see cref="ProbesReady"/> (R13b, #1721).
+    /// </summary>
+    /// <param name="spec">The product.</param>
+    /// <returns>Whether a probe is running.</returns>
+    public bool IsProbing(SpecRef spec)
+    {
+        lock (_gate)
+            return _probes.ContainsKey(spec);
+    }
+
+    /// <summary>
     /// Every product with a portrayal catalogue: the products with datasets
     /// open first, then every other catalogue, bundled ones (S-401 among
     /// them) and ones the user added (design note D4). Each group is in

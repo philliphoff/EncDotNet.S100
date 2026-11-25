@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -69,6 +70,7 @@ internal sealed class ReferenceViewModel : ViewModelBase, IActivityTabContentSig
         _navigator.Changed += OnNavigatorChanged;
         _navigator.ShowRequested += OnShowRequested;
         _glyphs.PaletteChanged += OnPaletteChanged;
+        _service.ProbesReady += OnProbesReady;
         if (_settings is not null)
             _settings.PropertyChanged += OnSettingsChanged;
         if (_navigator.Current is not null)
@@ -187,6 +189,7 @@ internal sealed class ReferenceViewModel : ViewModelBase, IActivityTabContentSig
         _navigator.Changed -= OnNavigatorChanged;
         _navigator.ShowRequested -= OnShowRequested;
         _glyphs.PaletteChanged -= OnPaletteChanged;
+        _service.ProbesReady -= OnProbesReady;
         if (_settings is not null)
             _settings.PropertyChanged -= OnSettingsChanged;
         if (_map is not null)
@@ -255,19 +258,38 @@ internal sealed class ReferenceViewModel : ViewModelBase, IActivityTabContentSig
         });
     }
 
-    private ReferenceEntryContext Context(ChartReferenceIndex index) => new()
+    private ReferenceEntryContext Context(ChartReferenceIndex index)
     {
-        Index = index,
-        Artwork = _service.GetArtwork(index.Spec),
-        Terms = Terms?.With(index, _navigator.Open, _service.GetArtwork(index.Spec)),
-        Glyphs = _glyphs,
-        SimplifiedSymbols = _settings?.SimplifiedSymbols ?? false,
-        Open = _navigator.Open,
-        Post = _post,
-        Map = _map,
-        Settings = _settings,
-        ChangeSetting = ChangeSetting,
-    };
+        var feature = _navigator.CurrentFeature;
+        var from = _navigator.Current;
+
+        // A link inside an entry opened from a pick keeps the pick for the
+        // entries that show its values: its attributes, and its own feature
+        // type. A feature type entry without a pick passes the feature type
+        // alone to its attributes.
+        var context = feature ?? (from is { Kind: ReferenceKind.FeatureType } type ? ReferenceFeature.TypeOnly(type.Code) : null);
+        void Open(ReferenceKey key) => _navigator.Open(
+            key,
+            context is not null && (key.Kind == ReferenceKind.Attribute || (from is { } f && f.Kind == key.Kind && string.Equals(f.Code, key.Code, StringComparison.OrdinalIgnoreCase)))
+                ? context
+                : null);
+
+        return new()
+        {
+            Index = index,
+            Artwork = _service.GetArtwork(index.Spec),
+            Terms = Terms?.With(index, Open, _service.GetArtwork(index.Spec)),
+            Glyphs = _glyphs,
+            SimplifiedSymbols = _settings?.SimplifiedSymbols ?? false,
+            Open = Open,
+            Post = _post,
+            Map = _map,
+            Settings = _settings,
+            ChangeSetting = ChangeSetting,
+            Feature = feature,
+            ProbesPending = index.Probes is null && _service.IsProbing(index.Spec),
+        };
+    }
 
     private void UpdateCrumbs()
     {
@@ -282,6 +304,13 @@ internal sealed class ReferenceViewModel : ViewModelBase, IActivityTabContentSig
         ];
         OnPropertyChanged(nameof(HasTrail));
     }
+
+    // A background probe finished: a feature type entry of the product shows its variant table (R13b, #1721).
+    private void OnProbesReady(object? sender, CataloguesChangedEventArgs e) => _post(() =>
+    {
+        if (!_disposed && _entry is FeatureTypeEntryViewModel entry && entry.Key.Spec == e.Spec)
+            Loading = LoadAsync();
+    });
 
     private void OnPaletteChanged(object? sender, EventArgs e) => _post(() => _entry?.ReloadGlyphs());
 

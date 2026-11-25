@@ -19,8 +19,13 @@ public sealed class ChartReferenceServiceTests
     internal sealed class Fixture : IDisposable
     {
         public Fixture(params string[] specs)
+            : this(probes: true, specs)
         {
-            Features = new FeatureCatalogueManager((string spec) => Specification.TryOpenFeatureCatalogue(spec));
+        }
+
+        private Fixture(bool probes, string[] specs)
+        {
+            Features = new FeatureCatalogueManager((string spec) => probes ? Specification.TryOpenFeatureCatalogue(spec) : Changed(spec));
             Portrayals = new PortrayalCatalogueManager();
             foreach (var spec in specs.Length > 0 ? specs : Specification.AvailableSpecs)
             {
@@ -31,6 +36,14 @@ public sealed class ChartReferenceServiceTests
             Service = new ChartReferenceService(Features, Portrayals, () => Loaded);
         }
 
+        /// <summary>
+        /// The bundled catalogues with a comment added to each feature
+        /// catalogue, so the committed probe results don't apply and nothing
+        /// probes them: the indexes have no <see cref="ChartReferenceIndex.Probes"/>,
+        /// as an XSLT product's don't, and feature types keep Drawn with.
+        /// </summary>
+        public static Fixture WithoutProbes(params string[] specs) => new(probes: false, specs);
+
         public FeatureCatalogueManager Features { get; }
 
         public PortrayalCatalogueManager Portrayals { get; }
@@ -38,6 +51,17 @@ public sealed class ChartReferenceServiceTests
         public ChartReferenceService Service { get; }
 
         public List<string> Loaded { get; } = [];
+
+        private static MemoryStream? Changed(string spec)
+        {
+            using var bundled = Specification.TryOpenFeatureCatalogue(spec);
+            if (bundled is null) return null;
+            var changed = new MemoryStream();
+            bundled.CopyTo(changed);
+            changed.Write("\n<!-- changed -->\n"u8);
+            changed.Position = 0;
+            return changed;
+        }
 
         public void Dispose()
         {

@@ -134,7 +134,10 @@ internal sealed class ReferenceTerms
             service.GetArtwork,
             examiner,
             urls,
-            simplifiedSymbols);
+            simplifiedSymbols)
+        {
+            OpenFromFeature = navigator.Open,
+        };
         service.Changed += (_, e) => terms.Forget(e.Spec);
         return terms;
     }
@@ -152,7 +155,7 @@ internal sealed class ReferenceTerms
         var ready = new ConcurrentDictionary<string, ChartReferenceIndex>(_ready, StringComparer.OrdinalIgnoreCase);
         ready[index.Spec.Name] = index;
         Func<SpecRef, ChartReferenceArtwork?>? art = artwork is null ? _artwork : spec => SameSpec(spec, index.Spec) ? artwork : _artwork?.Invoke(spec);
-        return new ReferenceTerms(Glyphs, open, _indexes, art, Examiner, Urls, _simplified, ready);
+        return new ReferenceTerms(Glyphs, open, _indexes, art, Examiner, Urls, _simplified, ready) { OpenFromFeature = OpenFromFeature };
     }
 
     /// <summary>A plain set of terms over one index, for hosts that build none (tests, the study page).</summary>
@@ -168,6 +171,23 @@ internal sealed class ReferenceTerms
     /// <summary>Opens <paramref name="key"/>'s entry.</summary>
     /// <param name="key">The entry.</param>
     public void Open(ReferenceKey key) => _open(key);
+
+    /// <summary>
+    /// Opens an entry from a picked feature (R13b, #1721), so it can show the
+    /// feature's own values; <see langword="null"/> opens without the feature.
+    /// </summary>
+    public Action<ReferenceKey, ReferenceFeature?>? OpenFromFeature { get; init; }
+
+    /// <summary>Opens <paramref name="key"/>'s entry from a picked feature: Open in reference and F1.</summary>
+    /// <param name="key">The entry.</param>
+    /// <param name="feature">The picked feature, or <see langword="null"/>.</param>
+    public void Open(ReferenceKey key, ReferenceFeature? feature)
+    {
+        if (OpenFromFeature is { } open)
+            open(key, feature);
+        else
+            _open(key);
+    }
 
     /// <summary>
     /// What <paramref name="key"/>'s term says, when its index is ready;

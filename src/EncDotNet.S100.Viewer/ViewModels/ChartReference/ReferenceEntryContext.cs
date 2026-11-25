@@ -44,4 +44,17 @@ internal sealed class ReferenceEntryContext
 
     /// <summary>Opens the settings that change a display setting; <see langword="null"/> hides Change.</summary>
     public Action<string>? ChangeSetting { get; init; }
+
+    /// <summary>
+    /// The picked feature the entry was opened from (Open in reference, F1),
+    /// or <see langword="null"/>: a feature type's variant table rings its
+    /// cell (R13b, #1721).
+    /// </summary>
+    public ReferenceFeature? Feature { get; init; }
+
+    /// <summary>
+    /// Whether the index's probe results are still being worked out in the
+    /// background, so a feature type says "Working out variants…" (R13b, #1721).
+    /// </summary>
+    public bool ProbesPending { get; init; }
 }

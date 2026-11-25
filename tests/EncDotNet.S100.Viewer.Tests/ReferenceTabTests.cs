@@ -518,7 +518,8 @@ public sealed class ReferenceTabTests : IDisposable
     [AvaloniaFact]
     public async Task The_entry_has_one_left_inset_and_Lateral_Beacon_folds_its_long_lists()
     {
-        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        // Drawn with: the list an entry shows without probe results (R13b keeps it for XSLT products).
+        using var f = ChartReferenceServiceTests.Fixture.WithoutProbes("S-101");
         using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
         var nav = new ReferenceNavigator();
         using var tab = new ReferenceViewModel(nav, f.Service, cache, post: a => Dispatcher.UIThread.Post(a));
@@ -621,7 +622,8 @@ public sealed class ReferenceTabTests : IDisposable
     [AvaloniaFact]
     public async Task The_tab_shows_an_entry_with_its_trail_at_360_px()
     {
-        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        // Drawn with: the list an entry shows without probe results (R13b keeps it for XSLT products).
+        using var f = ChartReferenceServiceTests.Fixture.WithoutProbes("S-101");
         using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
         var nav = new ReferenceNavigator();
         using var tab = new ReferenceViewModel(nav, f.Service, cache, post: a => Dispatcher.UIThread.Post(a));

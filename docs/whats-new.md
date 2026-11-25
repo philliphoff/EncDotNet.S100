@@ -6,6 +6,23 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **How a feature type is drawn, as a table.** In the Reference tab, a
+  feature type's **How it is drawn** is now a table of what its rule draws
+  for each combination of values. Its rows and columns are the two
+  attributes that change the symbol most, such as Lateral Beacon's beacon
+  shape × colour, and any other attribute that changes it is a filter above
+  the table. Each cell is the drawn glyph: hover it for a peek, or click it
+  to open the symbol. A **Simplified / Paper chart** switch shows the other
+  style without changing the chart's setting. Opened from a pick with
+  **Open in reference** or F1, the filters start on the feature's values
+  and its cell is ringed. Parts drawn by shared rules (topmarks, lights)
+  are still links under the table, and the fallback symbol keeps its own
+  line. A table whose probe stopped at the cap says "Partial: the first 512
+  combinations". Products whose rules are XSLT keep the list of symbols
+  with their cases. So does a user-added catalogue while its rules are
+  probed in the background, which says "Working out variants…"
+  ([#1721](https://github.com/philliphoff/EncDotNet.S100/issues/1721)).
+
 - **The chart reference as a web page.** `s100 reference export --spec S-101
   --palette day --out <folder>` writes the chart reference as a static HTML
   site that works offline: an index with a search box, and a page for each

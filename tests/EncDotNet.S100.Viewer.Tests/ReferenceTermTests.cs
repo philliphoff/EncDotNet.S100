@@ -313,7 +313,8 @@ public sealed class ReferenceTermTests : IDisposable
     [AvaloniaFact]
     public async Task Names_and_the_words_of_Drawn_with_are_terms_in_an_entry()
     {
-        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        // Drawn with: the list an entry shows without probe results (R13b keeps it for XSLT products).
+        using var f = ChartReferenceServiceTests.Fixture.WithoutProbes("S-101");
         using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
         var nav = new ReferenceNavigator();
         using var tab = new ReferenceViewModel(nav, f.Service, cache, post: a => Dispatcher.UIThread.Post(a))
@@ -357,7 +358,8 @@ public sealed class ReferenceTermTests : IDisposable
     [AvaloniaFact]
     public async Task Punctuation_sits_tight_against_the_term_before_it()
     {
-        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        // Drawn with: the list an entry shows without probe results (R13b keeps it for XSLT products).
+        using var f = ChartReferenceServiceTests.Fixture.WithoutProbes("S-101");
         using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
         var nav = new ReferenceNavigator();
         using var tab = new ReferenceViewModel(nav, f.Service, cache, post: a => Dispatcher.UIThread.Post(a));

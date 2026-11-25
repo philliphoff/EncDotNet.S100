@@ -1019,9 +1019,20 @@ glyph large and at the size the chart draws it, in millimetres:
 - a **feature type** has its definition, its S-100 code and S-57 acronym, its
   display categories by geometry or case, its Chart 1 section, how many of its
   features are drawn in view with **Find** to ring them on the map, and
-  **Drawn with**: each symbol with the conditions that choose it in words.
-  Symbols drawn by shared rules, such as a topmark or a light, are links, and
-  the catalogue's fallback **?** has its own line;
+  **How it is drawn**: a table of what its rule draws for each combination of
+  values. The two attributes that change the symbol most are the rows and
+  columns (Lateral Beacon's beacon shape × colour), any other attribute that
+  changes it is a filter, and each cell is the drawn glyph, a term. A
+  **Simplified / Paper chart** switch shows the other style without changing
+  the chart setting. Opened from a pick with **Open in reference** or F1, the
+  filters start on the feature's values and its cell is ringed. The table
+  comes from the rule probe results committed with the catalogue; a table
+  whose probe stopped at its cap says "Partial: the first 512 combinations".
+  Products whose rules are XSLT show **Drawn with** instead: each symbol with
+  the conditions that choose it in words, as does a user-added catalogue
+  while its rules are probed in the background ("Working out variants…").
+  Symbols drawn by shared rules, such as a topmark or a light, are links
+  under the table, and the catalogue's fallback **?** has its own line;
 - a **symbol**, line style or area fill shows Day, Dusk and Night side by side,
   its description, the display setting that chooses it, its family, where it
   came from (the S-52 Presentation Library, or new in S-101) and the feature
