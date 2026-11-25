@@ -107,7 +107,11 @@ internal sealed class HostedSourceActivator : IDisposable
                     return;
                 lock (_lock)
                 {
-                    if (_disposed)
+                    // Only the latest change applies: a delay that had already
+                    // finished when a newer change cancelled it (always, with no
+                    // debounce) would otherwise apply its older views, in either
+                    // order on the thread pool.
+                    if (_disposed || !ReferenceEquals(_debounceCts, cts))
                         return;
                     _views = bounds;
                 }
