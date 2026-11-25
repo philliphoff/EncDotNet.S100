@@ -108,9 +108,15 @@ dotnet run --project src/EncDotNet.S100.Viewer
 | **S-131** | Marine Harbour Infrastructure | GML | Lua | Yes |
 | **S-201** | Aids to Navigation Information (IALA) | GML | XSLT | Yes |
 | **S-411** | Sea Ice Information | GML | XSLT | Yes |
+| **S-412** (draft) | Marine Weather Warnings | GML | XSLT | Yes |
 | **S-421** | Route Plans | GML | XSLT | Yes |
 | **S-401** (IEHG) | Inland ENC | ISO 8211 | Lua (Part 9A) | No |
 | **S-57** (legacy) | Electronic Navigational Charts (Edition 3.1) | ISO 8211 | Through S-101 | Through S-101 |
+
+SoundCharts also reads weather data that isn't S-100 and isn't for navigation,
+and draws it with its own styles: GRIB2 and NetCDF-CF forecast grids, CAP and
+NWS GeoJSON warnings, NHC tropical cyclone advisories and WPC coded surface
+bulletins (`CODSUS`). See [Show weather](#show-weather).
 
 You can load any combination of these at once. Time-varying products are drawn
 at the same view time.
@@ -131,6 +137,8 @@ SoundCharts accepts the following.
 | S-57 (or S-63) exchange set | A folder that contains `CATALOG.031`, or the `CATALOG.031` file itself | Every base cell the catalogue lists, with each cell's sequential updates (`.001`, `.002` and so on) from the set applied. |
 | Folder of ENC cells | A folder of base cells (`.000`) with no `CATALOG.031` or `CATALOG.XML` | Every base cell, detected as S-57 or S-101 one by one, with the update files next to each cell applied. |
 | Single dataset | A `.h5` file (S-102, S-104, S-111), a `.gml` file (any GML product) or a `.000` cell (S-101 or S-57) | The dataset. A `.000` cell also picks up the `.001`, `.002` and later updates next to it. |
+| Weather file | A GRIB2 file (with or without an extension), a NetCDF `.nc` file, a CAP alert or Atom feed, NWS alerts GeoJSON, a WPC coded surface bulletin, or an NHC advisory's forecast `.zip` | The forecast, warnings, analysis or storm. Choose the **Weather Data (GRIB2, NetCDF, CAP, CODSUS)** file type, or **All files** for a file with no extension. |
+| GRIB2 run folder | A folder of one model run's GRIB2 files, one per forecast hour | One dataset with every forecast hour. |
 
 Zipped S-57 exchange sets aren't supported. This matches the `s100 validate`
 command, which also reads S-57 exchange sets from a folder.
@@ -303,13 +311,27 @@ The directory's **Worldwide** and **United States** groups list weather
 services. They aren't S-100 data and aren't for navigation:
 
 - **GFS-Wave wave forecast** and **GFS wind and pressure** from the NOMADS
-  GRIB filter, cut to the map view when you open the wizard.
+  GRIB filter, cut to the map view when you open the wizard. The GFS source
+  also offers visibility, air and surface temperature, precipitation,
+  thunderstorm risk (CAPE) and cloud cover.
 - The same two models from NOAA's GFS bucket on AWS, for the whole globe. Only
   the chosen parameters are read from each forecast hour's file, by byte range.
 - **NWS marine weather alerts** in force for the marine zones in the map view,
   from `api.weather.gov`.
+- **Tropical cyclones — NHC**: the latest advisory of every storm NHC is
+  issuing advisories for.
+- **Surface analysis — WPC**: the latest coded surface analysis and forecast
+  bulletins.
 - **WAVEWATCH III global waves** from NOAA's ERDDAP, as a NetCDF subset of the
   map view.
+- **Sea surface temperature — NOAA ERDDAP**: the latest daily analysis for the
+  map view.
+- **Surface currents, altimetry — NOAA AOML ERDDAP** and **Surface currents,
+  HF radar — NOAA ERDDAP**: the latest analysed and observed currents.
+- **Surface currents, forecast — HYCOM**: the HYCOM global current forecast,
+  from its subset service.
+
+[Get the data](../../docs/weather.md#get-the-data) describes each source.
 
 In **What to include**, the **Parameters** (or **Datasets**) and **Forecast
 days** tabs start with the service's defaults ticked, and the step shows the
@@ -1504,6 +1526,21 @@ status. **Also write my check settings** adds your draft, required UKC and
 departure; they're left out otherwise. See [Route file
 formats](../../docs/route-checks.md#route-file-formats) for what each format
 holds.
+
+## Show weather
+
+Weather data isn't S-100 data and isn't for navigation; SoundCharts says so in
+the **Datasets** panel and in every pick report. Open a weather file, or load
+it from the Library ([Weather services](#weather-services)). The **Weather**
+section of **Display controls** switches the optional layers (isobars, wind
+speed fill, wave arrows, isotherms, currents, air temperature, precipitation,
+thunderstorm risk, cloud cover, and the wind radii, past track and forecast
+times of tropical cyclones), and the **Timeline** steps through the forecast.
+A route check compares forecast wind and waves with your limits and tests the
+route against tropical cyclones; see [Check a route](#check-a-route).
+
+[Show wind and waves on the chart](../../docs/weather.md) covers every layer,
+the colours, where to get the data and what isn't supported.
 
 ## Show buoy observations
 

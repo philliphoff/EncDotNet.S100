@@ -1,12 +1,16 @@
 # EncDotNet.S100.Datasets.Weather
 
-`EncDotNet.S100.Datasets.Weather` is the shared in-memory model for wind and
-wave grids from formats that predate S-100: GRIB2 and NetCDF-CF. The readers
-(separate packages: [`EncDotNet.S100.Datasets.NetCdf`](../EncDotNet.S100.Datasets.NetCdf/README.md),
-and GRIB2 still to come) produce a `WeatherGridSet`,
-and everything after the reader is shared: normalisation to the coverage
-pipeline's grid order, the canonical parameter table, and an `ICoverageSource`
-for drawing, sampling and picking, and the coverage styles that draw it. It
+`EncDotNet.S100.Datasets.Weather` is the shared in-memory model for weather
+and ocean grids from formats that predate S-100: GRIB2 and NetCDF-CF. The
+readers (separate packages:
+[`EncDotNet.S100.Datasets.Grib`](../EncDotNet.S100.Datasets.Grib/README.md)
+and [`EncDotNet.S100.Datasets.NetCdf`](../EncDotNet.S100.Datasets.NetCdf/README.md))
+produce a `WeatherGridSet`, and everything after the reader is shared:
+normalisation to the coverage pipeline's grid order, the canonical parameter
+table, an `ICoverageSource` for drawing, sampling and picking, and the
+coverage styles that draw it. The package also holds the
+[surface analysis](#surface-analyses) reader and model, and the
+[tropical cyclone](#tropical-cyclones) style. It
 depends on [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md) and
 [`EncDotNet.S100.Portrayals`](../EncDotNet.S100.Portrayals/README.md) and
 contains no GRIB2 or NetCDF code.

@@ -78,6 +78,26 @@ or more control over the pipeline.
 - `S421DatasetWriter`: write a typed S-421 route as GML. See the
   [S-421 package README](../src/EncDotNet.S100.Datasets.S421/README.md#write-a-dataset).
 
+## Weather packages
+
+Weather data isn't S-100 data and isn't for navigation. `S100Dataset.Open`
+and `DatasetPipelineFactory` detect and draw all of these; use the readers
+below for the data itself. See [Show wind and waves on the chart](weather.md).
+
+- `GribWeatherDataset.Open(path)` (`EncDotNet.S100.Datasets.Grib`) and
+  `NetCdfWeatherDataset.Open(path)` (`EncDotNet.S100.Datasets.NetCdf`): read a
+  GRIB2 or NetCDF-CF file into a `WeatherGridSet`. `GribFile.Open(path)`
+  lists a GRIB2 file's fields.
+- `WeatherGridSet` and `WeatherCoverageSource`
+  (`EncDotNet.S100.Datasets.Weather`): the shared grid model and its coverage
+  source for drawing, sampling and picking.
+- `CapReader.Read(path)` (`EncDotNet.S100.Datasets.Cap`): read a CAP alert, an
+  Atom feed of them or NWS alerts GeoJSON.
+- `NhcAdvisoryReader.Read(path)` (`EncDotNet.S100.Datasets.TropicalCyclones`):
+  read an NHC tropical cyclone advisory.
+- `CodedSurfaceBulletinReader.Read(path)` (`EncDotNet.S100.Datasets.Weather`):
+  read a WPC coded surface bulletin.
+
 ## EncDotNet.S100.Datasets.S57
 
 - `S57ToS101Translator`: translate an S-57 cell into the S-101 model. See

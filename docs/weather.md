@@ -2,7 +2,7 @@
 
 SoundCharts can draw forecast wind and waves, sea surface temperature,
 surface currents, restricted visibility, air temperature, freezing spray, precipitation, thunderstorm risk, cloud cover, marine weather warnings and live observations over your
-charts, with surface analyses (fronts and pressure centres). This page covers which files it reads,
+charts, with tropical cyclone advisories and surface analyses (fronts and pressure centres). This page covers which files it reads,
 where to get them, how to show them in SoundCharts and `s100`, and what isn't
 supported.
 
@@ -17,6 +17,7 @@ supported.
 | Data | Formats | What's drawn |
 |---|---|---|
 | Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows, a restricted visibility fill and a freezing spray fill; optionally a wind speed fill, wave arrows, sea isotherms, air isotherms, a precipitation rate fill, a precipitation amount fill, a thunderstorm risk fill and a cloud cover veil |
+| Tropical cyclones | NHC advisory GIS shapefile zips (forecast track and cone, wind radii, past track) | The cone, the forecast and past track, the 34, 50 and 64 kt wind radii, and the storm at the view time |
 | Surface analyses | WPC coded surface bulletin (`CODSUS`), standard and high resolution, and WPC's coded forecast bulletins (such as `CODSRP`) | Fronts, troughs, highs and lows in the symbols of a printed weather map, in one dark ink |
 | Marine weather warnings | CAP 1.2 XML (one alert or an Atom feed of them), NWS alerts GeoJSON | Warning areas, hatched by severity and labelled with the event, while they're in force |
 | Buoy and coastal station observations | NOAA NDBC, fetched live | A wind barb and wave height at each station |
@@ -636,8 +637,12 @@ centres; see the [MCP server](mcp-server.md).
 - **Surface analyses outside WPC's area**, and fronts in WPC's colours (blue
   cold, red warm). Fronts are drawn in one ink only. `s100 render` draws a
   stale analysis at full opacity.
-- **Weather in route checks.** A route check doesn't consider wind, waves or
-  model currents.
+- **Other weather in route checks.** A route check compares only the 10 m
+  wind speed and significant wave height with your limits, and tests the
+  route against NHC tropical cyclones; see
+  [Weather along the route](route-checks.md#weather-along-the-route). It
+  doesn't use model currents for ETAs, or visibility, freezing spray,
+  precipitation, warnings or surface analyses.
 - **Ocean model servers.** The Library fetches currents from ERDDAP and from
   HYCOM's subset service only. NOAA RTOFS is published only as whole-globe
   files on a curvilinear grid. Copernicus Marine needs an account.

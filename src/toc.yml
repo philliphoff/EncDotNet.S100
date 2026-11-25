@@ -22,6 +22,8 @@
   items:
     - name: EncDotNet.S100.Hdf5.PureHdf
       href: EncDotNet.S100.Hdf5.PureHdf/README.md
+    - name: EncDotNet.S100.Scripting.LuaCSharp
+      href: EncDotNet.S100.Scripting.LuaCSharp/README.md
     - name: EncDotNet.S100.Scripting.MoonSharp
       href: EncDotNet.S100.Scripting.MoonSharp/README.md
     - name: EncDotNet.S100.Crs.ProjNet
@@ -62,6 +64,8 @@
       href: EncDotNet.S100.Datasets.S57/README.md
     - name: EncDotNet.S100.Datasets.Grib
       href: EncDotNet.S100.Datasets.Grib/README.md
+    - name: EncDotNet.S100.Datasets.NetCdf
+      href: EncDotNet.S100.Datasets.NetCdf/README.md
     - name: EncDotNet.S100.Datasets.Weather
       href: EncDotNet.S100.Datasets.Weather/README.md
     - name: EncDotNet.S100.Datasets.Cap
@@ -72,8 +76,6 @@
       href: EncDotNet.S100.Datasets.Aml/README.md
     - name: EncDotNet.S100.Datasets.Pipelines
       href: EncDotNet.S100.Datasets.Pipelines/README.md
-    - name: EncDotNet.S100.Datasets.NetCdf
-      href: EncDotNet.S100.Datasets.NetCdf/README.md
 - name: Navigation
   items:
     - name: EncDotNet.S100.Navigation
@@ -96,14 +98,8 @@
       href: EncDotNet.S100.Renderers.Mapsui/README.md
     - name: EncDotNet.S100.Renderers.Mapsui.Avalonia
       href: EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md
-- name: Applications and hosts (not packaged)
+- name: Dynamic feature sources
   items:
-    - name: SoundCharts (EncDotNet.S100.Viewer)
-      href: EncDotNet.S100.Viewer/README.md
-    - name: EncDotNet.S100.Mcp
-      href: EncDotNet.S100.Mcp/README.md
-    - name: EncDotNet.S100.Mcp.Tools
-      href: EncDotNet.S100.Mcp.Tools/README.md
     - name: EncDotNet.S100.DynamicSources.Ais
       href: EncDotNet.S100.DynamicSources.Ais/README.md
     - name: EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo
@@ -114,6 +110,14 @@
       href: EncDotNet.S100.DynamicSources.Nmea/README.md
     - name: EncDotNet.S100.Nmea
       href: EncDotNet.S100.Nmea/README.md
+- name: Applications and hosts (not packaged)
+  items:
+    - name: SoundCharts (EncDotNet.S100.Viewer)
+      href: EncDotNet.S100.Viewer/README.md
+    - name: EncDotNet.S100.Mcp
+      href: EncDotNet.S100.Mcp/README.md
+    - name: EncDotNet.S100.Mcp.Tools
+      href: EncDotNet.S100.Mcp.Tools/README.md
     - name: EncDotNet.S100.Datasets.S129.Fusion
       href: EncDotNet.S100.Datasets.S129.Fusion/README.md
 - name: S-57 and ISO 8211 (EncDotNet)

@@ -55,6 +55,14 @@ File.WriteAllBytes("out.png", png);
 the dataset's product specification. `dataset.CanRenderHeadless` is `false` for
 products that have no image rendering; of the bundled products, that's S-131.
 
+`Open` also recognises the weather formats the pipeline reads: GRIB2 and
+NetCDF-CF grids, CAP warnings, NHC tropical cyclone advisories and WPC coded
+surface bulletins. They render with SoundCharts' own weather styles, and
+`dataset.Spec.Name` names the format: `GRIB2`, `NetCDF`, `CAP`, `CODSUS` or
+`TC`.
+Weather data isn't S-100 data and isn't for navigation; see
+[Show wind and waves on the chart](../../docs/weather.md).
+
 ### Render options
 
 Pass `S100RendererOptions` to set the image size, palette, symbol scale and
@@ -70,7 +78,7 @@ byte[] png = await renderer.RenderAsync(dataset, new S100RendererOptions
     Height = 1536,
     Palette = PaletteType.Night,
     SymbolScale = 1.25,
-    TimeStep = 0, // time-varying products, such as S-104 and S-111
+    TimeStep = 0, // time-varying products, such as S-104, S-111 and weather grids
 });
 ```
 
