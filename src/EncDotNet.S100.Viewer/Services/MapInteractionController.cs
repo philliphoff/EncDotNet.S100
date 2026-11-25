@@ -79,20 +79,28 @@ internal sealed class MapInteractionController
     public ChartReference.MapReferenceMenu? ReferenceMenu { get; init; }
 
     /// <summary>
-    /// Whether this map is the active one of a split (#1732, D6): only the
-    /// active map writes the status bar's scale, overscale and depth basis,
-    /// and only its pointer moves reach the map tools. Null in hosts with one
-    /// map, where it always is.
+    /// Whether this map is the active one of a split (#1732, D4): only its
+    /// pointer moves reach the map tools. Null in hosts with one map, where it
+    /// always is.
     /// </summary>
     public Func<bool>? IsActiveMap { get; init; }
 
     /// <summary>
-    /// The map's label ("Map 1") while the map is split, which prefixes the
-    /// status bar's lat/lon (#1732, D7); null or empty otherwise.
+    /// Whether the status bar describes this map (#1732): the map under the
+    /// pointer, else the active map. Only that map writes the scale, overscale
+    /// and depth basis. Null in hosts with one map, where it always does.
     /// </summary>
-    public Func<string?>? MapLabel { get; init; }
+    public Func<bool>? IsStatusMap { get; init; }
+
+    /// <summary>
+    /// Told when the pointer moves onto this map (true) or off it (false), so
+    /// the status bar can follow the map under the pointer (#1732).
+    /// </summary>
+    public Action<bool>? PointerOverMap { get; init; }
 
     private bool IsActive => IsActiveMap?.Invoke() ?? true;
+
+    private bool IsStatus => IsStatusMap?.Invoke() ?? true;
 
     /// <summary>The context menu shown last, while it may still be open.</summary>
     internal ContextMenu? OpenContextMenu { get; private set; }
@@ -295,13 +303,13 @@ internal sealed class MapInteractionController
     {
         scaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
         compassRose.UpdateForViewport(viewport.Rotation);
-        if (IsActive)
+        if (IsStatus)
             UpdateStatusReadouts(viewport);
     }
 
     /// <summary>
     /// Writes this map's scale, overscale and depth basis to the status bar,
-    /// as when it becomes the active map of a split (#1732, D6).
+    /// as when the status bar starts describing it (#1732).
     /// </summary>
     public void RefreshStatusReadouts()
     {
@@ -668,6 +676,7 @@ internal sealed class MapInteractionController
         _lastMouseScreenPos = null;
         _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
         _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+        PointerOverMap?.Invoke(false);
     }
 
     private void HandleViewportChangedForMouseLatLon()
@@ -694,9 +703,12 @@ internal sealed class MapInteractionController
             _lastMouseScreenPos = null;
             _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
             _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+            PointerOverMap?.Invoke(false);
             return;
         }
 
+        if (_lastMouseScreenPos is null)
+            PointerOverMap?.Invoke(true);
         _lastMouseScreenPos = position;
         UpdateMouseLatLonFromScreen(position);
     }
@@ -724,7 +736,6 @@ internal sealed class MapInteractionController
         // Normalize longitude into the canonical [-180, 180] range so that
         // panning past the antimeridian still produces sensible readings.
         lon = ((lon + 540.0) % 360.0) - 180.0;
-        _viewModel.StatusBar.MouseMapLabel = MapLabel?.Invoke() ?? string.Empty;
         _viewModel.StatusBar.MouseLatText = LatLonFormatter.FormatLatitude(lat);
         _viewModel.StatusBar.MouseLonText = LatLonFormatter.FormatLongitude(lon);
     }

@@ -42,7 +42,7 @@ public partial class MainWindow
             _loader,
             _pickService,
             isActive: () => ReferenceEquals(_mapViews.Active, view),
-            label: () => _split.IsSplit ? _split.Panes.FirstOrDefault(p => ReferenceEquals(p.View, view))?.Label : null);
+            statusFocus: _statusFocus);
         view.SetRouteCheckLegendReserve(_routeCheckLegendReserve);
         // The first map became active before it was attached: hand it the
         // tools and the Legend source now.
@@ -182,7 +182,7 @@ public partial class MainWindow
         MapWindowOverlays.Margin = new Thickness(left, split ? MapSplitViewModel.HeaderHeight : 0, right, 0);
 
         PlaceTimeHud();
-        _viewModel.StatusBar.ActiveMapLabel = split ? _split.ActivePane?.Label ?? string.Empty : string.Empty;
+        UpdateStatusMapLabel();
         _viewModel.Layout.IsMapSplit = split;
         ApplyRightDockOverlay();
     }
@@ -252,8 +252,9 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// The active map changed (D4–D6): the tools, the status bar's scale and
-    /// the Legend's Library coverage section follow it.
+    /// The active map changed (D4–D6): the tools and the Legend's Library
+    /// coverage section follow it, and the status bar too while the pointer
+    /// is over no map.
     /// </summary>
     private void OnActiveMapChanged()
     {
@@ -261,9 +262,8 @@ public partial class MainWindow
             return;
 
         active.BindTools();
-        active.RefreshStatusReadouts();
         PlaceTimeHud();
-        _viewModel.StatusBar.ActiveMapLabel = _split.IsSplit ? _split.ActivePane?.Label ?? string.Empty : string.Empty;
+        OnStatusMapChanged();
 
         // D27: one Library coverage entry in the Legend, the active map's.
         var legend = App.Services.GetRequiredService<LegendService>();
@@ -276,4 +276,22 @@ public partial class MainWindow
                 legend.AddSource(_activeCoverageLegend);
         }
     }
+
+    /// <summary>
+    /// The status bar now describes another map (the one under the pointer,
+    /// else the active one): its scale, overscale and depth basis, and the
+    /// badge naming it while split.
+    /// </summary>
+    private void OnStatusMapChanged()
+    {
+        if (_closing)
+            return;
+        (_statusFocus.Current as MapView)?.RefreshStatusReadouts();
+        UpdateStatusMapLabel();
+    }
+
+    private void UpdateStatusMapLabel() =>
+        _viewModel.StatusBar.StatusMapLabel = _split.IsSplit
+            ? _split.Panes.FirstOrDefault(p => ReferenceEquals(p.View, _statusFocus.Current))?.Label ?? string.Empty
+            : string.Empty;
 }

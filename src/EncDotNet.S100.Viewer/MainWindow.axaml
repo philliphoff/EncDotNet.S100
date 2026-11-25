@@ -341,21 +341,29 @@
                                VerticalAlignment="Center" />
 
                     <!-- Cursor latitude / longitude -->
-                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMouseLatLonVisible}" />
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsPointerGroupVisible}" />
+                    <!-- While split, the lat/lon, scale, overscale and DEPTHS all
+                         read one map, the one under the pointer or else the
+                         active one; the badge says which (#1732). -->
+                    <Border IsVisible="{Binding StatusBar.IsStatusMapLabelVisible}"
+                            AutomationProperties.AutomationId="StatusBar.Map"
+                            AutomationProperties.Name="{Binding StatusBar.StatusMapLabel}"
+                            Background="{DynamicResource AccentBrush}"
+                            CornerRadius="4"
+                            Padding="6,1"
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StatusBar.StatusMapLabel}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="White" />
+                    </Border>
                     <ic:FluentIcon Icon="MyLocation" IconVariant="Regular" FontSize="14"
                                    Opacity="0.6"
                                    VerticalAlignment="Center"
                                    Margin="0,0,6,0"
                                    IsVisible="{Binding StatusBar.IsMouseLatLonVisible}"
                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
-                    <!-- The map under the pointer while split (#1732, D7). -->
-                    <TextBlock Text="{Binding StatusBar.MouseMapLabel, StringFormat='{}{0} ·'}"
-                               IsVisible="{Binding StatusBar.IsMouseMapLabelVisible}"
-                               AutomationProperties.AutomationId="StatusBar.PointerMap"
-                               FontSize="12"
-                               Opacity="0.75"
-                               VerticalAlignment="Center"
-                               Margin="0,0,6,0" />
                     <TextBlock Text="{Binding StatusBar.MouseLatText}"
                                IsVisible="{Binding StatusBar.IsMouseLatLonVisible}"
                                FontSize="12"
@@ -377,22 +385,7 @@
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
 
                     <!-- Map scale, with the overscale pill immediately after -->
-                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMapScaleVisible}" />
-                    <!-- While split, the scale, overscale and DEPTHS follow the
-                         active map; the badge says which (#1732, D6). -->
-                    <Border IsVisible="{Binding StatusBar.IsActiveMapLabelVisible}"
-                            AutomationProperties.AutomationId="StatusBar.ActiveMap"
-                            AutomationProperties.Name="{Binding StatusBar.ActiveMapLabel}"
-                            Background="{DynamicResource AccentBrush}"
-                            CornerRadius="4"
-                            Padding="6,1"
-                            Margin="0,0,8,0"
-                            VerticalAlignment="Center">
-                        <TextBlock Text="{Binding StatusBar.ActiveMapLabel}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   Foreground="White" />
-                    </Border>
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsScaleSeparatorVisible}" />
                     <TextBlock Text="{x:Static loc:Strings.Status_ScaleLabel}"
                                FontSize="12"
                                Opacity="0.5"

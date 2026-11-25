@@ -582,8 +582,10 @@ While the map is split, each map has a header with its number, such as
 other maps** in the button's menu, or the button again, keeps the map you
 last used and closes the rest. The map you last pressed, scrolled, zoomed or
 used a tool in is the active one: its header is white with an accent line,
-and the Legend, DEPTHS, the status bar's scale and the map keys follow it.
-The status bar's position follows the map under the pointer.
+and the Legend, the tools and the map keys follow it. The status bar's
+position, scale, overscale and DEPTHS describe the map under the pointer, or
+the active map when the pointer isn't over a map; a badge such as **Map 2**
+says which.
 
 Each map is at least 320 pixels wide. When the window is too narrow for
 both, the map you aren't using folds to a strip with its number; click the

@@ -205,20 +205,20 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     /// <param name="viewModel">The window's view-model.</param>
     /// <param name="loader">The dataset loader.</param>
     /// <param name="pickService">The pick service.</param>
-    /// <param name="isActive">Whether this is the active map, which writes the status bar's scale (#1732, D6).</param>
-    /// <param name="label">The map's label while split ("Map 1"), for the status bar's lat/lon (D7); null otherwise.</param>
+    /// <param name="isActive">Whether this is the active map, whose pointer moves reach the map tools (#1732, D4).</param>
+    /// <param name="statusFocus">The map the status bar describes: told when the pointer is over this map, asked whether this map writes the scale (#1732).</param>
     public void Attach(
         MainViewModel viewModel,
         IDatasetLoaderService loader,
         IPickService pickService,
         Func<bool> isActive,
-        Func<string?> label)
+        MapStatusFocus statusFocus)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickService);
         ArgumentNullException.ThrowIfNull(isActive);
-        ArgumentNullException.ThrowIfNull(label);
+        ArgumentNullException.ThrowIfNull(statusFocus);
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_viewModel is not null)
             throw new InvalidOperationException("The map view is already attached.");
@@ -313,7 +313,14 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             DepthBasis = services.GetService<DepthBasisService>(),
             Viewport = Host,
             IsActiveMap = isActive,
-            MapLabel = label,
+            IsStatusMap = () => statusFocus.IsCurrent(this),
+            PointerOverMap = over =>
+            {
+                if (over)
+                    statusFocus.PointerEntered(this);
+                else
+                    statusFocus.PointerLeft(this);
+            },
             ReferenceMenu = services.GetService<ChartReference.ReferenceTerms>() is { } terms
                 ? new ChartReference.MapReferenceMenu(terms)
                 : null,

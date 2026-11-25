@@ -32,6 +32,7 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
     private readonly CancellationTokenSource _windowLifetimeCancellation = new();
     private readonly MapViews _mapViews;
     private readonly MapSplitViewModel _split;
+    private readonly MapStatusFocus _statusFocus;
     private readonly MapViewProbes _mapProbes;
     private readonly DebouncedSettingsSaver _mapLayoutSaver;
     private readonly Dictionary<MapViewId, MapView> _paneViews = [];
@@ -214,6 +215,8 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
         _split = new MapSplitViewModel(_mapViews, this, _mapLayoutSaver.RequestSave);
         _split.LayoutChanged += (_, _) => ApplyPaneLayout();
         _mapViews.ActiveChanged += (_, _) => OnActiveMapChanged();
+        _statusFocus = new MapStatusFocus(_mapViews);
+        _statusFocus.Changed += (_, _) => OnStatusMapChanged();
         SplitMapControls.DataContext = _split;
         // View › Split Map: ⌘\ is the macOS menu item's; Ctrl+\ elsewhere (D1).
         KeyBindings.Add(new KeyBinding
