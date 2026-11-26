@@ -19,6 +19,7 @@ internal static class SkillContent
             ["list-specs"] = "Commands.ListSpecs.md",
             ["s57 convert"] = "Commands.S57Convert.md",
             ["s101 convert"] = "Commands.S101Convert.md",
+            ["nis convert"] = "Commands.NisConvert.md",
             ["mcp serve"] = "Commands.McpServe.md",
             ["route check"] = "Commands.RouteCheck.md",
             ["tides stations"] = "Commands.TidesStations.md",
