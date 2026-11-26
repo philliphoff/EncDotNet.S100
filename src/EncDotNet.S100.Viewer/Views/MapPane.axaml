@@ -134,12 +134,41 @@
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
                         </Border>
-                        <TextBlock Classes="paneTitle"
+                        <!-- D19: double-click the name to rename the pane in
+                             place; Enter commits, Esc cancels, blank goes
+                             back to "Map N". -->
+                        <TextBlock x:Name="TitleText"
+                                   AutomationProperties.AutomationId="MapPane.Title"
+                                   Classes="paneTitle"
                                    Classes.active="{Binding IsActive}"
                                    Text="{Binding Title}"
+                                   IsVisible="{Binding !IsRenaming}"
+                                   ToolTip.Tip="{Binding RenameText}"
+                                   Background="Transparent"
                                    FontSize="12"
                                    Foreground="{DynamicResource ForegroundColor}"
-                                   VerticalAlignment="Center" />
+                                   VerticalAlignment="Center"
+                                   DoubleTapped="OnTitleDoubleTapped" />
+                        <TextBox x:Name="NameEditor"
+                                 AutomationProperties.AutomationId="MapPane.NameEditor"
+                                 AutomationProperties.Name="{Binding RenameText}"
+                                 Text="{Binding EditedName}"
+                                 IsVisible="{Binding IsRenaming}"
+                                 MaxLength="64"
+                                 AcceptsReturn="False"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                 Width="160"
+                                 Height="20" MinHeight="0"
+                                 Margin="-5,0,0,0"
+                                 Padding="4,0"
+                                 CornerRadius="4"
+                                 BorderThickness="1"
+                                 BorderBrush="{DynamicResource AccentBrush}"
+                                 Background="{DynamicResource BackgroundColor}"
+                                 FontSize="12"
+                                 VerticalAlignment="Center"
+                                 VerticalContentAlignment="Center"
+                                 LostFocus="OnNameEditorLostFocus" />
                     </StackPanel>
                 </DockPanel>
             </Panel>

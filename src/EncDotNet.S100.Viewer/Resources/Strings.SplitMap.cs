@@ -13,6 +13,10 @@ internal static partial class Strings
 
     public static string SplitMap_Swap => Get(nameof(SplitMap_Swap));
 
+    public static string SplitMap_Rename => Get(nameof(SplitMap_Rename));
+
+    public static string SplitMap_RenameFormat => Get(nameof(SplitMap_RenameFormat));
+
     public static string Menu_SplitMap => Get(nameof(Menu_SplitMap));
 
     public static string Tooltip_SplitMap => Get(nameof(Tooltip_SplitMap));
