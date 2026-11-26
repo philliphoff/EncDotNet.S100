@@ -88,6 +88,8 @@ flowchart LR
   S-101 portrayal.
 - [Converting S-101 to S-57](s101-to-s57.md): write S-101 data as S-57 cells for
   testing and S-57-only tools, following S-65 Annex C.
+- [Converting an NIS to S-57](nis-to-s57.md): read an Esri ArcGIS Maritime S-57
+  NIS from a file geodatabase and write its cells as S-57 cells.
 - [S-57 and ISO 8211 libraries](../external/EncDotNet/docs/index.md): read S-57
   cells, update cells and exchange sets, and ISO 8211 files, with EncDotNet.
 - [SoundCharts for ArcGIS](../external/EncDotNet.ArcGIS/docs/index.md): show

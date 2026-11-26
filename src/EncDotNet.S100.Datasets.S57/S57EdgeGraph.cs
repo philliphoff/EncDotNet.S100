@@ -237,6 +237,58 @@ internal sealed class S57EdgeGraph
         return (split, added);
     }
 
+    /// <summary>
+    /// Adds lines as edges, split wherever they cross or touch each other,
+    /// with new nodes rounded to the integer grid. A piece that repeats one
+    /// already in the graph, in either direction, reuses that edge, so lines
+    /// that run along each other share their edges.
+    /// </summary>
+    /// <param name="lines">The lines, each two or more positions; a closed ring repeats its first position last.</param>
+    /// <returns>For each line, the edges it became, in order from its first position.</returns>
+    public List<List<Use>> AddNodedLines(IReadOnlyList<IReadOnlyList<(int X, int Y)>> lines)
+    {
+        var strings = new List<ISegmentString>(lines.Count);
+        for (int i = 0; i < lines.Count; i++)
+            strings.Add(new NodedSegmentString(lines[i].Select(p => new Coordinate(p.X, p.Y)).ToArray(), (long)i));
+
+        var noder = new SnapRoundingNoder(Factory.PrecisionModel);
+        noder.ComputeNodes(strings);
+        var pieces = noder.GetNodedSubstrings()
+            .Where(s => s.Count >= 2)
+            .GroupBy(s => (long)s.Context)
+            .ToDictionary(g => g.Key, g => g.Select(s => s.Coordinates.Select(c => ((int)Math.Round(c.X), (int)Math.Round(c.Y))).ToList()).ToList());
+
+        var byKey = new Dictionary<string, Use>(StringComparer.Ordinal);
+        foreach (var edge in Edges.Keys)
+            Register(byKey, Positions(edge), edge);
+
+        var result = new List<List<Use>>(lines.Count);
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var uses = new List<Use>();
+            if (pieces.TryGetValue(i, out var list))
+            {
+                foreach (var piece in Order(list, lines[i][0]))
+                {
+                    var cleaned = WithoutRepeats(piece);
+                    if (cleaned.Count >= 2) uses.Add(Piece(byKey, cleaned));
+                }
+            }
+            result.Add(uses);
+        }
+        return result;
+
+        static List<(int X, int Y)> WithoutRepeats(List<(int X, int Y)> positions)
+        {
+            var cleaned = new List<(int X, int Y)>(positions.Count);
+            foreach (var p in positions)
+            {
+                if (cleaned.Count == 0 || cleaned[^1] != p) cleaned.Add(p);
+            }
+            return cleaned;
+        }
+    }
+
     private static void Register(Dictionary<string, Use> byKey, List<(int X, int Y)> positions, uint edge)
     {
         byKey.TryAdd(Key(positions), new Use(edge, false));

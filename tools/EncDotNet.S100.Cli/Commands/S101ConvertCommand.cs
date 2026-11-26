@@ -33,8 +33,6 @@ namespace EncDotNet.S100.Cli.Commands;
 /// </remarks>
 internal sealed class S101ConvertCommand : Command<S101ConvertCommandSettings>
 {
-    private const string Volume = "V01X01";
-
     public override int Execute(CommandContext context, S101ConvertCommandSettings settings, CancellationToken cancellationToken)
     {
         try
@@ -67,8 +65,8 @@ internal sealed class S101ConvertCommand : Command<S101ConvertCommandSettings>
                 var cellName = string.IsNullOrWhiteSpace(settings.CellName)
                     ? Path.GetFileNameWithoutExtension(settings.SourcePath)
                     : settings.CellName;
-                (cellPath, catalogPath) = WriteExchangeSet(settings.OutputPath, cellName, bytes, document);
-                WarnOnCellName(cellName);
+                (cellPath, catalogPath) = S57ExchangeSetOutput.Write(settings.OutputPath, cellName, bytes, document);
+                S57ExchangeSetOutput.WarnOnCellName(cellName);
             }
             else
             {
@@ -107,58 +105,6 @@ internal sealed class S101ConvertCommand : Command<S101ConvertCommandSettings>
         }
     }
 
-    /// <summary>
-    /// Writes <c>ENC_ROOT/&lt;cell&gt;/&lt;cell&gt;.000</c> and
-    /// <c>ENC_ROOT/CATALOG.031</c> under <paramref name="root"/>. The catalogue
-    /// lists itself and the cell, with the cell's extent and CRC (S-57 Part 3
-    /// §7.8.1; the ENC product specification §5.6).
-    /// </summary>
-    private static (string CellPath, string CatalogPath) WriteExchangeSet(
-        string root, string cellName, byte[] cell, S57Document document)
-    {
-        var encRoot = Path.Combine(root, "ENC_ROOT");
-        var cellDir = Path.Combine(encRoot, cellName);
-        Directory.CreateDirectory(cellDir);
-
-        var cellFile = cellName + ".000";
-        var cellPath = Path.Combine(cellDir, cellFile);
-        File.WriteAllBytes(cellPath, cell);
-
-        var extent = S57Dataset.ReadMetadata(document).Extent;
-        var catalog = new S57Catalog
-        {
-            Entries =
-            [
-                new S57CatalogEntry
-                {
-                    RecordName = "CD",
-                    RecordId = 1,
-                    FileName = "CATALOG.031",
-                    Volume = Volume,
-                    Implementation = "ASC",
-                },
-                new S57CatalogEntry
-                {
-                    RecordName = "CD",
-                    RecordId = 2,
-                    // CATD file names use '\' whatever the host (S-57 Part 3 §7.8.1).
-                    FileName = $"{cellName}\\{cellFile}",
-                    Volume = Volume,
-                    Implementation = "BIN",
-                    SouthernmostLatitude = extent?.SouthLatitude,
-                    WesternmostLongitude = extent?.WestLongitude,
-                    NorthernmostLatitude = extent?.NorthLatitude,
-                    EasternmostLongitude = extent?.EastLongitude,
-                    CrcChecksum = S57CatalogWriter.ComputeCrc(cell),
-                },
-            ],
-        };
-
-        var catalogPath = Path.Combine(encRoot, "CATALOG.031");
-        S57CatalogWriter.WriteToFile(catalogPath, catalog);
-        return (cellPath, catalogPath);
-    }
-
     // Annex C Ed 1.0.0 is written against S-101 Edition 2.0.0. Earlier
     // editions name some classes differently (BuoyLateral, not LateralBuoy),
     // and those have no rule.
@@ -169,15 +115,6 @@ internal sealed class S101ConvertCommand : Command<S101ConvertCommandSettings>
 
         AnsiConsole.MarkupLineInterpolated(
             $"[yellow]Warning:[/] the dataset declares S-101 Edition {(edition.Length == 0 ? "(none)" : edition)}; S-65 Annex C converts Edition 2.0.0. Feature classes and attributes renamed since are reported as unmapped and not converted.");
-    }
-
-    private static void WarnOnCellName(string cellName)
-    {
-        if (cellName.Length == 8 && cellName.All(char.IsAsciiLetterOrDigit))
-            return;
-
-        AnsiConsole.MarkupLineInterpolated(
-            $"[yellow]Warning:[/] '{cellName}' is not an 8-character S-57 cell name (such as XX5CELL1); some S-57 tools may reject it. Pass --cell-name to choose one.");
     }
 
     private static void PrintDiagnosticsSummary(S101ToS57TranslationDiagnostics diagnostics)

@@ -55,6 +55,7 @@ src/
   EncDotNet.S100.Datasets.S201/      # S-201 aids to navigation information (IALA) reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S411/      # S-411 sea ice reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S421/      # S-421 route plans reader + GML/XSLT portrayal
+  EncDotNet.S100.Datasets.Nis/       # Esri ArcGIS Maritime S-57 NIS: source-neutral model, managed file geodatabase reader, NIS → S-57 translator
   EncDotNet.S100.Datasets.Grib/      # Managed GRIB2 decoder (templates 3.0, 4.0/4.8, 5.0/5.2/5.3/5.41) for the weather readers
   EncDotNet.S100.Datasets.Weather/   # Shared wind and wave grid model + coverage source (GRIB2, NetCDF)
   EncDotNet.S100.Datasets.Cap/       # CAP 1.2 marine weather warnings (CAP XML, Atom, NWS GeoJSON) + NWS marine zones

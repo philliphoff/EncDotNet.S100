@@ -139,6 +139,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`health`](#health) | Checks that a `tiles serve`, `feed serve` or `mcp serve --transport http` on this computer answers, for container health checks. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
 | [`s101 convert`](#s101-convert) | Converts an S-101 dataset to an S-57 cell or exchange set, for testing and S-57-only tools. |
+| [`nis convert`](#nis-convert) | Converts one cell of an Esri ArcGIS Maritime S-57 NIS (a file geodatabase) to an S-57 cell or exchange set. |
 | [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools for a set of datasets, over standard input and output or HTTP. |
 | [`feed serve`](#feed-serve) | Serves a folder, exchange set or dataset as an S-100 feed over HTTP. |
 | [`feed export`](#feed-export) | Writes a folder, exchange set or dataset as a static S-100 feed. |
@@ -2256,6 +2257,49 @@ s100 s101 convert --to s57 --exchange-set --cell-name XX5CELL1 -o s57set 101XX00
 Read the cell back with `info`, and check an exchange set's catalogue with
 `validate`. [Converting S-101 to S-57](s101-to-s57.md) covers the summary,
 what Annex C drops, the options and what a producer still has to do.
+
+## nis convert
+
+```text
+s100 nis convert --to s57 [--cell <name>] -o <output> <source.gdb> [options]
+s100 nis convert --list <source.gdb>
+```
+
+`nis convert` reads an Esri ArcGIS Maritime S-57 Nautical Information System
+(NIS) stored in a file geodatabase, and writes one of its cells as an S-57
+Edition 3.1 base cell. It reads the geodatabase itself, so it needs no Esri
+software. `--list` prints the cells the NIS holds (their `DSNM`) with their
+feature counts. The command then prints a summary of what it read and wrote.
+
+The output is for testing, previewing and tools that read S-57. It isn't a
+production ENC.
+
+| Option | Default | Description |
+|---|---|---|
+| `-o`, `--output <path>` | required | The S-57 cell to write, or with `--exchange-set` the directory to write the exchange set into. |
+| `--to <format>` | `s57` | The format to write. Only `s57` is supported. |
+| `--cell <name>` | the only cell | The cell to convert, as `--list` prints it (`US5CA98M.005`) or without the extension (`US5CA98M`). Needed when the NIS holds more than one. |
+| `--list` | off | Lists the cells and their feature counts, and exits. |
+| `--exchange-set` | off | Writes `ENC_ROOT/CATALOG.031` and `ENC_ROOT/<cell>/<cell>.000` under the output directory. |
+| `--cell-name <name>` | `--cell` without extension | The name of the cell to write, without extension. |
+| `--bbox <W,S,E,N>` | none | Converts only features whose extent overlaps the box. |
+| `--edition <n>` | `1` | The edition number written in DSID. |
+| `--issue-date <YYYYMMDD>` | today (UTC) | The issue date written in DSID. |
+| `--agency <code>` | commonest | The numeric S-62 producing agency written in DSID, also given to features whose agency isn't known. |
+| `--agency-code <TOKEN=CODE>` | `US=550` | The numeric code of a two-character agency token in the NIS long names. Repeat for each token. |
+| `--no-coverage` | off | Doesn't add M_COVR objects when the cell has none. |
+| `--report <path>` | off | Also writes the translation diagnostics as JSON. |
+| `--debug` | off | Prints a full stack trace on error. |
+
+```bash
+s100 nis convert --list TUTORIAL_NIS.gdb
+s100 nis convert --to s57 --cell US5CA98M -o US5CA98M.000 TUTORIAL_NIS.gdb
+s100 nis convert --to s57 --cell US5NY1DM --exchange-set -o s57set TUTORIAL_NIS.gdb
+```
+
+Check the cell with `validate`, look at it with `render`, and convert it on to
+S-101 with `s57 convert`. [Converting an NIS to S-57](nis-to-s57.md) covers
+what the NIS holds, how it's converted, and the limits.
 
 ## mcp serve
 
