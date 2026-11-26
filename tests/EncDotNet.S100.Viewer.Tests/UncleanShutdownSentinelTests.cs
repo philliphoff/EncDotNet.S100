@@ -182,6 +182,25 @@ public sealed class UncleanShutdownSentinelTests : IDisposable
     }
 
     [Fact]
+    public void Disabled_LeavesAnotherRunsCrashMarkerForTheNextNormalLaunch()
+    {
+        // A normal run crashed earlier; an automation run (sentinel off)
+        // starts in the same data folder, then a normal run starts.
+        var started = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        WriteMarker(999_999_993, "EncDotNet.S100.Viewer", started, started, "1.0.0");
+
+        UncleanShutdownSentinel.Configure(enabled: false, _dir);
+        Assert.Empty(UncleanShutdownSentinel.BeginSession("2.0.0"));
+        UncleanShutdownSentinel.MarkCleanExit();
+        Assert.Equal(1, MarkerCount());
+
+        UncleanShutdownSentinel.Configure(enabled: true, _dir);
+        var crashed = UncleanShutdownSentinel.BeginSession("2.0.0");
+
+        Assert.Contains(crashed, c => c.Pid == 999_999_993);
+    }
+
+    [Fact]
     public void BeginSession_MarkerFromLiveOtherInstance_NotReportedAndRetained()
     {
         using var child = StartSleeper();

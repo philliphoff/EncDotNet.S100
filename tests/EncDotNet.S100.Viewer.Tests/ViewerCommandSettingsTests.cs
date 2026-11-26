@@ -163,4 +163,36 @@ public class ViewerCommandSettingsTests
         Assert.True(new ViewerCommandSettings { OwnShipSpeed = 1 }.HasOwnShipOption);
         Assert.False(new ViewerCommandSettings().HasOwnShipOption);
     }
+
+    [Fact]
+    public void CrashDetection_is_on_for_a_normal_run()
+    {
+        Assert.True(new ViewerCommandSettings().CrashDetectionEnabled);
+        Assert.True(new ViewerCommandSettings { DataDir = "/tmp/x", Palette = "Night" }.CrashDetectionEnabled);
+    }
+
+    [Theory]
+    [InlineData("--ephemeral")]
+    [InlineData("--mcp")]
+    [InlineData("--mcp-port")]
+    [InlineData("--mcp-port-file")]
+    [InlineData("--mcp-test-hooks")]
+    [InlineData("--mcp-toolsets")]
+    [InlineData("--no-crash-notice")]
+    public void CrashDetection_is_off_for_automation_runs(string option)
+    {
+        var settings = option switch
+        {
+            "--ephemeral" => new ViewerCommandSettings { Ephemeral = true },
+            "--mcp" => new ViewerCommandSettings { Mcp = true },
+            "--mcp-port" => new ViewerCommandSettings { McpPort = 0 },
+            "--mcp-port-file" => new ViewerCommandSettings { McpPortFile = "/tmp/mcp.url" },
+            "--mcp-test-hooks" => new ViewerCommandSettings { McpTestHooks = true },
+            "--mcp-toolsets" => new ViewerCommandSettings { McpToolsets = "query" },
+            "--no-crash-notice" => new ViewerCommandSettings { NoCrashNotice = true },
+            _ => throw new ArgumentOutOfRangeException(nameof(option)),
+        };
+
+        Assert.False(settings.CrashDetectionEnabled, option);
+    }
 }

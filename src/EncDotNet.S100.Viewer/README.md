@@ -2028,6 +2028,12 @@ even past the 5-file limit, so the next launch can still attach its end. At
 most 3 such files are kept, and none older than 7 days. `--ephemeral` runs
 don't write markers or rolling logs.
 
+Automated runs are often force-quit on purpose, so crash detection is off for
+runs started with `--ephemeral`, any `--mcp` option or `--no-crash-notice`.
+Those runs don't show the notification, don't write a marker, and leave any
+marker from an earlier normal run alone, so a real crash is still reported the
+next time you start SoundCharts normally.
+
 ## Connect AI agents over MCP
 
 SoundCharts can host a Model Context Protocol (MCP) server that gives AI agents
@@ -2103,6 +2109,7 @@ a run, stop the process from the operating system; SoundCharts ignores
 | `--own-ship-sog <MS>` | Own-ship speed over ground, in metres per second, 0 or more. |
 | `--log-file <PATH>` | Append structured logs to this file. |
 | `--crash-log <PATH>` | Write the crash log here instead of `viewer-crash.log` in the system temp folder. |
+| `--no-crash-notice` | Turn off crash detection for this run: no **Viewer recovered from an unexpected shutdown** notification, and no crash marker left behind. `--ephemeral` and every `--mcp` option already do this, so you only need it for other scripted runs. See [Crash recovery](#crash-recovery). |
 | `-v`, `--verbose` | Log at Debug level. |
 | `--demo-notifications` | Show sample notifications at start-up, to check how they look. For development. |
 
