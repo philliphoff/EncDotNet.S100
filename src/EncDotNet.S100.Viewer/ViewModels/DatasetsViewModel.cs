@@ -410,34 +410,116 @@ internal sealed partial class DatasetEntry : ViewModelBase
     // re-renders (palette switches, time-step scrubs) because the session
     // reapplies them when replacing generated layers.
 
-    private bool _isVisible = true;
+    // Per-map visibility (split map step 2 §2.1, #1766). The entry keeps a
+    // default and the maps that differ from it. While the default is "shown",
+    // the exceptions are the maps that hide the dataset, and an empty set
+    // means it's shown in every map (step 1's behaviour). SetVisible(false)
+    // flips the default, so a map opened later is hidden too until
+    // MapDatasetVisibility seeds it from the active map.
+    private bool _shownByDefault = true;
+    private readonly HashSet<MapViewId> _exceptions = [];
+
     /// <summary>
-    /// Whether this dataset's layers are drawn on the map. Toggling
-    /// this updates <see cref="Mapsui.Layers.ILayer.Enabled"/> on every
-    /// layer the loader has produced for this entry.
+    /// Whether map <paramref name="map"/> draws this dataset's layers, before
+    /// <see cref="IsHiddenByDisplay"/> (split map step 2 §2.1).
     /// </summary>
-    public bool IsVisible
+    /// <param name="map">The map.</param>
+    /// <returns><see langword="true"/> when the dataset is shown in that map.</returns>
+    public bool IsVisibleIn(MapViewId map) => _shownByDefault != _exceptions.Contains(map);
+
+    /// <summary>
+    /// Shows or hides this dataset in map <paramref name="map"/> only. Raises
+    /// <see cref="VisibilityChanged"/> with that map when the value changes.
+    /// </summary>
+    /// <param name="map">The map.</param>
+    /// <param name="visible">Whether that map draws the dataset.</param>
+    public void SetVisibleIn(MapViewId map, bool visible)
     {
-        get => _isVisible;
-        set
+        if (IsVisibleIn(map) == visible) return;
+        if (visible == _shownByDefault)
+            _exceptions.Remove(map);
+        else
+            _exceptions.Add(map);
+        OnVisibilityChanged(map);
+    }
+
+    /// <summary>
+    /// Shows or hides this dataset in every map, including maps opened later.
+    /// The single-pane eye, the hide-on-load policies and the exchange-set
+    /// header's hide-all use it. Raises <see cref="VisibilityChanged"/> with
+    /// <see langword="null"/> when anything changes.
+    /// </summary>
+    /// <param name="visible">Whether every map draws the dataset.</param>
+    public void SetVisible(bool visible)
+    {
+        if (_shownByDefault == visible && _exceptions.Count == 0) return;
+        _shownByDefault = visible;
+        _exceptions.Clear();
+        OnVisibilityChanged(null);
+    }
+
+    /// <summary>
+    /// Whether some map draws this dataset. With one map it's that map's
+    /// visibility. Work that serves every pane (lazy loading, hosted sources,
+    /// Timeline lanes) reads it.
+    /// </summary>
+    /// <remarks>
+    /// The entry doesn't know which maps are open: a dataset hidden one map at
+    /// a time in every open map reads as hidden here once
+    /// <see cref="RetainMaps"/> has run, which <c>MapDatasetVisibility</c>
+    /// does after every per-map change.
+    /// </remarks>
+    public bool IsVisibleAnywhere => _shownByDefault || _exceptions.Count > 0;
+
+    /// <summary>
+    /// Raised after this dataset's visibility changes, with the map it changed
+    /// in, or <see langword="null"/> when it changed in every map.
+    /// </summary>
+    public event EventHandler<MapViewId?>? VisibilityChanged;
+
+    /// <summary>
+    /// Drops every map not in <paramref name="openMaps"/> from the entry's
+    /// per-map state, and folds "hidden (or shown) in each open map one by
+    /// one" into the default, so <see cref="IsVisibleAnywhere"/> is exact.
+    /// The visibility in every open map stays as it was, so nothing is raised
+    /// but the property changes for <see cref="IsVisibleAnywhere"/>.
+    /// </summary>
+    /// <param name="openMaps">The maps open now.</param>
+    internal void RetainMaps(IReadOnlyCollection<MapViewId> openMaps)
+    {
+        ArgumentNullException.ThrowIfNull(openMaps);
+        var anywhere = IsVisibleAnywhere;
+        _exceptions.RemoveWhere(map => !openMaps.Contains(map));
+        if (openMaps.Count > 0 && _exceptions.Count == openMaps.Count)
         {
-            if (IsVisible != value)
-            {
-                _isVisible = value;
-                UpdateMapDataset();
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(RowOpacity));
-                OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
-            }
+            _shownByDefault = !_shownByDefault;
+            _exceptions.Clear();
         }
+
+        if (anywhere != IsVisibleAnywhere)
+            RaiseVisibilityProperties();
+    }
+
+    private void OnVisibilityChanged(MapViewId? map)
+    {
+        UpdateMapDataset();
+        RaiseVisibilityProperties();
+        VisibilityChanged?.Invoke(this, map);
+    }
+
+    private void RaiseVisibilityProperties()
+    {
+        OnPropertyChanged(nameof(IsVisibleAnywhere));
+        OnPropertyChanged(nameof(RowOpacity));
+        OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
     }
 
     private bool _isHiddenByDisplay;
     /// <summary>
-    /// Whether a display control hides this dataset on the map, whatever
-    /// <see cref="IsVisible"/> says: today the AML product switches and scale
+    /// Whether a display control hides this dataset in every map, whatever
+    /// <see cref="IsVisibleIn"/> says: today the AML product switches and scale
     /// bands (<c>AmlDisplayService</c>, AML handoff decisions 24 and 26). Unlike
-    /// <see cref="IsVisible"/> it isn't the row's own setting, so the row's eye
+    /// visibility it isn't the row's own setting, so the row's eye
     /// keeps its state. Changing it doesn't re-render the dataset.
     /// </summary>
     public bool IsHiddenByDisplay
@@ -457,7 +539,7 @@ internal sealed partial class DatasetEntry : ViewModelBase
     /// <summary>
     /// This dataset's own narrowing of viewing-group visibility, on top of the
     /// map-wide ECDIS display settings, or <c>null</c> for none. Unlike
-    /// <see cref="IsVisible"/> it isn't a user setting: services set it (Check
+    /// visibility it isn't a user setting: services set it (Check
     /// route keeps only a received S-421 route's action points). Changing it
     /// re-renders the dataset.
     /// </summary>
@@ -519,7 +601,8 @@ internal sealed partial class DatasetEntry : ViewModelBase
     private bool _isActive = true;
     /// <summary>
     /// Whether this dataset participates in S-98 composition and queries,
-    /// independently of <see cref="IsVisible"/>.
+    /// independently of <see cref="IsVisibleIn"/>. It's one switch for
+    /// every map (split map step 2, Q3).
     /// </summary>
     public bool IsActive
     {
@@ -575,10 +658,11 @@ internal sealed partial class DatasetEntry : ViewModelBase
     /// UI helper: dims the row text when the dataset is hidden or still
     /// deferred (registered from a large exchange set but not yet loaded).
     /// </summary>
-    public double RowOpacity => (!IsVisible || _isDeferred) ? 0.5 : 1.0;
+    public double RowOpacity => (!IsVisibleAnywhere || _isDeferred) ? 0.5 : 1.0;
 
     /// <summary>
-    /// Flips <see cref="IsVisible"/>. Bound to the eye-icon button in
+    /// Shows or hides the dataset in every map (<see cref="SetVisible"/>),
+    /// from <see cref="IsVisibleAnywhere"/>. Bound to the eye-icon button in
     /// the Datasets list so the action behaves as a transient command
     /// (icon swaps in response to state change) rather than a
     /// persistent toggle button (which would render as accent-checked).
@@ -920,7 +1004,7 @@ internal sealed partial class DatasetEntry : ViewModelBase
             if (_layerTime?.Nearest is { } nearest)
                 _jumpToLayerData?.Invoke(nearest);
         });
-        ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
+        ToggleVisibilityCommand = new RelayCommand(() => SetVisible(!IsVisibleAnywhere));
 
         _subLayers.CollectionChanged += (_, _) =>
         {
@@ -953,7 +1037,9 @@ internal sealed partial class DatasetEntry : ViewModelBase
         _id,
         DisplayName,
         metadata,
-        _isVisible && !_isHiddenByDisplay,
+        // One projection for every map until slice 2 projects per map
+        // (split map step 2 §2.2): a dataset shown in any map is drawn.
+        IsVisibleAnywhere && !_isHiddenByDisplay,
         _isActive,
         _opacity,
         _availableTimes,
@@ -1348,9 +1434,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
     public ICommand SendToBackCommand { get; }
 
     // ── Bulk actions ─────────────────────────────────────────────────
-    /// <summary>Sets <see cref="DatasetEntry.IsVisible"/> to true on every entry.</summary>
+    /// <summary>Shows every entry in every map.</summary>
     public ICommand ShowAllCommand { get; }
-    /// <summary>Sets <see cref="DatasetEntry.IsVisible"/> to false on every entry.</summary>
+    /// <summary>Hides every entry in every map.</summary>
     public ICommand HideAllCommand { get; }
     /// <summary>
     /// Hides every dataset except the supplied one. Surfaced from the
@@ -1963,18 +2049,18 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     private void ShowAll()
     {
-        foreach (var e in Entries) e.IsVisible = true;
+        foreach (var e in Entries) e.SetVisible(true);
     }
 
     private void HideAll()
     {
-        foreach (var e in Entries) e.IsVisible = false;
+        foreach (var e in Entries) e.SetVisible(false);
     }
 
     private void Isolate(DatasetEntry? entry)
     {
         if (entry is null) return;
-        foreach (var e in Entries) e.IsVisible = ReferenceEquals(e, entry);
+        foreach (var e in Entries) e.SetVisible(ReferenceEquals(e, entry));
     }
 
     private void ResetOpacity()

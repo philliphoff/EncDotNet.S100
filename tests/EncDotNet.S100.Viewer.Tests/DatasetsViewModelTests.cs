@@ -174,13 +174,13 @@ public class DatasetsViewModelTests
         var vm = new DatasetsViewModel(loader);
         var a = vm.Add("/a.000", "S-101");
         var b = vm.Add("/b.000", "S-101");
-        a.IsVisible = false;
-        b.IsVisible = false;
+        a.SetVisible(false);
+        b.SetVisible(false);
 
         vm.ShowAllCommand.Execute(null);
 
-        Assert.True(a.IsVisible);
-        Assert.True(b.IsVisible);
+        Assert.True(a.IsVisibleAnywhere);
+        Assert.True(b.IsVisibleAnywhere);
     }
 
     [Fact]
@@ -193,8 +193,8 @@ public class DatasetsViewModelTests
 
         vm.HideAllCommand.Execute(null);
 
-        Assert.False(a.IsVisible);
-        Assert.False(b.IsVisible);
+        Assert.False(a.IsVisibleAnywhere);
+        Assert.False(b.IsVisibleAnywhere);
     }
 
     [Fact]
@@ -208,9 +208,9 @@ public class DatasetsViewModelTests
 
         vm.IsolateCommand.Execute(b);
 
-        Assert.False(a.IsVisible);
-        Assert.True(b.IsVisible);
-        Assert.False(c.IsVisible);
+        Assert.False(a.IsVisibleAnywhere);
+        Assert.True(b.IsVisibleAnywhere);
+        Assert.False(c.IsVisibleAnywhere);
     }
 
     [Fact]

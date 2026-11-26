@@ -209,7 +209,8 @@ public sealed class ViewerStateToolsTests
     public async Task Dataset_state_shows_a_hidden_dataset_and_reports_the_change()
     {
         var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
-        var entry = new DatasetEntry("/data/104US004SC1BO_20251217T12Z.h5", "S-104") { IsVisible = false };
+        var entry = new DatasetEntry("/data/104US004SC1BO_20251217T12Z.h5", "S-104");
+        entry.SetVisible(false);
         datasets.Entries.Add(entry);
         var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
 
@@ -220,7 +221,7 @@ public sealed class ViewerStateToolsTests
         Assert.False(state.PreviousVisible);
         Assert.Equal(0.5, state.Opacity);
         Assert.True(state.Changed);
-        Assert.True(entry.IsVisible);
+        Assert.True(entry.IsVisibleAnywhere);
     }
 
     [Fact]

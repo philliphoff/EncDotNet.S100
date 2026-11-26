@@ -134,7 +134,7 @@ internal sealed partial class DatasetEntry
     /// </summary>
     public bool ShowsAmlCoverageOutline =>
         _aml is { } aml
-        && IsVisible
+        && IsVisibleAnywhere
         && !IsHiddenByDisplay
         && (!aml.Drawn || (SubLayers.Count > 0 && SubLayers.All(s => !s.IsVisible)));
 

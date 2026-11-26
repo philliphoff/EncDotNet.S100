@@ -289,16 +289,16 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
     public void The_switch_leaves_the_datasets_own_visibility_alone()
     {
         var f = new Fixture();
-        f.Entry.IsVisible = false;
+        f.Entry.SetVisible(false);
 
         f.Drawing.ShowNavigationalWarnings = false;
-        Assert.False(f.Entry.IsVisible);
+        Assert.False(f.Entry.IsVisibleAnywhere);
         f.Drawing.ShowNavigationalWarnings = true;
-        Assert.False(f.Entry.IsVisible);
+        Assert.False(f.Entry.IsVisibleAnywhere);
 
-        f.Entry.IsVisible = true;
+        f.Entry.SetVisible(true);
         f.Drawing.ShowNavigationalWarnings = false;
-        Assert.True(f.Entry.IsVisible);
+        Assert.True(f.Entry.IsVisibleAnywhere);
         Assert.False(f.Drawing.ShowNavigationalWarnings);
     }
 

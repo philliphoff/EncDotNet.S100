@@ -248,7 +248,8 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
         return new TimelineLayerState(
             Id: entry.DisplayName,
             Spec: entry.ProductSpec,
-            Visible: entry.IsVisible,
+            // A lane shows while any pane draws the dataset (split map D20).
+            Visible: entry.IsVisibleAnywhere,
             DrawnTime: entry.CurrentTime,
             PreviousSample: previous,
             NextSample: next,

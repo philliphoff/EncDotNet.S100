@@ -142,11 +142,12 @@ internal sealed class ViewerDatasetStateController : IViewerDatasetStateControll
             if (entry is null)
                 return;
 
-            var previousVisible = entry.IsVisible;
+            var previousVisible = entry.IsVisibleAnywhere;
             var previousOpacity = entry.Opacity;
             var previousPosition = _datasets.Entries.IndexOf(entry);
+            // Without a map, visibility applies to every map (split map step 2, Q6).
             if (visible is { } show)
-                entry.IsVisible = show;
+                entry.SetVisible(show);
             if (opacity is { } alpha)
                 entry.Opacity = alpha;
             var move = order switch
@@ -159,7 +160,7 @@ internal sealed class ViewerDatasetStateController : IViewerDatasetStateControll
             };
             move?.Execute(entry);
             outcome = new DatasetStateOutcome(
-                entry.DisplayName, entry.ProductSpec, entry.IsVisible, entry.Opacity, previousVisible, previousOpacity,
+                entry.DisplayName, entry.ProductSpec, entry.IsVisibleAnywhere, entry.Opacity, previousVisible, previousOpacity,
                 _datasets.Entries.IndexOf(entry), previousPosition, entry.ViewingGroups);
         }).ConfigureAwait(false);
         return outcome;

@@ -230,7 +230,8 @@ internal sealed class PositionLegendService : IDisposable
         var cells = new List<(DatasetEntry Entry, IChartDepthCell Cell)>();
         foreach (var (entry, processor) in processors)
         {
-            if (processor is IChartDepthCell cell && entry.IsVisible && _loader.GetActive(entry.Id.Value))
+            // DEPTHS follows the user's view: the active map's once split map step 2 slice 3 (#1768) wires it; with one map they agree.
+            if (processor is IChartDepthCell cell && entry.IsVisibleAnywhere && _loader.GetActive(entry.Id.Value))
                 cells.Add((entry, cell));
         }
         cells.Sort((a, b) => Order(a.Entry).CompareTo(Order(b.Entry)));

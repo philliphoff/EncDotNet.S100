@@ -112,6 +112,54 @@ public sealed class DatasetLoaderSplitMapTests : IDisposable
     }
 
     [Fact]
+    public async Task A_dataset_loaded_while_split_is_shown_in_every_map()
+    {
+        // Split map step 2, Q1: whichever pane is active.
+        var first = new MapViewsTests.FakeMapView("map-1");
+        var second = new MapViewsTests.FakeMapView("map-2");
+        _views.Add(first);
+        _views.Add(second);
+        _views.Activate(second);
+        _loader.Initialize(_views, options: null);
+        var entry = CapEntry("gale");
+
+        await _loader.LoadAsync(entry, Ct);
+
+        Assert.True(entry.IsVisibleIn(first.Id));
+        Assert.True(entry.IsVisibleIn(second.Id));
+    }
+
+    [Fact]
+    public async Task A_gridded_S104_surface_loads_hidden_in_every_map()
+    {
+        // A load policy hides in every map (split map step 2 §2.3), and in a
+        // map opened after it too.
+        var first = new MapViewsTests.FakeMapView("map-1");
+        var second = new MapViewsTests.FakeMapView("map-2");
+        _views.Add(first);
+        _views.Add(second);
+        _loader.Initialize(_views, options: null);
+        var path = Path.Combine(_dir, "104XX00_gridded.h5");
+        EncDotNet.S100.Testing.Scenarios.Hdf5.S104FixtureBuilder.WriteFile(
+            path,
+            [new EncDotNet.S100.Testing.Scenarios.Hdf5.S104FixtureBuilder.SpecRow { WaterLevelHeight = 1.5f, WaterLevelTrend = 2 }],
+            1,
+            1,
+            useF64GridAttrs: false,
+            useUnsignedCounts: false,
+            productSpecification: "INT.IHO.S-104.2.0");
+        var entry = new DatasetEntry(path, "S-104");
+
+        await _loader.LoadAsync(entry, Ct);
+
+        Assert.True(entry.IsLoaded);
+        Assert.False(entry.IsVisibleIn(first.Id));
+        Assert.False(entry.IsVisibleIn(second.Id));
+        Assert.False(entry.IsVisibleIn(new MapViewId("map-3")));
+        Assert.False(entry.IsVisibleAnywhere);
+    }
+
+    [Fact]
     public async Task A_map_added_after_a_load_catches_up_and_a_removed_map_is_released()
     {
         var first = new MapViewsTests.FakeMapView("map-1");

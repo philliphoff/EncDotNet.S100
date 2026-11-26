@@ -196,7 +196,7 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
     /// the source row's show/hide (eye) icon. Toggling
     /// <see cref="ToggleVisibilityCommand"/> hides all members when any
     /// are visible, otherwise shows all.</summary>
-    public bool IsAnyDatasetVisible => Datasets.Any(d => d.IsVisible);
+    public bool IsAnyDatasetVisible => Datasets.Any(d => d.IsVisibleAnywhere);
 
     /// <summary>Shows or hides every member dataset in one shot: hides all
     /// when any are currently visible, otherwise shows all.</summary>
@@ -241,7 +241,8 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
         var hide = IsAnyDatasetVisible;
         foreach (var dataset in Datasets)
         {
-            dataset.IsVisible = !hide;
+            // Hide-all acts on every map (split map step 2 §1.1).
+            dataset.SetVisible(!hide);
         }
     }
 
@@ -270,7 +271,7 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
 
     private void OnMemberPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DatasetEntry.IsVisible))
+        if (e.PropertyName == nameof(DatasetEntry.IsVisibleAnywhere))
         {
             OnPropertyChanged(nameof(IsAnyDatasetVisible));
         }

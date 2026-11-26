@@ -113,11 +113,12 @@ internal sealed class SourceDatasetService : IDisposable
             var registration = Find(sourceId);
             var activation = registration?.ActivationFor(entry.SourceOptions) ?? SourceActivation.Always;
             var running = activator = new HostedSourceActivator(
-                hosted, activation, _viewports, entry.IsVisible, logger: _logger);
+                hosted, activation, _viewports, entry.IsVisibleAnywhere, logger: _logger);
             onChanged = (_, e) =>
             {
-                if (e.PropertyName == nameof(DatasetEntry.IsVisible))
-                    running.SetVisible(entry.IsVisible);
+                // A source runs while some pane shows it (split map step 2 §2.5).
+                if (e.PropertyName == nameof(DatasetEntry.IsVisibleAnywhere))
+                    running.SetVisible(entry.IsVisibleAnywhere);
             };
             entry.PropertyChanged += onChanged;
 

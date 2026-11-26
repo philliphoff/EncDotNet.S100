@@ -221,7 +221,7 @@ internal sealed class AmlDisplayService : IAmlClbPresence, IDisposable
     // A cell the row's eye hides doesn't cover coarser cells.
     private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DatasetEntry.IsVisible) && sender is DatasetEntry entry && _cells.Any(c => c.Entry == entry))
+        if (e.PropertyName == nameof(DatasetEntry.IsVisibleAnywhere) && sender is DatasetEntry entry && _cells.Any(c => c.Entry == entry))
             _marshal(Rebuild);
     }
 
@@ -272,7 +272,9 @@ internal sealed class AmlDisplayService : IAmlClbPresence, IDisposable
             _seen.Remove(removed);
 
         // Cells the row's eye hides take no part: they mustn't hide coarser ones.
-        var shown = cells.Where(c => c.Entry.IsVisible).ToList();
+        // The band windows set IsHiddenByDisplay, which is global (split map
+        // step 2, Q3), so a cell shown in any map takes part.
+        var shown = cells.Where(c => c.Entry.IsVisibleAnywhere).ToList();
         foreach (var cell in cells)
             cell.Window = AmlBandWindow.Always;
         var windows = AmlScaleBandVisibility.Resolve([.. shown.Select(c => new AmlBandCell(c.Code, c.ScaleBand, c.Coverage))]);
@@ -320,7 +322,8 @@ internal sealed class AmlDisplayService : IAmlClbPresence, IDisposable
             ClbDrawnChanged?.Invoke();
     }
 
-    private static bool IsShown(Cell cell) => cell.Entry.IsVisible && !cell.Entry.IsHiddenByDisplay;
+    // The product counts follow the user's view: the active map's once split map step 2 slice 3 (#1768) wires it; with one map they agree.
+    private static bool IsShown(Cell cell) => cell.Entry.IsVisibleAnywhere && !cell.Entry.IsHiddenByDisplay;
 
     /// <inheritdoc />
     public void Dispose()

@@ -928,7 +928,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
 
         // The user has switched the west cell off, so only the east half of the
         // view has finer chart on it.
-        west.IsVisible = false;
+        west.SetVisible(false);
         coordinator.Register(new[] { coarse, west, east });
         notifier.Publish(Viewport(40, -75, 41, -74));
 

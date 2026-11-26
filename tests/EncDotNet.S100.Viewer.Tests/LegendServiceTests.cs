@@ -155,7 +155,7 @@ public sealed class LegendServiceTests
     {
         var f = new Fixture();
         var hidden = f.Add("111US00_a.h5", "S-111", 40, -75, 41, -74);
-        hidden.IsVisible = false;
+        hidden.SetVisible(false);
         f.Loader.SetEntries(
             VectorEntry("111US00_a.h5", "S-111", "s111.arrows", "Surface currents: 111US00_a.h5", S98DisplayPlane.DynamicArrows, CurrentLegend),
             LayerStackLegendTests.FillEntry("s104.h5", legend: null));
@@ -163,7 +163,7 @@ public sealed class LegendServiceTests
 
         Assert.Empty(service.Sections);
 
-        hidden.IsVisible = true;
+        hidden.SetVisible(true);
         Assert.Equal("S-111", Assert.Single(service.Sections).Id);
     }
 

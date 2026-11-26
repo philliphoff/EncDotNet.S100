@@ -123,7 +123,8 @@ internal sealed class FeedbackService : IFeedbackService
             datasets.Add(new FeedbackDatasetInfo(
                 DisplayName: entry.DisplayName,
                 ProductSpec: entry.ProductSpec,
-                IsVisible: entry.IsVisible,
+                // The map the user reports on: the active map's once split map step 2 slice 3 (#1768) wires it; with one map they agree.
+                IsVisible: entry.IsVisibleAnywhere,
                 ValidationErrorCount: entry.ValidationErrorCount,
                 ValidationWarningCount: entry.ValidationWarningCount));
         }

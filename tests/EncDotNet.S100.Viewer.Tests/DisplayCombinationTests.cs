@@ -251,7 +251,7 @@ public class DisplayCombinationServiceTests
 
         Assert.True(h.Active(s101));
         Assert.False(h.Active(s102));
-        Assert.True(s102.IsVisible);
+        Assert.True(s102.IsVisibleAnywhere);
         var change = Assert.Single(result.Datasets);
         Assert.Equal(s102.Id.Value, change.Id);
         Assert.False(change.Active);
@@ -420,7 +420,7 @@ public class DisplayCombinationServiceTests
         h.State.SetShowNavigationalWarnings(false);
         h.State.HideViewingGroup("S-101", 90000);
         h.State.HideViewingGroup("S-124", 1);
-        s102.IsVisible = false;
+        s102.SetVisible(false);
         h.State.SetCategory(EcdisDisplayCategory.Standard);
 
         Assert.False(h.Service.IsModified);

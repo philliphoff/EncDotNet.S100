@@ -147,7 +147,7 @@ public sealed class AmlDisplayTests : IDisposable
         Assert.True(clb.IsHiddenByDisplay);
         Assert.False(clb.MapDataset!.IsVisible);
         // The Datasets row's own eye keeps its state.
-        Assert.True(clb.IsVisible);
+        Assert.True(clb.IsVisibleAnywhere);
         Assert.False(ral.IsHiddenByDisplay);
         Assert.True(ral.MapDataset!.IsVisible);
         Assert.Contains("CLB", _state.HiddenAmlProducts);
@@ -201,7 +201,7 @@ public sealed class AmlDisplayTests : IDisposable
         _viewport.ZoomTo(110_000);
         Assert.True(band5.IsHiddenByDisplay);
 
-        band6.IsVisible = false;
+        band6.SetVisible(false);
 
         Assert.False(band5.IsHiddenByDisplay);
     }

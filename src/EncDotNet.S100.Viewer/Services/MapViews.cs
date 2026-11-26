@@ -101,6 +101,16 @@ internal sealed class MapViews : IMapViewportSet
     /// <summary>Raised after <see cref="Active"/> changes, once the accessors are rebound.</summary>
     public event EventHandler? ActiveChanged;
 
+    /// <summary>
+    /// Raised after a map is added, before <see cref="ViewAdded"/>: the place
+    /// to give the new map the state it inherits from the active map (its
+    /// dataset visibility, split map step 2 §2.1) before the loader, which
+    /// follows <see cref="ViewAdded"/>, catches its session up. The map is
+    /// already in <see cref="All"/>, and <see cref="Active"/> is still the map
+    /// that was active before (or the new map when it's the first).
+    /// </summary>
+    public event EventHandler<IMapViewCapabilities>? ViewSeeding;
+
     /// <summary>Raised after a map is added, once it is in <see cref="All"/> (and active when it's the first).</summary>
     public event EventHandler<IMapViewCapabilities>? ViewAdded;
 
@@ -147,6 +157,7 @@ internal sealed class MapViews : IMapViewportSet
             viewports = ViewportsLocked();
         }
 
+        ViewSeeding?.Invoke(this, view);
         if (activated)
             OnActiveChanged();
         if (view.Viewport.Current is not null)

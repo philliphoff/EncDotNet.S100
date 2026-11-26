@@ -112,9 +112,9 @@ public sealed class AmlDatasetsTests : IDisposable
         entry.SetAml(cell);
         Assert.True(entry.ShowsAmlCoverageOutline);
 
-        entry.IsVisible = false;
+        entry.SetVisible(false);
         Assert.False(entry.ShowsAmlCoverageOutline);
-        entry.IsVisible = true;
+        entry.SetVisible(true);
 
         // Hidden by the display panel (a product switch or the scale bands).
         entry.IsHiddenByDisplay = true;
@@ -206,7 +206,7 @@ public sealed class AmlDatasetsTests : IDisposable
         Assert.IsType<AmlCoverageOutlineStyle>(Assert.Single(feature.Styles));
 
         // The row's eye turns it off.
-        entry.IsVisible = false;
+        entry.SetVisible(false);
         controller.Rebuild();
         Assert.Empty(controller.Outlines);
         Assert.Empty(layer.Features);
