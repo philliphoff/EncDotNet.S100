@@ -185,7 +185,7 @@ dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn 
   EncDotNet.ArcGIS repository, and a new or renamed page there needs a
   matching entry in `docs/toc.yml` here.
 - When editing the viewer (`src/EncDotNet.S100.Viewer/**`), follow the
-  localization and UI rules in [`.claude/rules/viewer.md`](.claude/rules/viewer.md)
+  localization and UI rules in [`.claude/rules/viewer.md`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.claude/rules/viewer.md)
   (every user-facing string lives in `Resources/Strings.resx`).
 
 ## Release signing
