@@ -33,7 +33,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// overlays are attached, in the order the window always used: construct
 /// (host only), then <see cref="Attach"/>.
 /// </remarks>
-internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IDisposable
+internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IMapViewDiagnostics, IDisposable
 {
     /// <summary>Within this many pixels of the checked route, the pointer moves the profile cursor.</summary>
     private const double CheckHoverRadiusPx = 12;
@@ -166,10 +166,11 @@ internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IDisposa
         Host.SetViewportToCenterAndResolution(new MPoint(centerX, centerY), resolution);
 
     /// <summary>
-    /// The render-activity monitor fed by this map, or <see langword="null"/>
-    /// before <see cref="Attach"/> or when the control has no map.
+    /// This map's own render-activity monitor (split map, #1735): its paints,
+    /// refresh requests and busy layers only. <see langword="null"/> before
+    /// <see cref="Attach"/> or when the control has no map.
     /// </summary>
-    public RenderActivityMonitor? RenderActivity => _renderActivityMonitor;
+    public IRenderActivityMonitor? RenderActivity => _renderActivityMonitor;
 
     /// <summary>
     /// The Library coverage outlines' Legend section source (legends D8), or
@@ -275,19 +276,21 @@ internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IDisposa
             mapForBackColor.BackColor = new Mapsui.Styles.Color(170, 211, 223);
         }
 
-        // The render-activity monitor that backs the MCP 'await_render_idle' /
-        // 'get_render_stats' tools hears every map: the InstrumentedMapControl
-        // feeds paint stats through the static RenderActivityHub.Sink, and
-        // Mapsui's graphics-refresh signal counts as activity. The busy probe
-        // and the settle probe are the window's (MapViewProbes), over every
-        // map or the active one.
+        // The render-activity monitors that back the MCP 'await_render_idle' /
+        // 'get_render_stats' tools: this map's own (the tools' map argument,
+        // #1735) and the window's, which hears every map. The control feeds
+        // paint stats to both, and Mapsui's graphics-refresh signal counts as
+        // activity for both. This map's busy probe is its own layers; the
+        // window's busy and settle probes are MapViewProbes'.
         if (mapControl.Map is { } activityMap)
         {
-            var monitor = services.GetRequiredService<RenderActivityMonitor>();
-            _renderActivityMonitor = monitor;
+            var window = services.GetRequiredService<RenderActivityMonitor>();
+            var own = new RenderActivityMonitor { BusyProbe = IsBusy };
+            _renderActivityMonitor = own;
             _renderActivityMap = activityMap;
-            RenderActivityHub.Sink = monitor;
-            _renderActivityRefreshHandler = (_, _) => monitor.NotifyActivity();
+            var sink = new FanOutRenderActivitySink(own, window);
+            mapControl.ActivitySink = sink;
+            _renderActivityRefreshHandler = (_, _) => sink.NotifyActivity();
             activityMap.RefreshGraphicsRequest += _renderActivityRefreshHandler;
         }
 
@@ -805,10 +808,11 @@ internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IDisposa
         _validationOverlay?.Dispose();
         _validationOverlay = null;
 
-        // Detach this map's render-activity wiring; the window clears the
-        // static hub and the probes with the last map (MapViewProbes).
+        // Detach this map's render-activity wiring; the window clears its
+        // probes with the last map (MapViewProbes).
         if (_renderActivityMonitor is not null)
         {
+            Pane.MapControl.ActivitySink = null;
             if (_renderActivityMap is not null && _renderActivityRefreshHandler is not null)
             {
                 _renderActivityMap.RefreshGraphicsRequest -= _renderActivityRefreshHandler;

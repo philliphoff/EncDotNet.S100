@@ -584,9 +584,10 @@ public partial class App : Application
                 viewport,
                 sp.GetRequiredService<ICapabilityAccessor<IMapCoordinateConverter>>(),
                 catalog,
-                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>(),
+                sp.GetRequiredService<ICapabilityAccessor<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>>(),
                 sp.GetRequiredService<IGeographicPickPresenter>(),
-                perfHarness.Settle),
+                perfHarness.Settle,
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapSplitControllerAccessor>()),
             new McpTools.Groups.PresentationMcpToolGroup(
                 sp.GetRequiredService<IRenderStateControllerAccessor>(),
                 sp.GetRequiredService<MapPresentationStateProjection>(),
@@ -604,7 +605,8 @@ public partial class App : Application
                 perfHarness,
                 settings,
                 viewport,
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>()),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViews>()),
             new McpTools.Groups.ShellMcpToolGroup(
                 sp.GetRequiredService<IViewerUiControllerAccessor>(),
                 sp.GetRequiredService<IAppScreenshotProvider>(),
@@ -1657,6 +1659,8 @@ public partial class App : Application
             sp.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>());
         services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
         services.AddSingleton<IViewerUiControllerAccessor, ViewerUiControllerAccessor>();
+        // The window's split as the MCP map tools drive it (split map D28, #1735).
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.MapSplitControllerAccessor>();
         services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>();
         services.AddSingleton<IRenderActivityMonitor>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>());
@@ -1673,6 +1677,12 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>(sp => new ViewerMapDrawState(
             sp.GetRequiredService<GlobalTimeService>(),
             sp.GetRequiredService<ViewerDatasetCatalog>()));
+        // The same for the MCP tools' map argument (split map D28): every map
+        // draws the same in step 1, so any map's is the shared one.
+        services.AddSingleton<ICapabilityAccessor<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>>(sp =>
+            new EncDotNet.S100.Viewer.Services.SharedMapCapabilityAccessor<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViews>(),
+                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>()));
         // The Timeline as the MCP tools drive it, shared by the timeline and Check passage tools.
         services.AddSingleton<IViewerTimelineController>(sp => new ViewerTimelineController(
             sp.GetRequiredService<GlobalTimeService>(),
@@ -1694,7 +1704,7 @@ public partial class App : Application
             sp.GetRequiredService<ViewerSettings>(),
             new McpTools.ViewerPassageRouteProvider(sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(), new McpTools.DispatcherRouteEditInvoker()),
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
-            sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>(),
+            sp.GetRequiredService<ICapabilityAccessor<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>>(),
             CreateMcpToolGroups(sp),
             sp.GetService<ILoggerFactory>()));
         // The settled signal and process metrics behind the perf harness's MCP

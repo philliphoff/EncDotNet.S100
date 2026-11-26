@@ -19,7 +19,8 @@ internal static class GetRenderStatsMcpAdapter
         "rendering performance across pan/zoom, palette, or time-step changes. Pair with " +
         "'await_render_idle' so the reported paint reflects a settled view. Describes the " +
         "live map paint, not the offscreen render_to_image clone; returns hasData=false " +
-        "when no paint has occurred yet.";
+        "when no paint has occurred yet. With the map split it reports every map's paints " +
+        "together, or only the map named by 'map'.";
 
     public static McpServerTool Create(GetRenderStatsTool inner)
     {
@@ -30,8 +31,12 @@ internal static class GetRenderStatsMcpAdapter
                 "call's window covers only paints observed afterwards. Use to bracket a " +
                 "measurement phase (reset before a pan/zoom burst, read after).")]
             bool resetWindow = false,
+            [System.ComponentModel.Description(
+                "With the map split: the map to report (an id from list_maps, such as 'map-2'); its own paints " +
+                "and window. Omit to report every map's paints together.")]
+            string? map = null,
             CancellationToken ct = default) =>
-            DispatchAsync(() => inner.InvokeAsync(new GetRenderStatsRequest(resetWindow), ct));
+            DispatchAsync(() => inner.InvokeAsync(new GetRenderStatsRequest(resetWindow, map), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -85,6 +90,7 @@ internal static class GetRenderStatsMcpAdapter
             var payload = new JsonObject
             {
                 ["hasData"] = value.HasData,
+                ["map"] = value.Map,
                 ["frameDurationMs"] = value.FrameDurationMs,
                 ["intervalMs"] = value.IntervalMs,
                 ["totalDrawCalls"] = value.TotalDrawCalls,

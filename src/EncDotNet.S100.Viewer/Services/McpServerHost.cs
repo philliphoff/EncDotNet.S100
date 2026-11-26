@@ -29,7 +29,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private IReadOnlyList<string>? _servedToolsets;
     private readonly IPassageRouteProvider _passageRoutes;
     private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache _routeCheckSources;
-    private readonly IMapDrawState _mapDrawState;
+    private readonly ICapabilityAccessor<IMapDrawState> _mapDrawState;
     private readonly IReadOnlyList<IViewerMcpToolGroup> _toolGroups;
     private readonly ILoggerFactory? _loggers;
     private readonly ILogger _logger;
@@ -42,7 +42,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     /// <param name="settings">Whether MCP is on, and its port, bind address and test hooks.</param>
     /// <param name="passageRoutes">The viewer's routes, as the shared passage tools read them.</param>
     /// <param name="routeCheckSources">The route-check sources shared with the viewer's own route checks.</param>
-    /// <param name="mapDrawState">What the map draws now, so the server's queries match the map.</param>
+    /// <param name="mapDrawState">What each map draws now, so the server's queries match the map (the active one, or the one a query names).</param>
     /// <param name="toolGroups">The viewer's own tools, created afresh each time the server starts.</param>
     /// <param name="loggers">Logs the server's start, stop and port conflicts.</param>
     public McpServerHost(
@@ -50,7 +50,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         ViewerSettings settings,
         IPassageRouteProvider passageRoutes,
         EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache routeCheckSources,
-        IMapDrawState mapDrawState,
+        ICapabilityAccessor<IMapDrawState> mapDrawState,
         IReadOnlyList<IViewerMcpToolGroup> toolGroups,
         ILoggerFactory? loggers = null)
     {

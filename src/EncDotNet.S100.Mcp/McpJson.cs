@@ -146,6 +146,7 @@ public static class McpJson
 [JsonSerializable(typeof(GeometryInvalid))]
 [JsonSerializable(typeof(TimeOutOfRange))]
 [JsonSerializable(typeof(HostNotReady))]
+[JsonSerializable(typeof(MapNotFound))]
 [JsonSerializable(typeof(DatasetLoadFailed))]
 [JsonSerializable(typeof(LibrarySourceNotFound))]
 [JsonSerializable(typeof(LibraryItemNotFound))]

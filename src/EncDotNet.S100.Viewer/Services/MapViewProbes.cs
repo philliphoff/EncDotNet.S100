@@ -3,11 +3,12 @@ using EncDotNet.S100.Viewer.Diagnostics;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Points the render-activity and settle monitors at the window's maps
-/// (split map, #1732): the busy probe asks every map, so the MCP
-/// <c>await_render_idle</c> tool waits for all of them; the settle probe
-/// (<c>await_settled</c>) and its redraw follow the active map, which the MCP
-/// map tools act on until they gain a <c>map</c> argument (#1735).
+/// Points the window's render-activity and settle monitors at the window's
+/// maps (split map, #1732, #1735): the busy probe asks every map, so the MCP
+/// <c>await_render_idle</c> tool with no <c>map</c> waits for all of them; the
+/// settle probe (<c>await_settled</c>) and its redraw follow the active map.
+/// A tool given a <c>map</c> uses that map's own monitor and probes
+/// (<see cref="MapView.RenderActivity"/>, <see cref="MapView.EvaluateSettle"/>).
 /// </summary>
 internal sealed class MapViewProbes : IDisposable
 {
@@ -53,9 +54,7 @@ internal sealed class MapViewProbes : IDisposable
 
     private void Clear()
     {
-        // No map: the static hub mustn't outlive the maps, and a torn-down
-        // map mustn't be probed.
-        RenderActivityHub.Sink = null;
+        // No map: a torn-down map mustn't be probed.
         _activity.BusyProbe = null;
         _settle.TileProbe = null;
         _settle.RequestRedraw = null;

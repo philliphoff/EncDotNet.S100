@@ -7,7 +7,8 @@ namespace EncDotNet.S100.Mcp.Tools.Mutable;
 public sealed record RenderToImageRequest(
     [property: Description("Output image width in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport width if it has one, otherwise 1024. Independently, whenever the renderer has a live viewport its width is echoed as viewportWidth — even when explicit dimensions are supplied.")] int? Width = null,
     [property: Description("Output image height in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport height if it has one, otherwise 768. Independently, whenever the renderer has a live viewport its height is echoed as viewportHeight — even when explicit dimensions are supplied.")] int? Height = null,
-    [property: Description("Display pixel-density multiplier (1.0 = device-independent pixels; 2.0 = HiDPI). Null defaults to 1.0. Clamped to [0.5, 3.0].")] double? PixelDensity = null);
+    [property: Description("Display pixel-density multiplier (1.0 = device-independent pixels; 2.0 = HiDPI). Null defaults to 1.0. Clamped to [0.5, 3.0].")] double? PixelDensity = null,
+    [property: Description("The map to render, for a host with several maps (an id from list_maps); null renders the active map. A host with one map takes no map id.")] string? Map = null);
 
 /// <summary>Result payload for <see cref="RenderToImageTool"/>.</summary>
 public sealed record RenderToImageResult(
@@ -63,7 +64,11 @@ public sealed class RenderToImageTool
                 "pixelDensity", $"value {d} is not a finite number"));
         }
 
-        var renderer = _renderer.Current;
+        if (MapTargets.TryResolve(_renderer, request.Map, out var renderer) is { } mapError)
+        {
+            return ToolResult<RenderToImageResult>.Err(mapError);
+        }
+
         if (renderer is null)
         {
             return ToolResult<RenderToImageResult>.Err(

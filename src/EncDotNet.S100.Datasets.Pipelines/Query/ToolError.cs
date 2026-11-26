@@ -255,3 +255,19 @@ public sealed record DatasetLoadFailed(
     [property: Description("Human-readable reason the load produced no portrayable dataset; not localised.")] string Reason) : ToolError(
     "dataset_load_failed",
     $"Load failed: {Reason}.");
+
+/// <summary>
+/// The <c>map</c> argument names no map of the host: a viewer whose map is
+/// split into panes knows each pane's map by an id such as <c>map-2</c>, and a
+/// host with one map takes no map id.
+/// </summary>
+/// <param name="Map">The map id that could not be resolved.</param>
+/// <param name="Maps">The host's map ids; empty when it has one map and takes no id.</param>
+[Description("Raised when the map argument names no map of the host. list_maps lists the map ids; a host with one map takes no map id.")]
+public sealed record MapNotFound(
+    [property: Description("The map id that could not be resolved.")] string Map,
+    [property: Description("The host's map ids; empty when the host has one map and takes no map id.")] IReadOnlyList<string> Maps) : ToolError(
+    "map_not_found",
+    Maps.Count == 0
+        ? $"Map '{Map}' not found: this host has one map; omit map."
+        : $"Map '{Map}' not found; the maps are {string.Join(", ", Maps)}.");

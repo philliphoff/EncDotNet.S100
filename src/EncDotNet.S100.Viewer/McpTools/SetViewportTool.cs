@@ -33,7 +33,8 @@ internal sealed record SetViewportRequest(
     [property: Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLatitude/centerLongitude; mutually exclusive with scaleDenominator and the bbox form.")] double? Zoom = null,
     [property: Description("Optional clockwise viewport rotation in degrees (0 = north-up). Applied on top of the bbox or centre+zoom frame, so it exercises the rotated-viewport render path (e.g. upright-label verification). Any finite value is accepted and normalised to [0, 360); must accompany a frame form.")] double? Rotation = null,
     [property: Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLatitude/centerLongitude; mutually exclusive with zoom and the bbox form. Converted at the centre latitude with the 0.28 mm pixel the status bar uses, so the status bar reads back this scale.")] double? ScaleDenominator = null,
-    [property: Description("Optional animation duration in milliseconds for the centre forms: the map animates to the view, as a 'go to' in the viewer does, instead of jumping. 0 or absent jumps. The echo then reports the target and the scale requested, since the live map is still on its way.")] long? DurationMs = null);
+    [property: Description("Optional animation duration in milliseconds for the centre forms: the map animates to the view, as a 'go to' in the viewer does, instead of jumping. 0 or absent jumps. The echo then reports the target and the scale requested, since the live map is still on its way.")] long? DurationMs = null,
+    [property: Description("With the map split: the map to move (an id from list_maps). Null moves the active map; the call doesn't change the active map.")] string? Map = null);
 
 /// <summary>Result of <see cref="SetViewportTool"/>.</summary>
 [Description("Result of set_viewport: the request mode that was applied (bbox or center) plus an echo of the resolved WGS-84 viewport and its map scale. The echo is the precise frame the navigator was set to and is suitable for verification in scripted runs. Longitudes are in the continuous frame that was framed: west < east, and past ±180 for a frame on or across the antimeridian.")]
@@ -144,7 +145,10 @@ internal sealed class SetViewportTool
                 "supply EITHER zoom OR scaleDenominator with centerLatitude/centerLongitude, not both"));
         }
 
-        var host = _accessor.Current;
+        if (MapTargets.TryResolve(_accessor, request.Map, out var host) is { } mapError)
+        {
+            return Err(mapError);
+        }
         if (host is null)
         {
             return Err(new MapNotReady("the viewer's map control has not been initialised yet"));

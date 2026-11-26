@@ -1065,6 +1065,9 @@ public sealed class MapPaneSettings
     /// <summary>Whether the user folded the pane to its strip (a splitter dragged past its minimum).</summary>
     public bool Folded { get; set; }
 
+    /// <summary>The name the user gave the pane (split map D19), or <see langword="null"/> for its number.</summary>
+    public string? Name { get; set; }
+
     /// <summary>The view's centre, x in Web Mercator metres; <see langword="null"/> when not saved.</summary>
     public double? CenterX { get; set; }
 

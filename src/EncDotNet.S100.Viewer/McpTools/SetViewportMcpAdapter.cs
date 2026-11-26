@@ -54,10 +54,11 @@ internal static class SetViewportMcpAdapter
             [Description("Optional animation duration in milliseconds (0 to 10000) for the centre forms: the map animates to the view instead of jumping. The echo then reports the target.")] long? durationMs = null,
             [Description("Alias of centerLatitude (older name).")] double? centerLat = null,
             [Description("Alias of centerLongitude (older name).")] double? centerLon = null,
+            [Description("With the map split: the map to move (an id from list_maps, such as 'map-2'). Omit for the active map; the call doesn't change the active map. A linked split moves the other maps too.")] string? map = null,
             CancellationToken ct = default) =>
             DispatchAsync(() => PositionArguments.Resolve(centerLatitude, centerLongitude, centerLat, centerLon, ("centerLatitude", "centerLongitude", "centerLat", "centerLon"), out var centre) is { } bad
                 ? Task.FromResult(ToolResult<SetViewportResult>.Err(bad))
-                : inner.InvokeAsync(new SetViewportRequest(south, west, north, east, centre?.Latitude, centre?.Longitude, zoom, rotation, scaleDenominator, durationMs), ct));
+                : inner.InvokeAsync(new SetViewportRequest(south, west, north, east, centre?.Latitude, centre?.Longitude, zoom, rotation, scaleDenominator, durationMs, map), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {

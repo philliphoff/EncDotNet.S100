@@ -133,6 +133,46 @@ public class IdentifyFeaturesAtTimeTests
         Assert.Equal(["P1", "P2", "ONLY_P1", "SHARED"], await IdentifyAsync(tool, 0.0, 0.0, IceInForce));
     }
 
+    [Fact]
+    public async Task S124_WithAMap_FollowsThatMapsDrawState()
+    {
+        var catalog = S124Catalog(out var dataset);
+        var maps = new MapDrawStates(
+            ("map-1", new FakeMapDrawState(null, (dataset, ["P1", "P2"]))),
+            ("map-2", new FakeMapDrawState(null)));
+        var tool = new IdentifyFeaturesTool(catalog, maps);
+
+        // The active (first) map hides both parts; map-2 hides none.
+        Assert.Empty(await IdentifyAsync(tool, 0.0, 0.0));
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, Map: "map-2"), TestContext.Current.CancellationToken);
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(["P1", "P2", "ONLY_P1", "SHARED"], value.Features.Select(f => f.FeatureId));
+
+        var unknown = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, Map: "map-9"), TestContext.Current.CancellationToken);
+        Assert.True(unknown.TryGetError(out var error));
+        Assert.IsType<MapNotFound>(error);
+    }
+
+    [Fact]
+    public async Task WithAMapAndNoMapHost_RefusesTheMap()
+    {
+        var tool = new IdentifyFeaturesTool(S412Catalog());
+
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(61.0, -23.0, Map: "map-1"), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.Equal("map_not_found", error!.Code);
+    }
+
+    private sealed class MapDrawStates(params (string Id, IMapDrawState State)[] maps) : EncDotNet.S100.Hosting.IMapCapabilityAccessor<IMapDrawState>
+    {
+        public IMapDrawState? Current => maps[0].State;
+
+        public IReadOnlyList<string> Maps => [.. maps.Select(m => m.Id)];
+
+        public IMapDrawState? Get(string map) => maps.FirstOrDefault(m => m.Id == map).State;
+    }
+
     // Two parts at the origin: P1 references ONLY_P1 and SHARED, P2 SHARED;
     // the smaller area ranks first.
     private static FakeDatasetCatalog S124Catalog(out LoadedDataset dataset)

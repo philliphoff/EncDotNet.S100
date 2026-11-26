@@ -41,3 +41,28 @@ public sealed class StaticCapabilityAccessor<TCapability>(TCapability current)
     public TCapability Current { get; } = current
         ?? throw new ArgumentNullException(nameof(current));
 }
+
+/// <summary>
+/// An <see cref="ICapabilityAccessor{TCapability}"/> for a host with several
+/// maps, such as a viewer with its map split into panes. <see cref="ICapabilityAccessor{TCapability}.Current"/>
+/// is the active map's capability; <see cref="Get"/> reaches any map's by its id.
+/// </summary>
+/// <remarks>
+/// A tool that takes an optional map id resolves it through
+/// <see cref="Get"/> when its accessor is one of these, and refuses a map id
+/// when it isn't (the host has one map).
+/// </remarks>
+public interface IMapCapabilityAccessor<out TCapability> : ICapabilityAccessor<TCapability>
+    where TCapability : class
+{
+    /// <summary>The ids of the host's maps.</summary>
+    IReadOnlyList<string> Maps { get; }
+
+    /// <summary>
+    /// The capability of the map with id <paramref name="map"/>, or
+    /// <see langword="null"/> when there is no such map or it isn't available yet.
+    /// </summary>
+    /// <param name="map">A map id from <see cref="Maps"/>.</param>
+    /// <returns>The capability, or <see langword="null"/>.</returns>
+    TCapability? Get(string map);
+}

@@ -139,6 +139,46 @@ public class RenderToImageToolTests
             AssertErr(await tool.InvokeAsync(new RenderToImageRequest(), TestContext.Current.CancellationToken)));
     }
 
+    [Fact]
+    public async Task A_map_id_renders_that_map_of_a_host_with_several()
+    {
+        var first = new FakeRenderer(FakePng);
+        var second = new FakeRenderer(FakePng);
+        var tool = new RenderToImageTool(new TwoMaps(first, second));
+
+        AssertOk(await tool.InvokeAsync(new RenderToImageRequest(200, 100, Map: "map-2"), TestContext.Current.CancellationToken));
+        Assert.Null(first.LastCall);
+        Assert.Equal((200, 100, 1.0), second.LastCall);
+
+        // No map: the active (current) one.
+        AssertOk(await tool.InvokeAsync(new RenderToImageRequest(200, 100), TestContext.Current.CancellationToken));
+        Assert.NotNull(first.LastCall);
+
+        var unknown = Assert.IsType<MapNotFound>(
+            AssertErr(await tool.InvokeAsync(new RenderToImageRequest(Map: "map-3"), TestContext.Current.CancellationToken)));
+        Assert.Equal(["map-1", "map-2"], unknown.Maps);
+    }
+
+    [Fact]
+    public async Task A_map_id_is_refused_by_a_host_with_one_map()
+    {
+        var tool = new RenderToImageTool(Accessor(new FakeRenderer(FakePng)));
+
+        var error = Assert.IsType<MapNotFound>(
+            AssertErr(await tool.InvokeAsync(new RenderToImageRequest(Map: "map-1"), TestContext.Current.CancellationToken)));
+        Assert.Equal("map_not_found", error.Code);
+        Assert.Empty(error.Maps);
+    }
+
+    private sealed class TwoMaps(IImageRenderer first, IImageRenderer second) : IMapCapabilityAccessor<IImageRenderer>
+    {
+        public IImageRenderer? Current => first;
+
+        public IReadOnlyList<string> Maps => ["map-1", "map-2"];
+
+        public IImageRenderer? Get(string map) => map switch { "map-1" => first, "map-2" => second, _ => null };
+    }
+
     private static ICapabilityAccessor<IImageRenderer> Accessor(IImageRenderer r)
         => new StaticCapabilityAccessor<IImageRenderer>(r);
 

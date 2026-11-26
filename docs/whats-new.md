@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Drive split maps over MCP.** New tools split the map
+  (`set_split_map`), list the maps with their views (`list_maps`), make one
+  active (`set_active_map`), link their views (`set_map_link`) and name a
+  pane (`set_map_name`). `set_viewport`, `fling`, `pick_features`,
+  `render_to_image`, `identify_features`, `await_settled`,
+  `await_render_idle` and `get_render_stats` take a `map` id to act on a map
+  other than the active one, so an agent can wait for one pane to settle.
+  Picks report `shownIn`: which maps show the picked feature, and why not
+  ([#1735](https://github.com/philliphoff/EncDotNet.S100/issues/1735)).
+
 - **Convert an ArcGIS Maritime NIS to S-57.** `s100 nis convert` reads an
   Esri ArcGIS Maritime S-57 Nautical Information System from a file
   geodatabase, with a managed reader that needs no Esri software, and writes

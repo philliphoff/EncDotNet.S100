@@ -20,7 +20,8 @@ internal static class AwaitRenderIdleMcpAdapter
         "settled view instead of racing the render pass. Measures the on-screen map paint " +
         "loop (not the offscreen render_to_image clone) and always waits at least the quiet " +
         "period. Returns whether the map went idle, how long it waited, and how many paints " +
-        "completed while waiting.";
+        "completed while waiting. With the map split it waits for every map, or only for the map " +
+        "named by 'map'.";
 
     public static McpServerTool Create(AwaitRenderIdleTool inner)
     {
@@ -28,8 +29,9 @@ internal static class AwaitRenderIdleMcpAdapter
         var del = (
             [Description("Continuous inactivity (ms) that qualifies as idle; also the minimum time the call waits. Null defaults to 250. Clamped to [0, 10000].")] int? quietPeriodMs = null,
             [Description("Maximum total time to wait (ms). Null defaults to 5000. Clamped to [50, 120000].")] int? timeoutMs = null,
+            [Description("With the map split: the map to wait for (an id from list_maps, such as 'map-2'); only its paints, refreshes and busy layers count. Omit to wait for every map.")] string? map = null,
             CancellationToken ct = default) =>
-            DispatchAsync(() => inner.InvokeAsync(new AwaitRenderIdleRequest(quietPeriodMs, timeoutMs), ct));
+            DispatchAsync(() => inner.InvokeAsync(new AwaitRenderIdleRequest(quietPeriodMs, timeoutMs, map), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -57,7 +59,8 @@ internal static class AwaitRenderIdleMcpAdapter
         {
             var payload = new JsonObject
             {
-                ["wentIdle"] = value!.WentIdle,
+                ["map"] = value!.Map,
+                ["wentIdle"] = value.WentIdle,
                 ["timedOut"] = value.TimedOut,
                 ["waitedMs"] = value.WaitedMs,
                 ["paintsObserved"] = value.PaintsObserved,
