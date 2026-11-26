@@ -166,8 +166,8 @@ public class FeatureSearchServiceTests
 
         private readonly Action<IDatasetProcessor, int, string> _openAt;
         public RecordingPick(Action<IDatasetProcessor, int, string> openAt) { _openAt = openAt; }
-        public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
-        public void PresentGeographicPick(double latitude, double longitude, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.Services.GeographicPickFeature> features) { }
+        public System.Threading.Tasks.Task HandlePickAsync(EncDotNet.S100.Viewer.Services.MapViewId map, Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
+        public void PresentGeographicPick(double latitude, double longitude, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.Services.GeographicPickFeature> features, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit> overlayHits, EncDotNet.S100.Viewer.Services.MapViewId? map) { }
         public bool NavigateToReference(FeatureReference reference) => false;
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;
         public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName)

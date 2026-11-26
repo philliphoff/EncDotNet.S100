@@ -226,6 +226,25 @@ public sealed class SplitMapMcpToolsTests
     }
 
     [Fact]
+    public async Task Pick_features_with_select_in_a_map_that_isnt_active_shows_the_pick_at_that_map()
+    {
+        // #1763: Object Information reports at the map picked in, which the
+        // call doesn't activate.
+        await using var f = await StartAsync(catalog: WarningCatalog());
+        DrawWarnings(f.Map("map-1"));
+        f.Map("map-1").Notifier.Publish(Viewport(0, 0));
+        f.Map("map-1").Host.ScreenPoint = new GeoPosition(0, 0);
+
+        var pick = Json(await f.CallAsync("pick_features", Args(("x", 400.0), ("y", 300.0), ("map", "map-1"), ("select", true)), Ct));
+
+        Assert.True(pick["selected"]!.GetValue<bool>());
+        var presented = Assert.Single(f.Presenter.Presented);
+        Assert.Equal(new MapViewId("map-1"), presented.Map);
+        Assert.Equal("W1", presented.Features[0].FeatureRef);
+        Assert.Same(f.Map("map-2"), f.Views.Active);
+    }
+
+    [Fact]
     public async Task Await_settled_waits_for_the_named_map_only()
     {
         await using var f = await StartAsync();

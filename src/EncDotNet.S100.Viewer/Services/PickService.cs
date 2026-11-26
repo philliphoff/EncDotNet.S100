@@ -77,7 +77,8 @@ internal sealed class PickService : IPickService
 
     private void Publish(PickResult result) => Picked?.Invoke(this, result);
 
-    public async Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? overlayHits = null)
+    /// <inheritdoc />
+    public async Task HandlePickAsync(MapViewId map, MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? overlayHits = null)
     {
         using var __cmd = ViewerObservability.BeginCommand("pick");
 
@@ -87,7 +88,7 @@ internal sealed class PickService : IPickService
         {
             // Even without a position a pick may still carry overlay hits;
             // honour them if present, otherwise clear.
-            Publish(new PickResult(overlay));
+            Publish(new PickResult(overlay, Map: map));
             return;
         }
 
@@ -108,7 +109,7 @@ internal sealed class PickService : IPickService
             if (coverageHit is not null)
             {
                 PickHit[] coverageHits = [coverageHit];
-                Publish(new PickResult(coverageHits, location, BuildLocationDepth(coverageHits, lat, lon)));
+                Publish(new PickResult(coverageHits, location, BuildLocationDepth(coverageHits, lat, lon), map));
                 return;
             }
 
@@ -120,7 +121,7 @@ internal sealed class PickService : IPickService
 
         // Data source design note P5: an overlay source's hit (own-ship) is
         // drawn on top, so it comes first.
-        Publish(new PickResult([.. overlay, .. hits], location, BuildLocationDepth(hits, lat, lon)));
+        Publish(new PickResult([.. overlay, .. hits], location, BuildLocationDepth(hits, lat, lon), map));
     }
 
     /// <inheritdoc />
@@ -151,25 +152,17 @@ internal sealed class PickService : IPickService
     /// <summary>The on-screen pick tolerance, in DIP, around the click.</summary>
     internal const double PickTolerancePx = 6.0;
 
-    /// <summary>
-    /// Publishes a pre-resolved geographic pick (the MCP <c>pick_features</c>
-    /// path). Each feature is re-queried against its owning dataset's
-    /// processor so the panel shows full FC-decoded attributes; entries that
-    /// no longer resolve are skipped. The pick highlight follows because it
-    /// observes Object Information, which shows the result.
-    /// </summary>
-    public void PresentGeographicPick(
-        double latitude,
-        double longitude,
-        IReadOnlyList<GeographicPickFeature> features) =>
-        PresentGeographicPick(latitude, longitude, features, []);
-
     /// <inheritdoc />
+    /// <remarks>
+    /// The pick highlight follows because it observes Object Information,
+    /// which shows the result.
+    /// </remarks>
     public void PresentGeographicPick(
         double latitude,
         double longitude,
         IReadOnlyList<GeographicPickFeature> features,
-        IReadOnlyList<PickHit> overlayHits)
+        IReadOnlyList<PickHit> overlayHits,
+        MapViewId? map)
     {
         ArgumentNullException.ThrowIfNull(features);
         ArgumentNullException.ThrowIfNull(overlayHits);
@@ -200,7 +193,7 @@ internal sealed class PickService : IPickService
             return;
         }
 
-        Publish(new PickResult([.. overlayHits, .. hits], new PickLocation(latitude, longitude), BuildLocationDepth(hits, latitude, longitude)));
+        Publish(new PickResult([.. overlayHits, .. hits], new PickLocation(latitude, longitude), BuildLocationDepth(hits, latitude, longitude), map));
     }
 
     private bool TryResolveProcessorByDisplayName(

@@ -9,8 +9,11 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <summary>
 /// Fills Object information's "Shown in" chips and "Other maps" rows while
 /// the map is split (split map design note D11, #1733). The report itself is
-/// at the picked map's time: a pick reads the active map's session, and the
-/// map clicked in became active first (D4).
+/// at the picked map's time. The picked map is the one the pick names
+/// (<see cref="PickReportViewModel.PickedMap"/>, #1763), which need not be
+/// active: an MCP <c>pick_features</c> with <c>select</c> and a <c>map</c>
+/// doesn't activate it. A pick that names no map is reported at the map
+/// active when it was made.
 /// </summary>
 internal sealed class PickMapPresencePresenter : IDisposable
 {
@@ -50,9 +53,9 @@ internal sealed class PickMapPresencePresenter : IDisposable
     {
         switch (e.PropertyName)
         {
-            case nameof(PickReportViewModel.Location):
-                // A new pick: it was made in the active map.
-                _pickedView = _report.HasPick ? _split.Views.Active : null;
+            case nameof(PickReportViewModel.Location) or nameof(PickReportViewModel.PickedMap):
+                // A new pick: the map it names, else the active map.
+                _pickedView = PickedView();
                 Update();
                 break;
             case nameof(PickReportViewModel.SelectedHit) or nameof(PickReportViewModel.HasPick):
@@ -60,6 +63,11 @@ internal sealed class PickMapPresencePresenter : IDisposable
                 break;
         }
     }
+
+    private IMapViewCapabilities? PickedView() =>
+        _report.PickedMap is { } map && _split.Views.Find(map.Value) is { } view
+            ? view
+            : _split.Views.Active;
 
     private void OnChanged(object? sender, EventArgs e) => Update();
 

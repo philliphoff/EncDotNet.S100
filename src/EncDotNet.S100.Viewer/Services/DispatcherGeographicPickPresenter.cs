@@ -39,7 +39,7 @@ internal sealed class DispatcherGeographicPickPresenter : IGeographicPickPresent
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<PickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features)
+    public IReadOnlyList<PickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features, MapViewId? map)
     {
         ArgumentNullException.ThrowIfNull(features);
         IReadOnlyList<PickHit> dynamicHits = [];
@@ -56,7 +56,7 @@ internal sealed class DispatcherGeographicPickPresenter : IGeographicPickPresent
 
         if (features.Count > 0 || dynamicHits.Count > 0)
         {
-            _marshal(() => _pickService.PresentGeographicPick(latitude, longitude, features, dynamicHits));
+            _marshal(() => _pickService.PresentGeographicPick(latitude, longitude, features, dynamicHits, map));
         }
 
         return dynamicHits;

@@ -9,14 +9,14 @@ public class DispatcherGeographicPickPresenterTests
     {
         public event EventHandler<PickResult>? Picked { add { } remove { } }
 
-        public (double Lat, double Lon, IReadOnlyList<GeographicPickFeature> Features)? Presented { get; private set; }
+        public (double Lat, double Lon, IReadOnlyList<GeographicPickFeature> Features, MapViewId? Map)? Presented { get; private set; }
 
         public void PresentGeographicPick(
-            double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features)
-            => Presented = (latitude, longitude, features);
+            double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features, IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit> overlayHits, MapViewId? map)
+            => Presented = (latitude, longitude, features, map);
 
         // Unused members for this test.
-        public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
+        public System.Threading.Tasks.Task HandlePickAsync(MapViewId map, Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
         public bool NavigateToReference(FeatureReference reference) => false;
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;
         public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName) => false;
@@ -34,12 +34,14 @@ public class DispatcherGeographicPickPresenterTests
             resolution: () => null);
 
         var features = new[] { new GeographicPickFeature("test.gml", "1") };
-        _ = presenter.Present(47.6, -122.3, features);
+        _ = presenter.Present(47.6, -122.3, features, new MapViewId("map-2"));
 
         Assert.True(marshalled);
         Assert.NotNull(pickService.Presented);
         Assert.Equal(47.6, pickService.Presented!.Value.Lat, 6);
         Assert.Equal(-122.3, pickService.Presented!.Value.Lon, 6);
         Assert.Same(features, pickService.Presented!.Value.Features);
+        // The map picked in travels with the pick (#1763).
+        Assert.Equal(new MapViewId("map-2"), pickService.Presented!.Value.Map);
     }
 }

@@ -19,12 +19,12 @@ internal sealed class StubPickService : IPickService
     /// <summary>Publishes <paramref name="result"/> as a pick would.</summary>
     public void Publish(PickResult result) => Picked?.Invoke(this, result);
 
-    public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
+    public System.Threading.Tasks.Task HandlePickAsync(EncDotNet.S100.Viewer.Services.MapViewId map, Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
 
     public void PresentGeographicPick(
         double latitude,
         double longitude,
-        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.Services.GeographicPickFeature> features)
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.Services.GeographicPickFeature> features, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit> overlayHits, EncDotNet.S100.Viewer.Services.MapViewId? map)
     { }
 
     public bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference) => false;

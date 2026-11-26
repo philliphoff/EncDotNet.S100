@@ -33,6 +33,10 @@ internal interface IGeographicPickPresenter
     /// <param name="latitude">Pick latitude in WGS-84 decimal degrees.</param>
     /// <param name="longitude">Pick longitude in WGS-84 decimal degrees.</param>
     /// <param name="features">Resolved features under the pick, most-specific first.</param>
+    /// <param name="map">
+    /// The map picked in, which Object Information reports at (split map
+    /// design note D11, #1763), or <see langword="null"/> for the active map.
+    /// </param>
     /// <returns>The overlay sources' features at the point (own-ship), shown with them; nothing is shown when both are empty.</returns>
-    IReadOnlyList<ViewModels.PickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features);
+    IReadOnlyList<ViewModels.PickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features, MapViewId? map);
 }

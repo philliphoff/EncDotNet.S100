@@ -196,7 +196,11 @@ internal sealed class PickFeaturesTool
                 refs[i] = new GeographicPickFeature(match.DatasetId.Value, match.FeatureId);
             }
 
-            var dynamicHits = _presenter.Present(value.Point.Latitude, value.Point.Longitude, refs);
+            // Object Information reports at the map picked in, not the
+            // active one (D11, #1763). The identify above has already
+            // refused an unknown map.
+            MapViewId? map = request.Map is { Length: > 0 } id ? new MapViewId(id) : null;
+            var dynamicHits = _presenter.Present(value.Point.Latitude, value.Point.Longitude, refs, map);
             dynamicFeatures = [.. dynamicHits.Select(h => new PickDynamicFeature(h.FeatureType, h.FeatureRef, h.FeatureTypeName ?? h.FeatureType))];
             selected = refs.Length > 0 || dynamicHits.Count > 0;
         }

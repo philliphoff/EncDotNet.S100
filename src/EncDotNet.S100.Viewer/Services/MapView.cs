@@ -334,6 +334,7 @@ internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IMapView
             loader,
             services.GetService<DynamicSources.IDynamicSourcePickService>())
         {
+            Map = Id,
             DepthBasis = services.GetService<DepthBasisService>(),
             Viewport = Host,
             IsStatusMap = () => split.StatusFocus.IsCurrent(this),

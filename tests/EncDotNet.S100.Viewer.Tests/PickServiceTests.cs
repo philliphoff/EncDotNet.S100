@@ -56,8 +56,8 @@ public class PickServiceTests
         }
 
         public event EventHandler<PickResult>? Picked;
-        public Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? dynamicHits = null) => Inner.HandlePickAsync(worldPosition, resolution, dynamicHits);
-        public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) => Inner.PresentGeographicPick(latitude, longitude, features);
+        public Task HandlePickAsync(EncDotNet.S100.Viewer.Services.MapViewId map, MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? dynamicHits = null) => Inner.HandlePickAsync(map, worldPosition, resolution, dynamicHits);
+        public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit> overlayHits, EncDotNet.S100.Viewer.Services.MapViewId? map) => Inner.PresentGeographicPick(latitude, longitude, features, overlayHits, map);
         public bool NavigateToReference(FeatureReference reference) => Inner.NavigateToReference(reference);
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => Inner.OpenFeature(processor, featureRef, datasetFileName);
         public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName) => Inner.OpenFeatureAt(processor, ordinal, datasetFileName);
@@ -136,7 +136,7 @@ public class PickServiceTests
         Assert.True(viewModel.PickReport.HasPick);
 
         var service = CreatePickService(new StubLoader(), viewModel);
-        await service.HandlePickAsync(null, 1.0);
+        await service.HandlePickAsync(new MapViewId("map-1"), null, 1.0);
 
         Assert.False(viewModel.PickReport.HasPick);
     }
@@ -147,7 +147,7 @@ public class PickServiceTests
         var viewModel = CreateMainViewModel();
         var service = CreatePickService(new StubLoader(), viewModel);
 
-        await service.HandlePickAsync(null, 1.0);
+        await service.HandlePickAsync(new MapViewId("map-1"), null, 1.0);
 
         Assert.False(viewModel.PickReport.HasPick);
     }
@@ -243,7 +243,7 @@ public class PickServiceTests
         }
 
         loader.Picks = picks;
-        return service.HandlePickAsync(new MPoint(0, 0), 1.0);
+        return service.HandlePickAsync(new MapViewId("map-1"), new MPoint(0, 0), 1.0);
     }
 
     [Fact]
@@ -672,7 +672,9 @@ public class PickServiceTests
         // DisplayName is the file name (Path.GetFileName) of the entry.
         service.PresentGeographicPick(
             47.6, -122.3,
-            new[] { new GeographicPickFeature(entry.DisplayName, "1") });
+            new[] { new GeographicPickFeature(entry.DisplayName, "1") },
+            [],
+            new MapViewId("map-2"));
 
         Assert.True(viewModel.PickReport.HasPick);
         Assert.Single(viewModel.PickReport.Hits);
@@ -680,6 +682,8 @@ public class PickServiceTests
         Assert.True(viewModel.PickReport.HasLocation);
         Assert.Equal(47.6, viewModel.PickReport.Location!.Value.Latitude, 6);
         Assert.Equal(-122.3, viewModel.PickReport.Location!.Value.Longitude, 6);
+        // Reported at the map picked in, not the active one (#1763).
+        Assert.Equal(new MapViewId("map-2"), viewModel.PickReport.PickedMap);
     }
 
     [Fact]
@@ -702,7 +706,9 @@ public class PickServiceTests
         // Unknown feature ref → nothing resolves → pick cleared.
         service.PresentGeographicPick(
             47.6, -122.3,
-            new[] { new GeographicPickFeature(entry.DisplayName, "missing") });
+            new[] { new GeographicPickFeature(entry.DisplayName, "missing") },
+            [],
+            map: null);
 
         Assert.False(viewModel.PickReport.HasPick);
     }

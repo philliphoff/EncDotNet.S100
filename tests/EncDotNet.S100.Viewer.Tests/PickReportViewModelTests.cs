@@ -662,8 +662,8 @@ public class PickReportViewModelTests
     {
         public event Action<FeatureReference>? Navigated;
         public event EventHandler<PickResult>? Picked { add { } remove { } }
-        public Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? dynamicHits = null) => Task.CompletedTask;
-        public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) { }
+        public Task HandlePickAsync(EncDotNet.S100.Viewer.Services.MapViewId map, Mapsui.MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? dynamicHits = null) => Task.CompletedTask;
+        public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit> overlayHits, EncDotNet.S100.Viewer.Services.MapViewId? map) { }
         public bool NavigateToReference(FeatureReference reference)
         {
             Navigated?.Invoke(reference);

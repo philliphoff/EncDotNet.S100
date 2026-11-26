@@ -42,6 +42,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private IReadOnlyList<object> _sections = [];
     private IReadOnlyList<PickActionViewModel> _actions = [];
     private PickLocation? _location;
+    private MapViewId? _pickedMap;
     private DepthOverTimeViewModel? _locationDepth;
     private string _chartBasisLine = string.Empty;
     private Services.Legends.LegendService? _legend;
@@ -478,6 +479,17 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public bool HasDatasetPick => Hits.Count > 0;
 
     /// <summary>
+    /// The map the current pick was made in (<see cref="PickResult.Map"/>),
+    /// or <see langword="null"/> for a pick made in no map in particular,
+    /// which is reported at the active map (split map design note D11, #1763).
+    /// </summary>
+    public MapViewId? PickedMap
+    {
+        get => _pickedMap;
+        private set => SetProperty(ref _pickedMap, value);
+    }
+
+    /// <summary>
     /// Geographic location (WGS84) of the click that produced the current
     /// pick, or <c>null</c> when the pick carries no location (e.g. a
     /// programmatic open via feature search). Set by the pick service from
@@ -857,6 +869,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             return;
         }
 
+        // Before Location, so a pick's map is known when its location is.
+        PickedMap = result.Map;
         Location = result.Location;
         LocationDepthSeries = BuildDepthCard(result);
         var hadPick = _hasPick;
@@ -978,6 +992,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         _sections = [];
         _actions = [];
         _stationChart = null;
+        PickedMap = null;
         Location = null;
         LocationDepthSeries = null;
         HasPick = false;
