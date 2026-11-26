@@ -1,7 +1,7 @@
 # Dual map, step 2: a dataset subset per pane
 
-> Status: **Draft**, round 1 (2026-11-26). The slice plan in §4 waits for
-> the user's approval; no issues are filed yet.
+> Status: **Accepted** (2026-11-26). The user approved the slice plan in
+> §4 and resolved Q1–Q6 (§5) with the recommendations.
 
 Step 1 split the map into panes that each have their own viewport and
 show the same datasets at the same time
@@ -124,7 +124,7 @@ all give today's answer, so the change can ship before anything else.
 Everything else stays global, for every pane: `IsActive`, `Opacity`, the
 sub-layer switches, `IsHiddenByDisplay`, `ViewingGroups`,
 `HiddenFeatures` and `PortrayalTime` (D26; step 3 makes the last two per
-map). See question Q3.
+map). Q3 confirmed this.
 
 The entry knows map ids but not maps. A small `MapDatasetVisibility`
 service follows `MapViews`:
@@ -184,7 +184,7 @@ header's chips (§2.6).
 
 The other choice is to show it only in the active pane, which suits a
 comparison already set up but makes a fresh load look as if it failed in
-the other pane. See Q1.
+the other pane. Q1 chose every pane.
 
 ### 2.4 Order and the Layer stack
 
@@ -326,7 +326,9 @@ disjoint case before anyone changes the budget.
 ## 4. Slices for step 2
 
 Each slice ships on its own and keeps the viewer working with one pane
-and with a split.
+and with a split. The epic is #1765. The slices are #1763 (0a), #1761
+(0b), and #1766, #1767, #1768, #1769, #1770, #1771, #1773 and #1772 for
+slices 1 to 8.
 
 0. **Prerequisites from step 1.**
    - **0a. Carry the picked map to the presenter** (#1763). *Done when*
@@ -393,23 +395,20 @@ can run in parallel. Slice 7 needs slice 2, and slice 8 needs slice 7.
 #1762 (the `set_viewport` result) isn't needed for step 2 and can run at
 any time.
 
-## 5. Open questions
+## 5. Resolved questions
 
-These need the user's answer before the slices are filed. Each has a
-recommendation.
+Answered by the user on 2026-11-26, who approved the slice plan in §4 and
+took the recommendation on each question.
 
-- **Q1. A dataset loaded while split.** Shown in every pane
-  (recommended, §2.3), or only in the active pane?
-- **Q2. The exchange-set header.** Chips that act on all the set's cells
-  in one pane (recommended), or one eye that acts on every pane?
-- **Q3. What else is per pane.** Only visibility (recommended). Opacity,
-  sub-layer switches (for example S-111 arrows) and the S-98 Active
-  toggle stay global. Should any of them be per pane in step 2?
-- **Q4. Received S-421 routes.** Keep one eye that switches Native and
-  Planning display for every pane (recommended), since routes are drawn
-  in every pane?
+- **Q1. A dataset loaded while split.** Shown in every pane, whichever is
+  active (§2.3).
+- **Q2. The exchange-set header.** Per-pane chips that act on all the
+  set's cells in that pane (§2.6).
+- **Q3. What else is per pane.** Only visibility. Opacity, the sub-layer
+  switches and the S-98 Active toggle stay global (§2.1).
+- **Q4. Received S-421 routes.** One eye that switches Native and Planning
+  display for every pane (§2.6).
 - **Q5. The header checklist with exchange sets.** One tri-state row per
-  exchange set, then the loose datasets (recommended), or every cell?
-- **Q6. `set_dataset_state` without `map`.** Every map, as the eye with
-  one pane (recommended), or the active map, as the other map tools
-  default (D4)?
+  exchange set, then the loose datasets (§2.6).
+- **Q6. `set_dataset_state` without `map`.** Applies to every map, as the
+  eye does with one pane (§2.7).
