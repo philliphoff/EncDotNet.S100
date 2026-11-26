@@ -467,4 +467,90 @@ public sealed class MapSplitViewModelTests
 
         Assert.All(f.Split.Panes, p => Assert.False(p.IsFolded));
     }
+
+    [Fact]
+    public void The_link_is_off_by_default_and_only_turns_on_while_split()
+    {
+        // D13: off by default; one map has nothing to link to.
+        var f = new Fixture();
+        f.Split.Restore(saved: null, restoreViews: true);
+
+        Assert.False(f.Split.IsLinked);
+        Assert.False(f.Split.ToggleLinkCommand.CanExecute(null));
+        f.Split.ToggleLink();
+        Assert.False(f.Split.IsLinked);
+
+        f.Split.OpenSplit();
+        Assert.True(f.Split.ToggleLinkCommand.CanExecute(null));
+        Assert.False(f.Split.IsLinked);
+    }
+
+    [Fact]
+    public void Any_header_chain_links_every_pane()
+    {
+        // D13: one link state for the window in step 1; each header reads "Linked".
+        var f = Split();
+        var changes = new List<string?>();
+        f.Split.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        f.Pane("map-1").ToggleLinkCommand.Execute(null);
+
+        Assert.True(f.Split.IsLinked);
+        Assert.Contains(nameof(MapSplitViewModel.IsLinked), changes);
+        Assert.All(f.Split.Panes, p =>
+        {
+            Assert.True(p.IsLinked);
+            Assert.Equal("Unlink views", p.LinkText);
+        });
+
+        f.Pane("map-2").ToggleLinkCommand.Execute(null);
+
+        Assert.False(f.Split.IsLinked);
+        Assert.All(f.Split.Panes, p =>
+        {
+            Assert.False(p.IsLinked);
+            Assert.Equal("Link views", p.LinkText);
+        });
+    }
+
+    [Fact]
+    public void A_pane_opened_while_linked_shows_the_link()
+    {
+        var f = Split();
+        f.Split.ToggleLinkCommand.Execute(null);
+
+        f.Split.OpenSplit();
+
+        Assert.True(f.Pane("map-3").IsLinked);
+    }
+
+    [Fact]
+    public void Turning_the_split_off_unlinks()
+    {
+        var f = Split();
+        f.Split.ToggleLink();
+
+        f.Split.CloseSplit();
+
+        Assert.False(f.Split.IsLinked);
+        Assert.False(f.Pane("map-2").IsLinked);
+        f.Split.OpenSplit();
+        Assert.False(f.Split.IsLinked);
+    }
+
+    [Fact]
+    public void The_link_isnt_saved_with_the_layout()
+    {
+        // D2 restores the split and the views; the link starts off (D13).
+        var f = Split();
+        f.Split.ToggleLink();
+        var layout = new MapLayoutSettings();
+
+        f.Split.WriteTo(layout);
+        var restored = new Fixture();
+        restored.Split.Restore(layout, restoreViews: true);
+
+        Assert.True(restored.Split.IsSplit);
+        Assert.False(restored.Split.IsLinked);
+    }
 }

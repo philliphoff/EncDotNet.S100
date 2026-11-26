@@ -234,6 +234,12 @@
                                       IsChecked="{Binding IsSplit, Mode=OneWay}"
                                       Command="{Binding ToggleSplitCommand}"
                                       InputGesture="{OnPlatform Ctrl+OemPipe, macOS=Cmd+OemPipe}" />
+                            <MenuItem Header="{x:Static loc:Strings.SplitMap_LinkViews}"
+                                      AutomationProperties.AutomationId="MainWindow.SplitMapMenu.Link"
+                                      ToggleType="CheckBox"
+                                      IsChecked="{Binding IsLinked, Mode=OneWay}"
+                                      Command="{Binding ToggleLinkCommand}"
+                                      InputGesture="{OnPlatform Ctrl+Shift+OemPipe, macOS=Cmd+Shift+OemPipe}" />
                             <MenuItem Header="{x:Static loc:Strings.SplitMap_CloseOthers}"
                                       AutomationProperties.AutomationId="MainWindow.SplitMapMenu.CloseOthers"
                                       Command="{Binding CloseOtherMapsCommand}" />

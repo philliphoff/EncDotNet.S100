@@ -163,9 +163,19 @@ internal sealed class NativeMenuBuilder
             checkedSelector: () => split.IsSplit,
             gesture: new KeyGesture(Key.OemPipe, KeyModifiers.Meta));
 
+        // View › Link Map Views (⌘⇧\), D13.
+        var linkMapViewsItem = BuildToggleItem(
+            Strings.Menu_LinkMapViews,
+            split,
+            initiallyChecked: split.IsLinked,
+            execute: () => split.ToggleLinkCommand.Execute(null),
+            propertyName: nameof(MapSplitViewModel.IsLinked),
+            checkedSelector: () => split.IsLinked,
+            gesture: new KeyGesture(Key.OemPipe, KeyModifiers.Meta | KeyModifiers.Shift));
+
         var viewMenu = new NativeMenuItem(Strings.Menu_View)
         {
-            Menu = new NativeMenu { appearanceMenu, splitMapItem },
+            Menu = new NativeMenu { appearanceMenu, splitMapItem, linkMapViewsItem },
         };
 
         var fileMenu = BuildFileMenu();

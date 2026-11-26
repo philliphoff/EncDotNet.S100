@@ -55,6 +55,7 @@ public partial class MapPane : UserControl
         AutomationProperties.SetAutomationId(this, prefix);
         AutomationProperties.SetAutomationId(Header, $"{prefix}.Header");
         AutomationProperties.SetAutomationId(CloseButton, $"{prefix}.Close");
+        AutomationProperties.SetAutomationId(LinkButton, $"{prefix}.Link");
         AutomationProperties.SetAutomationId(FoldStrip, $"{prefix}.FoldStrip");
     }
 

@@ -24,4 +24,14 @@ internal static partial class Strings
     public static string SplitMap_FoldedStripFormat => Get(nameof(SplitMap_FoldedStripFormat));
 
     public static string SplitMap_UnfoldFormat => Get(nameof(SplitMap_UnfoldFormat));
+
+    public static string SplitMap_Link => Get(nameof(SplitMap_Link));
+
+    public static string SplitMap_Unlink => Get(nameof(SplitMap_Unlink));
+
+    public static string SplitMap_Linked => Get(nameof(SplitMap_Linked));
+
+    public static string SplitMap_LinkViews => Get(nameof(SplitMap_LinkViews));
+
+    public static string Menu_LinkMapViews => Get(nameof(Menu_LinkMapViews));
 }
