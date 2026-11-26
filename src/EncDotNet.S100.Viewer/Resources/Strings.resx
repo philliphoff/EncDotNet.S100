@@ -10614,4 +10614,24 @@
     <value>Show {0}</value>
     <comment>Tooltip and name of a folded pane strip, e.g. Show Map 1</comment>
   </data>
+  <data name="SplitMap_Link" xml:space="preserve">
+    <value>Link views</value>
+    <comment>Tooltip and name of a pane header's chain while unlinked (D13)</comment>
+  </data>
+  <data name="SplitMap_Unlink" xml:space="preserve">
+    <value>Unlink views</value>
+    <comment>Tooltip and name of a pane header's chain while linked (D13)</comment>
+  </data>
+  <data name="SplitMap_Linked" xml:space="preserve">
+    <value>Linked</value>
+    <comment>Shown beside the chain in each pane header while the views are linked (D13)</comment>
+  </data>
+  <data name="SplitMap_LinkViews" xml:space="preserve">
+    <value>Link views</value>
+    <comment>Split menu item: links the panes' views, keeping their centre and scale ratio (D13, D14)</comment>
+  </data>
+  <data name="Menu_LinkMapViews" xml:space="preserve">
+    <value>Link Map Views</value>
+    <comment>View › Link Map Views (⌘⇧\) (D1, D13)</comment>
+  </data>
 </root>

@@ -235,6 +235,12 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
             Gesture = new KeyGesture(Key.OemPipe, KeyModifiers.Control),
             Command = _split.ToggleSplitCommand,
         });
+        // View › Link Map Views: ⌘⇧\ on macOS, Ctrl+Shift+\ elsewhere (D13).
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.OemPipe, KeyModifiers.Control | KeyModifiers.Shift),
+            Command = _split.ToggleLinkCommand,
+        });
 
         // Let the feedback reporter capture the whole application window.
         App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;

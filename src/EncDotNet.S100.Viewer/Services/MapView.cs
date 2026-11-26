@@ -33,7 +33,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// overlays are attached, in the order the window always used: construct
 /// (host only), then <see cref="Attach"/>.
 /// </remarks>
-internal sealed class MapView : IMapViewCapabilities, IDisposable
+internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IDisposable
 {
     /// <summary>Within this many pixels of the checked route, the pointer moves the profile cursor.</summary>
     private const double CheckHoverRadiusPx = 12;
@@ -68,6 +68,8 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     private MapToolContext? _toolContext;
     private ToolOverlayController? _toolOverlay;
     private SplitMapOverlayController? _splitOverlay;
+    private Navigator? _linkNavigator;
+    private Navigator.ViewportChangedEventHandler? _linkViewportChanged;
     private bool _disposed;
 
     /// <summary>
@@ -114,7 +116,13 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         // synchronously in its constructor. See
         // docs/design/ais-zoom-gated-subscription.md.
         if (pane.MapControl.Map?.Navigator is { } navigator)
+        {
             _viewport.Bind(navigator);
+            // The viewport link (#1734) follows this map's view frame by frame.
+            _linkNavigator = navigator;
+            _linkViewportChanged = (_, _) => ViewChanged?.Invoke(this, EventArgs.Empty);
+            navigator.ViewportChanged += _linkViewportChanged;
+        }
     }
 
     /// <summary>The view's stable id.</summary>
@@ -143,6 +151,19 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
 
     /// <inheritdoc />
     public IMapDatasetSession DatasetSession { get; }
+
+    /// <inheritdoc />
+    public EncDotNet.S100.Rendering.Engine.ViewState? CurrentView =>
+        _linkNavigator?.Viewport is { Width: > 0, Height: > 0, Resolution: > 0 } viewport
+            ? EncDotNet.S100.Renderers.Mapsui.MapsuiChartLayers.ToViewState(viewport)
+            : null;
+
+    /// <inheritdoc />
+    public event EventHandler? ViewChanged;
+
+    /// <inheritdoc />
+    public void ShowView(double centerX, double centerY, double resolution) =>
+        Host.SetViewportToCenterAndResolution(new MPoint(centerX, centerY), resolution);
 
     /// <summary>
     /// The render-activity monitor fed by this map, or <see langword="null"/>
@@ -775,6 +796,11 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             return;
         _disposed = true;
         var services = _services;
+
+        if (_linkNavigator is not null && _linkViewportChanged is not null)
+            _linkNavigator.ViewportChanged -= _linkViewportChanged;
+        _linkNavigator = null;
+        _linkViewportChanged = null;
 
         _validationOverlay?.Dispose();
         _validationOverlay = null;
