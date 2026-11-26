@@ -19,14 +19,12 @@ internal sealed class MapToolsViewModel : ViewModelBase
     private readonly RangeBearingTool _rangeBearingTool;
 
     public MapToolsViewModel(
-        IMeasureOverlayAppearanceProvider measureAppearance,
         MeasureSession measure,
         MeasureCardViewModel measureCard,
         RangeBearingState rangeBearing,
         RoutesService routes,
         ViewerSettingsService settings)
     {
-        ArgumentNullException.ThrowIfNull(measureAppearance);
         ArgumentNullException.ThrowIfNull(measure);
         ArgumentNullException.ThrowIfNull(measureCard);
         ArgumentNullException.ThrowIfNull(rangeBearing);
@@ -43,9 +41,9 @@ internal sealed class MapToolsViewModel : ViewModelBase
         _measure.ActivationRequested += (_, _) => Tools.Activate(MeasureTool.ToolId);
 
         Tools.Register(new PickTool());
-        Tools.Register(new MeasureTool(measureAppearance, _measure));
+        Tools.Register(new MeasureTool(_measure));
         Tools.Register(new RouteEditTool(_routes));
-        _rangeBearingTool = new RangeBearingTool(rangeBearing, measureAppearance, () => settings.DistanceUnit);
+        _rangeBearingTool = new RangeBearingTool(rangeBearing, () => settings.DistanceUnit);
         Tools.Register(_rangeBearingTool);
         RangeBearing = new RangeBearingViewModel(
             rangeBearing,
@@ -54,7 +52,7 @@ internal sealed class MapToolsViewModel : ViewModelBase
         settings.DistanceUnitChanged += _ =>
         {
             RangeBearing.OnUnitChanged();
-            _rangeBearingTool.InvalidateOverlay();
+            _rangeBearingTool.InvalidateSummary();
         };
         // The MCP tools turn the tool on through the shared state, as
         // set_route_edit_mode does through RoutesService.

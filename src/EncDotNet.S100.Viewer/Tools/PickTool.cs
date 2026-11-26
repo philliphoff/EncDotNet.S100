@@ -35,6 +35,8 @@ internal sealed class PickTool : IMapTool
 
     public void OnDeactivated() { }
 
+    public void OnContextChanged(MapToolContext context) { }
+
     public bool OnPointerPressed(PointerPressedEventArgs e) => false;
     public bool OnPointerMoved(PointerEventArgs e) => false;
     public bool OnPointerReleased(PointerReleasedEventArgs e) => false;

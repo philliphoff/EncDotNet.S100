@@ -1258,6 +1258,67 @@
                 </StackPanel>
             </Grid>
 
+            <!-- While split: which maps draw the feature (split map D11, #1733).
+                 A hidden chip selects the feature's dataset in Datasets. -->
+            <ItemsControl ItemsSource="{Binding ShownIn}"
+                          IsVisible="{Binding HasShownIn}"
+                          AutomationProperties.AutomationId="PickReport.ShownIn">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PickShownInChip">
+                        <Panel Margin="0,0,6,4">
+                            <Border IsVisible="{Binding IsShown}"
+                                    AutomationProperties.AutomationId="{Binding AutomationId}"
+                                    AutomationProperties.Name="{Binding Text}"
+                                    CornerRadius="10"
+                                    Padding="8,2"
+                                    Background="{DynamicResource AccentBrush}">
+                                <TextBlock Text="{Binding Text}"
+                                           FontSize="11"
+                                           Foreground="White" />
+                            </Border>
+                            <Button IsVisible="{Binding IsHidden}"
+                                    AutomationProperties.AutomationId="{Binding AutomationId}"
+                                    AutomationProperties.Name="{Binding Text}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.SplitMap_HiddenInTooltip}"
+                                    ToolTip.Tip="{x:Static loc:Strings.SplitMap_HiddenInTooltip}"
+                                    Command="{Binding Command}"
+                                    CornerRadius="10"
+                                    Padding="8,2"
+                                    MinHeight="0"
+                                    Background="Transparent"
+                                    BorderBrush="{DynamicResource BorderColor}"
+                                    BorderThickness="1">
+                                <TextBlock Text="{Binding Text}" FontSize="11" />
+                            </Button>
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Other maps of a split at their own times (D11, step 3). -->
+            <StackPanel Spacing="2"
+                        IsVisible="{Binding HasOtherMaps}"
+                        AutomationProperties.AutomationId="PickReport.OtherMaps">
+                <TextBlock Text="{x:Static loc:Strings.SplitMap_OtherMaps}"
+                           FontSize="10"
+                           LetterSpacing="1"
+                           Opacity="0.7" />
+                <ItemsControl ItemsSource="{Binding OtherMaps}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PickOtherMapRow">
+                            <TextBlock Text="{Binding Text}"
+                                       AutomationProperties.AutomationId="{Binding AutomationId}"
+                                       FontSize="12" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
             <!-- References list (xlink:href targets) -->
             <Border BorderBrush="{DynamicResource BorderColor}"
                     BorderThickness="0,1,0,0"

@@ -14,6 +14,8 @@ public class MapToolControllerTests
         public int DeactivationCount { get; private set; }
         public void OnActivated(MapToolContext ctx) => ActivationCount++;
         public void OnDeactivated() => DeactivationCount++;
+        public int ContextChangeCount { get; private set; }
+        public void OnContextChanged(MapToolContext ctx) => ContextChangeCount++;
         public bool OnPointerPressed(PointerPressedEventArgs e) => false;
         public bool OnPointerMoved(PointerEventArgs e) => false;
         public bool OnPointerReleased(PointerReleasedEventArgs e) => false;
@@ -101,12 +103,13 @@ public class MapToolControllerTests
     }
 
     private static MapToolContext Context() => new(
-        new Mapsui.UI.Avalonia.MapControl(), _ => { }, _ => { }, _ => { }, () => { }, _ => null, _ => null);
+        new Mapsui.UI.Avalonia.MapControl(), _ => { }, _ => null, _ => null);
 
     [AvaloniaFact]
     public void Initialize_with_another_maps_context_moves_the_active_tool_to_it()
     {
-        // Split map (#1732): the tools follow the active map.
+        // Split map (#1733, D12): the tool keeps its state and takes its
+        // input from the other map; it isn't switched off and on.
         var c = new MapToolController();
         var tool = new StubTool("a");
         c.Register(tool);
@@ -114,10 +117,13 @@ public class MapToolControllerTests
         c.Activate("a");
         Assert.Equal(1, tool.ActivationCount);
 
-        c.Initialize(Context());
+        var other = Context();
+        c.Initialize(other);
 
-        Assert.Equal(1, tool.DeactivationCount);
-        Assert.Equal(2, tool.ActivationCount);
+        Assert.Equal(0, tool.DeactivationCount);
+        Assert.Equal(1, tool.ActivationCount);
+        Assert.Equal(1, tool.ContextChangeCount);
+        Assert.Same(other, c.Context);
         Assert.Equal("a", c.ActiveToolId);
     }
 

@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Input;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Services;
-using Mapsui.Layers;
 using Mapsui.Projections;
 
 namespace EncDotNet.S100.Viewer.Tools;
@@ -35,24 +34,18 @@ internal sealed class MeasureTool : IMapTool
     private const double LabelCharWidthPx = 7.3;
 
     private readonly MeasureSession _session;
-    private readonly IMeasureOverlayAppearanceProvider _appearance;
     private MapToolContext? _context;
-    private MemoryLayer? _layer;
     private Point? _pressPosition;
     private bool _pressIsLeftButton;
 
     /// <summary>
-    /// Creates a measure tool that draws its overlay using the appearance
-    /// supplied by <paramref name="appearance"/>. The tool subscribes to
-    /// <see cref="IMeasureOverlayAppearanceProvider.Changed"/> while
-    /// active so accent/theme updates are reflected live, and
-    /// unsubscribes on deactivation.
+    /// Creates a measure tool over the shared <paramref name="session"/>.
+    /// Each map draws the path (<see cref="ToolOverlayController"/>), so a
+    /// measurement shows in every pane of a split (D12).
     /// </summary>
-    public MeasureTool(IMeasureOverlayAppearanceProvider appearance, MeasureSession session)
+    public MeasureTool(MeasureSession session)
     {
-        ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(session);
-        _appearance = appearance;
         _session = session;
     }
 
@@ -73,9 +66,6 @@ internal sealed class MeasureTool : IMapTool
     public void OnActivated(MapToolContext context)
     {
         _context = context;
-        _layer = MeasureOverlayLayer.Create();
-        context.AddLayer(_layer);
-        _appearance.Changed += OnAppearanceChanged;
         _session.Changed += OnSessionChanged;
         _session.PositionCommitted += OnPositionCommitted;
         _session.IsActive = true;
@@ -84,12 +74,8 @@ internal sealed class MeasureTool : IMapTool
 
     public void OnDeactivated()
     {
-        _appearance.Changed -= OnAppearanceChanged;
         _session.Changed -= OnSessionChanged;
         _session.PositionCommitted -= OnPositionCommitted;
-        if (_context is not null && _layer is not null)
-            _context.RemoveLayer(_layer);
-        _layer = null;
         _context?.SetStatusSummary(null);
         _context = null;
         _pressPosition = null;
@@ -98,12 +84,18 @@ internal sealed class MeasureTool : IMapTool
         _session.NotifyChanged();
     }
 
-    private void OnAppearanceChanged(object? sender, EventArgs e)
+    /// <summary>
+    /// The input moved to another map (D12): the path stays, so it can be
+    /// finished there.
+    /// </summary>
+    public void OnContextChanged(MapToolContext context)
     {
-        if (_layer is not null) Redraw();
+        _context = context;
+        _pressPosition = null;
+        _pressIsLeftButton = false;
     }
 
-    private void OnSessionChanged(object? sender, EventArgs e) => Redraw();
+    private void OnSessionChanged(object? sender, EventArgs e) => PushSummary();
 
     /// <summary>Pans, without zooming, to a typed position that's off screen (D7).</summary>
     private void OnPositionCommitted(object? sender, GeoPosition position)
@@ -255,11 +247,5 @@ internal sealed class MeasureTool : IMapTool
     /// <summary>Tells everyone sharing the session that the path changed.</summary>
     private void Refresh() => _session.NotifyChanged();
 
-    private void Redraw()
-    {
-        if (_layer is null || _context is null) return;
-        MeasureOverlayLayer.Update(_layer, State, _appearance.Current, _session.Unit);
-        _context.SetStatusSummary(State.FormatSummary(_session.Unit));
-        _context.RefreshGraphics();
-    }
+    private void PushSummary() => _context?.SetStatusSummary(State.FormatSummary(_session.Unit));
 }

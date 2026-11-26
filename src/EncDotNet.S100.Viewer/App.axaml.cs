@@ -2321,7 +2321,6 @@ public partial class App : Application
             sp.GetRequiredService<TimelineViewModel>(),
             UiThread.Post));
         services.AddSingleton(sp => new MapToolsViewModel(
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>(),

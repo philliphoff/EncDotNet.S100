@@ -52,6 +52,7 @@ internal sealed class PickHighlightController : IDisposable
     private readonly Action<Action> _marshal;
     private readonly MemoryLayer _layer;
     private readonly NavigationalWarningDrawingService? _warningDrawing;
+    private readonly Func<PickHit, string?>? _ghostReason;
     private bool _disposed;
 
     /// <summary>
@@ -74,6 +75,12 @@ internal sealed class PickHighlightController : IDisposable
     /// switch off, a warning's pick isn't highlighted either (#995).
     /// <see langword="null"/> always highlights.
     /// </param>
+    /// <param name="ghostReason">
+    /// Why this map shows a pick as a ghost (split map design note D10): the
+    /// tag text when the map doesn't draw the picked feature while another map
+    /// does, else <see langword="null"/>. <see langword="null"/> (one map)
+    /// never draws a ghost.
+    /// </param>
     public PickHighlightController(
         IMapLayerCollection layers,
         PickReportViewModel pickReport,
@@ -81,7 +88,8 @@ internal sealed class PickHighlightController : IDisposable
         IMeasureOverlayAppearanceProvider appearance,
         ViewerSettingsService settings,
         Action<Action> marshal,
-        NavigationalWarningDrawingService? warningDrawing)
+        NavigationalWarningDrawingService? warningDrawing,
+        Func<PickHit, string?>? ghostReason)
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -97,6 +105,7 @@ internal sealed class PickHighlightController : IDisposable
         _settings = settings;
         _marshal = marshal;
         _warningDrawing = warningDrawing;
+        _ghostReason = ghostReason;
 
         _layer = PickHighlightOverlayLayer.Create();
 
@@ -167,7 +176,10 @@ internal sealed class PickHighlightController : IDisposable
                 Points: Array.Empty<GeoPosition>());
         }
 
-        var state = new PickHighlightState(location, geometry);
+        // In a split, a map that doesn't draw the picked feature while another
+        // does draws a ghost with the reason (D10); every other map, the pick.
+        var ghost = !hidden && hit is not null ? _ghostReason?.Invoke(hit) : null;
+        var state = new PickHighlightState(location, geometry, ghost);
 
         // The marker's casing dims against a dark chart basemap. That is the
         // chart *palette* (Dusk/Night), not the application chrome theme — a
