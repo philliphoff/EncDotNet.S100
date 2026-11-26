@@ -594,6 +594,11 @@ the map stops shrinking; it stays a strip until you click it. Object information
 the map is split. The split and each map's view come back the next time you
 start SoundCharts.
 
+An agent can split, drive and link the maps over MCP: `list_maps`,
+`set_split_map`, `set_active_map`, `set_map_link` and `set_map_name`, and a
+`map` argument on the map tools. See the
+[MCP server](../../docs/mcp-server.md#split-map-tools) page.
+
 ### Basemap
 
 Choose the basemap in **Settings** > **Chart display** > **Basemap**:
@@ -2080,6 +2085,7 @@ running app:
 | `open_dataset`, `close_dataset`, `close_all_datasets` | Load a file or exchange set the same way the **File** menu does, and report its ID, bounding box and load time; unload datasets by ID. |
 | `create_route`, `list_routes`, `get_route`, `delete_route`, `append_waypoint`, `insert_waypoint`, `move_waypoint`, `delete_waypoint`, `set_leg_attributes`, `set_route_info`, `get_passage`, `set_passage`, `undo_route_edit`, `redo_route_edit`, `set_route_edit_mode`, `select_route_item`, `set_passage_card` | Build and edit routes, shown live in the **Routes** panel. Edits are undoable, with the viewer's own edits. |
 | `list_panels`, `set_panel` | List the dock panels and their state, and show or hide a panel by ID (such as `Datasets`, `LayerStack`, `PickReport` or `Timeline`). |
+| `list_maps`, `set_split_map`, `set_active_map`, `set_map_link`, `set_map_name` | Split the map, list the panes with their views, make one active, link their views and name them. The map tools take a `map` id to act on a pane other than the active one. |
 
 The [MCP server](../../docs/mcp-server.md) page has the full tool list, which
 tools change state, and an agent walkthrough.

@@ -222,6 +222,7 @@ internal sealed class MapSplitViewModel : ViewModelBase
                 : null;
             var opened = Open(new MapViewId(pane.Id), viewport, double.IsFinite(pane.Weight) && pane.Weight > 0 ? pane.Weight : 1);
             opened.IsCollapsed = split && pane.Folded;
+            opened.Name = pane.Name;
         }
 
         if (saved!.ActiveMap is { } activeId && Panes.FirstOrDefault(p => p.Id.Value == activeId) is { } active)
@@ -332,11 +333,33 @@ internal sealed class MapSplitViewModel : ViewModelBase
                 Id = p.Id.Value,
                 Weight = p.Weight,
                 Folded = p.IsCollapsed,
+                Name = p.Name,
                 CenterX = viewport?.CenterX,
                 CenterY = viewport?.CenterY,
                 Resolution = viewport?.Resolution,
             };
         })];
+    }
+
+    /// <summary>
+    /// Names a pane, as renaming it from its header does (D19): "S-57",
+    /// "Low water". A blank name goes back to the number ("Map 2").
+    /// </summary>
+    /// <param name="id">The pane's map id.</param>
+    /// <param name="name">The name, or <see langword="null"/> or blank for none.</param>
+    /// <returns>True when a pane has the id.</returns>
+    public bool SetName(MapViewId id, string? name)
+    {
+        if (Panes.FirstOrDefault(p => p.Id == id) is not { } pane)
+            return false;
+        var trimmed = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        if (pane.Name != trimmed)
+        {
+            pane.Name = trimmed;
+            _requestSave();
+        }
+
+        return true;
     }
 
     /// <summary>Tells the split a pane's share of the map area changed (a splitter drag).</summary>
@@ -435,6 +458,7 @@ internal sealed class MapPaneViewModel : ViewModelBase
 {
     private readonly MapSplitViewModel _split;
     private int _number = 1;
+    private string? _name;
     private bool _isActive;
     private bool _isFolded;
     private bool _isSplit;
@@ -472,6 +496,7 @@ internal sealed class MapPaneViewModel : ViewModelBase
             if (SetProperty(ref _number, value))
             {
                 OnPropertyChanged(nameof(Label));
+                OnPropertyChanged(nameof(Title));
                 OnPropertyChanged(nameof(CloseText));
                 OnPropertyChanged(nameof(FoldedText));
                 OnPropertyChanged(nameof(UnfoldText));
@@ -479,8 +504,25 @@ internal sealed class MapPaneViewModel : ViewModelBase
         }
     }
 
-    /// <summary>"Map 1", "Map 2": the label in headers, chips and the status bar.</summary>
+    /// <summary>"Map 1", "Map 2": the label in chips and the status bar, and the header's title until the pane is named.</summary>
     public string Label => string.Format(CultureInfo.CurrentCulture, Strings.SplitMap_PaneLabelFormat, Number);
+
+    /// <summary>
+    /// The name the user gave the pane ("S-57", "Low water"; D19), or
+    /// <see langword="null"/>. Saved with the layout.
+    /// </summary>
+    public string? Name
+    {
+        get => _name;
+        set
+        {
+            if (SetProperty(ref _name, string.IsNullOrWhiteSpace(value) ? null : value))
+                OnPropertyChanged(nameof(Title));
+        }
+    }
+
+    /// <summary>The header's title: the pane's name, or its label ("Map 2") when it has none.</summary>
+    public string Title => _name ?? Label;
 
     /// <summary>The close button's tooltip and name: "Close Map 2".</summary>
     public string CloseText => string.Format(CultureInfo.CurrentCulture, Strings.SplitMap_ClosePaneFormat, Label);

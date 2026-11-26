@@ -61,7 +61,9 @@ public static class S100McpTools
     /// </param>
     /// <param name="mapDrawState">
     /// What the host's map draws, so <c>identify_features</c> with no time
-    /// matches it, or <c>null</c> when the host has no map.
+    /// matches it, or <c>null</c> when the host has no map. An
+    /// <see cref="EncDotNet.S100.Hosting.IMapCapabilityAccessor{TCapability}"/>
+    /// (a host with several maps) lets the tool's <c>map</c> argument name one.
     /// </param>
     /// <returns>
     /// The tools in a stable order. Tool names are the <c>Name</c> constants on
@@ -69,7 +71,7 @@ public static class S100McpTools
     /// <c>list_datasets</c>, <c>describe_feature</c>, <c>sample</c>);
     /// host-supplied tools must not collide with them.
     /// </returns>
-    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null, RouteCheckSourceCache? routeCheckSources = null, IMapDrawState? mapDrawState = null)
+    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null, RouteCheckSourceCache? routeCheckSources = null, EncDotNet.S100.Hosting.ICapabilityAccessor<IMapDrawState>? mapDrawState = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var transforms = new ProjNetCrsTransformFactory();

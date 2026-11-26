@@ -30,7 +30,7 @@ public class PickFeaturesToolTests
         {
             Current = hostOverride ?? host,
         };
-        var tool = new PickFeaturesTool(accessor, new IdentifyFeaturesTool(new FakeCatalog()), presenter: null);
+        var tool = new PickFeaturesTool(accessor, new IdentifyFeaturesTool(new FakeCatalog()), presenter: null, new MapSplitControllerAccessor());
         return (tool, host, accessor);
     }
 

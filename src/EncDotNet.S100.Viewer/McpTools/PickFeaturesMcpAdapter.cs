@@ -32,7 +32,9 @@ internal static class PickFeaturesMcpAdapter
         "warnings, surface analyses and tropical cyclones at the view time, and no S-124 part the map hides. Read-only by default; pass select=true to also show the " +
         "pick on the live viewer (populates the Object Information panel and draws a pick highlight — marker " +
         "plus selected-feature outline — exactly like a user click). Viewer-injected tool — not available " +
-        "from a headless MCP host.";
+        "from a headless MCP host. 'shownIn' lists, for the top feature, each map (pane) in reading order with " +
+        "whether it shows the feature at the pick now and, if not, why: 'dataset_hidden', 'not_at_time' or " +
+        "'out_of_view'. With the map split, 'map' names the map to pick in.";
 
     /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
     public static McpServerTool Create(PickFeaturesTool inner)
@@ -50,9 +52,10 @@ internal static class PickFeaturesMcpAdapter
             [Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double radiusMeters = 50.0,
             [Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int maxResults = 20,
             [Description("When true, also show the pick on the live viewer: the resolved features populate the Object Information panel and the map draws a pick highlight (marker + selected-feature outline), exactly like a user click. Default false (read-only).")] bool select = false,
+            [Description("With the map split: the map to pick in (an id from list_maps, such as 'map-2'); x/y are in its pixels, or in its render_to_image capture's. Omit for the active map; the call doesn't change the active map.")] string? map = null,
             CancellationToken ct = default) =>
             DispatchAsync(() => inner.InvokeAsync(
-                new PickFeaturesRequest(x, y, latitude, longitude, imageWidth, imageHeight, ParseSpec(spec), radiusMeters, maxResults, select),
+                new PickFeaturesRequest(x, y, latitude, longitude, imageWidth, imageHeight, ParseSpec(spec), radiusMeters, maxResults, select, map),
                 ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions

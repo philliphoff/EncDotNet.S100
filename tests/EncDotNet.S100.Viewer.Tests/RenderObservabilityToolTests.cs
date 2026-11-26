@@ -45,7 +45,7 @@ public class RenderObservabilityToolTests
         {
             NextResult = new RenderIdleResult(true, false, 42.0, 3, 250.0),
         };
-        var tool = new AwaitRenderIdleTool(monitor);
+        var tool = new AwaitRenderIdleTool(monitor, SplitMapMcpTestKit.NewViews());
 
         var result = await tool.InvokeAsync(new AwaitRenderIdleRequest(), TestContext.Current.CancellationToken);
 
@@ -61,7 +61,7 @@ public class RenderObservabilityToolTests
     public async Task AwaitRenderIdle_clamps_out_of_range_arguments()
     {
         var monitor = new FakeMonitor { NextResult = new RenderIdleResult(false, true, 1, 0, 1) };
-        var tool = new AwaitRenderIdleTool(monitor);
+        var tool = new AwaitRenderIdleTool(monitor, SplitMapMcpTestKit.NewViews());
 
         var result = await tool.InvokeAsync(new AwaitRenderIdleRequest(QuietPeriodMs: 999_999, TimeoutMs: 1), TestContext.Current.CancellationToken);
 
@@ -89,7 +89,7 @@ public class RenderObservabilityToolTests
     [Fact]
     public async Task GetRenderStats_reports_no_data_when_no_paint()
     {
-        var tool = new GetRenderStatsTool(new FakeMonitor { LatestStats = null });
+        var tool = new GetRenderStatsTool(new FakeMonitor { LatestStats = null }, SplitMapMcpTestKit.NewViews());
         var result = await tool.InvokeAsync(new GetRenderStatsRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -112,7 +112,7 @@ public class RenderObservabilityToolTests
             },
             PaintSequence: 42,
             CapturedAtUtc: DateTimeOffset.UnixEpoch);
-        var tool = new GetRenderStatsTool(new FakeMonitor { LatestStats = snapshot });
+        var tool = new GetRenderStatsTool(new FakeMonitor { LatestStats = snapshot }, SplitMapMcpTestKit.NewViews());
 
         var result = await tool.InvokeAsync(new GetRenderStatsRequest(), TestContext.Current.CancellationToken);
 

@@ -229,6 +229,9 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
             App.Services.GetRequiredService<ITimeFormatProvider>(),
             SelectDatasetRow);
         SplitMapControls.DataContext = _split;
+        // The MCP map tools (list_maps, set_split_map and the rest; D28, #1735).
+        App.Services.GetRequiredService<MapSplitControllerAccessor>().Current =
+            new MapSplitController(_split, _mapViews, UiThread.InvokeAsync);
         // View › Split Map: ⌘\ is the macOS menu item's; Ctrl+\ elsewhere (D1).
         KeyBindings.Add(new KeyBinding
         {
@@ -292,6 +295,7 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
             // WindowNotReady) rather than a stale controller, and so the
             // MainViewModel / window are not kept alive after close.
             App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current = null;
+            App.Services.GetRequiredService<MapSplitControllerAccessor>().Current = null;
             App.Services.GetRequiredService<IAppScreenshotProvider>().Target = null;
             // Removing the last view clears the map capability accessors,
             // the image renderer first, and the probes. Each view detaches its

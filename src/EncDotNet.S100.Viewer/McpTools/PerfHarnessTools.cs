@@ -203,7 +203,7 @@ internal sealed record PortrayalPrewarmDto(
 /// slot showing its own target tile. It measures from the last
 /// <c>set_viewport</c>, so a harness calls <c>set_viewport</c> then this.
 /// </remarks>
-internal sealed class AwaitSettledTool(ViewSettleMonitor monitor)
+internal sealed class AwaitSettledTool(ViewSettleMonitor monitor, MapViews views)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "await_settled";
@@ -215,18 +215,46 @@ internal sealed class AwaitSettledTool(ViewSettleMonitor monitor)
     internal const int DefaultPollMs = 10;
 
     private readonly ViewSettleMonitor _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
+    private readonly MapViews _views = views ?? throw new ArgumentNullException(nameof(views));
 
     /// <summary>Waits.</summary>
-    public async Task<ToolResult<SettleStateDto>> InvokeAsync(int? timeoutMs, int? confirmMs, int? pollMs, CancellationToken ct)
+    /// <param name="timeoutMs">Longest wait, ms.</param>
+    /// <param name="confirmMs">How long the view must stay settled, ms.</param>
+    /// <param name="pollMs">Sampling interval, ms.</param>
+    /// <param name="map">
+    /// With the map split, the map to wait for (an id from <c>list_maps</c>);
+    /// null waits for the active map, as the window's settle probe follows it.
+    /// </param>
+    /// <param name="ct">Cancels the wait.</param>
+    public async Task<ToolResult<SettleStateDto>> InvokeAsync(int? timeoutMs, int? confirmMs, int? pollMs, string? map, CancellationToken ct)
     {
         var timeout = Math.Clamp(timeoutMs ?? DefaultTimeoutMs, 50, MaxTimeoutMs);
         var confirm = Math.Clamp(confirmMs ?? DefaultConfirmMs, 0, MaxConfirmMs);
         var poll = Math.Clamp(pollMs ?? DefaultPollMs, 1, 1000);
-        var outcome = await _monitor.WaitForSettledAsync(
-            TimeSpan.FromMilliseconds(confirm),
-            TimeSpan.FromMilliseconds(timeout),
-            TimeSpan.FromMilliseconds(poll),
-            ct).ConfigureAwait(false);
+        SettleOutcome outcome;
+        if (string.IsNullOrWhiteSpace(map))
+        {
+            outcome = await _monitor.WaitForSettledAsync(
+                TimeSpan.FromMilliseconds(confirm),
+                TimeSpan.FromMilliseconds(timeout),
+                TimeSpan.FromMilliseconds(poll),
+                ct).ConfigureAwait(false);
+        }
+        else
+        {
+            if (McpMapTargets.Resolve(_views, map, out var view) is { } error)
+                return ToolResult<SettleStateDto>.Err(error);
+            if (view is not IMapViewDiagnostics diagnostics)
+                return ToolResult<SettleStateDto>.Err(new MapNotReady($"map '{map}' has no render diagnostics"));
+            outcome = await _monitor.WaitForSettledAsync(
+                TimeSpan.FromMilliseconds(confirm),
+                TimeSpan.FromMilliseconds(timeout),
+                TimeSpan.FromMilliseconds(poll),
+                diagnostics.EvaluateSettle,
+                diagnostics.RefreshGraphics,
+                ct).ConfigureAwait(false);
+        }
+
         return ToolResult<SettleStateDto>.Ok(ToDto(outcome));
     }
 
@@ -498,13 +526,18 @@ internal sealed class FlingTool(ICapabilityAccessor<IMapViewportController> acce
     private readonly ICapabilityAccessor<IMapViewportController> _accessor = accessor ?? throw new ArgumentNullException(nameof(accessor));
 
     /// <summary>Starts the fling.</summary>
-    public ToolResult<FlingDto> Invoke(double velocityX, double velocityY)
+    /// <param name="velocityX">Release velocity, px/s, positive to the right.</param>
+    /// <param name="velocityY">Release velocity, px/s, positive downwards.</param>
+    /// <param name="map">With the map split, the map to fling (an id from <c>list_maps</c>); null flings the active map.</param>
+    public ToolResult<FlingDto> Invoke(double velocityX, double velocityY, string? map = null)
     {
         if (!double.IsFinite(velocityX) || Math.Abs(velocityX) > MaxVelocity)
             return ToolResult<FlingDto>.Err(new InvalidArgument("velocityX", $"must be finite and within ±{MaxVelocity}"));
         if (!double.IsFinite(velocityY) || Math.Abs(velocityY) > MaxVelocity)
             return ToolResult<FlingDto>.Err(new InvalidArgument("velocityY", $"must be finite and within ±{MaxVelocity}"));
-        if (_accessor.Current is not { } host)
+        if (MapTargets.TryResolve(_accessor, map, out var resolved) is { } mapError)
+            return ToolResult<FlingDto>.Err(mapError);
+        if (resolved is not { } host)
             return ToolResult<FlingDto>.Err(new MapNotReady("the viewer's map control has not been initialised yet"));
 
         var target = host.Fling(velocityX, velocityY);
@@ -556,11 +589,12 @@ internal static class PerfHarnessMcpAdapters
             [Description("Longest wait in ms; default 60000, 50 to 600000.")] int? timeoutMs = null,
             [Description("How long the view must stay settled before the call returns, in ms; default 250, 0 to 10000. The reported settleMs doesn't include it.")] int? confirmMs = null,
             [Description("Sampling interval in ms; default 10, 1 to 1000.")] int? pollMs = null,
+            [Description("With the map split: the map to wait for (an id from list_maps, such as 'map-2'); its tiles must settle, with the chart cells every map needs loaded. Omit for the active map.")] string? map = null,
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() =>
             {
                 Attach();
-                return inner.InvokeAsync(timeoutMs, confirmMs, pollMs, ct);
+                return inner.InvokeAsync(timeoutMs, confirmMs, pollMs, map, ct);
             });
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -572,6 +606,7 @@ internal static class PerfHarnessMcpAdapters
                 + "tile slot of every visible tiled layer shows its own target tile (not a fallback band, predecessor, held "
                 + "tile or other scale class) with no visible tile work pending. Returns settleMs, the time from the last "
                 + "set_viewport to the frame that completed the settled view, or timedOut. Call set_viewport, then this. "
+                + "With the map split it waits for the active map, or for the map named by 'map'. "
                 + "Measurement only: it doesn't change loading or rendering. Read-only; viewer-injected tool.",
             SerializerOptions = McpAdapterShared.Options,
         });
@@ -613,12 +648,13 @@ internal static class PerfHarnessMcpAdapters
         var del = (
             [Description("Release velocity, screen pixels per second, positive to the right: the map moves with the finger, so the view travels the other way.")] double velocityX,
             [Description("Release velocity, screen pixels per second, positive downwards.")] double velocityY,
+            [Description("With the map split: the map to fling (an id from list_maps, such as 'map-2'). Omit for the active map; the call doesn't change the active map.")] string? map = null,
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() =>
             {
                 ct.ThrowIfCancellationRequested();
                 Attach();
-                return Task.FromResult(inner.Invoke(velocityX, velocityY));
+                return Task.FromResult(inner.Invoke(velocityX, velocityY, map));
             });
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -627,7 +663,8 @@ internal static class PerfHarnessMcpAdapters
             Description =
                 "Flings the map as releasing a drag at this velocity does: the view coasts and decelerates to a stop, "
                 + "over up to a second. Returns where the viewer predicts it comes to rest. Marks the settle trigger, so "
-                + "await_settled measures from the release. Viewer-injected tool.",
+                + "await_settled measures from the release. With the map split, 'map' names the map to fling; a linked "
+                + "split moves the other maps with it. Viewer-injected tool.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

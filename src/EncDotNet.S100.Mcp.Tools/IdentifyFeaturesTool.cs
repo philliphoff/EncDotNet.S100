@@ -42,6 +42,20 @@ public sealed class IdentifyFeaturesTool
         _service = new IdentifyFeaturesService(catalog, drawState);
     }
 
+    /// <summary>
+    /// Creates the tool for a host whose maps draw as <paramref name="drawStates"/>
+    /// says; a request may name a map when it's an
+    /// <see cref="EncDotNet.S100.Hosting.IMapCapabilityAccessor{TCapability}"/>.
+    /// </summary>
+    /// <param name="catalog">The catalog.</param>
+    /// <param name="drawStates">What the host's maps draw.</param>
+    public IdentifyFeaturesTool(IDatasetCatalog catalog, EncDotNet.S100.Hosting.ICapabilityAccessor<IMapDrawState> drawStates)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(drawStates);
+        _service = new IdentifyFeaturesService(catalog, drawStates);
+    }
+
     /// <summary>Executes the tool by delegating to the shared service.</summary>
     public Task<ToolResult<IdentifyFeaturesResult>> InvokeAsync(
         IdentifyFeaturesRequest request,

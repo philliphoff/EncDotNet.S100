@@ -136,7 +136,7 @@
                         </Border>
                         <TextBlock Classes="paneTitle"
                                    Classes.active="{Binding IsActive}"
-                                   Text="{Binding Label}"
+                                   Text="{Binding Title}"
                                    FontSize="12"
                                    Foreground="{DynamicResource ForegroundColor}"
                                    VerticalAlignment="Center" />

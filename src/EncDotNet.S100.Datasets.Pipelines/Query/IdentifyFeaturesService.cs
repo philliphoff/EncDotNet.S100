@@ -6,6 +6,7 @@ using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Spec;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Hosting;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Query;
@@ -34,6 +35,10 @@ namespace EncDotNet.S100.Datasets.Pipelines.Query;
 /// <see langword="null"/> follows the host's map (<see cref="IMapDrawState"/>)
 /// when it has one, else identifies every drawable feature.
 /// </param>
+/// <param name="Map">
+/// The map whose draw state to follow, for a host with several maps (a split
+/// viewer); <see langword="null"/> follows the active map.
+/// </param>
 public sealed record IdentifyFeaturesRequest(
     [property: Description("Pick latitude in decimal degrees on WGS-84 (EPSG:4326). Must be in [-90, 90].")] double Latitude,
     [property: Description("Pick longitude in decimal degrees on WGS-84 (EPSG:4326). Must be in [-540, 540]; a value past ±180 (a point on an adjacent world copy) matches the same place one world east or west, so data kept in a 0…360 or other continuous longitude frame is found either way.")] double Longitude,
@@ -41,7 +46,8 @@ public sealed record IdentifyFeaturesRequest(
     [property: Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double RadiusMeters = 50.0,
     [property: Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int MaxResults = 20,
     [property: Description("Optional UTC ISO-8601 time to identify at: time-dependent products (S-412, CAP, surface analyses, tropical cyclones) return only the features drawn then. Omit to follow the host's map (SoundCharts: the view time and the warnings it shows), or, in a headless host, to identify every drawable feature.")] DateTimeOffset? Time = null,
-    [property: Description("Add every feature's attributes as encoded (code and raw value) in 'attributes'. Default false: only AML features list them. Numeric depths are in 'depth' either way.")] bool IncludeAttributes = false);
+    [property: Description("Add every feature's attributes as encoded (code and raw value) in 'attributes'. Default false: only AML features list them. Numeric depths are in 'depth' either way.")] bool IncludeAttributes = false,
+    [property: Description("Optional map id (from list_maps) whose draw state to follow when time is omitted; null follows the active map. A host with one map takes no map id.")] string? Map = null);
 
 /// <summary>
 /// A single feature picked at the query point by
@@ -212,7 +218,7 @@ public sealed class IdentifyFeaturesService
         new(StringComparer.OrdinalIgnoreCase) { "fileReference", "TXTDSC", "NTXTDS" };
 
     private readonly IDatasetCatalog _catalog;
-    private readonly IMapDrawState? _drawState;
+    private readonly ICapabilityAccessor<IMapDrawState>? _drawStates;
 
     /// <summary>
     /// Creates a new <see cref="IdentifyFeaturesService"/> for a host with no
@@ -232,10 +238,23 @@ public sealed class IdentifyFeaturesService
     /// <param name="catalog">The catalog.</param>
     /// <param name="drawState">What the host's map draws.</param>
     public IdentifyFeaturesService(IDatasetCatalog catalog, IMapDrawState drawState)
+        : this(catalog, new StaticCapabilityAccessor<IMapDrawState>(drawState))
+    {
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="IdentifyFeaturesService"/> for a host whose
+    /// maps draw as <paramref name="drawStates"/> says: a request with no time
+    /// identifies what the requested map (or the active one) draws. An
+    /// <see cref="IMapCapabilityAccessor{TCapability}"/> lets a request name a map.
+    /// </summary>
+    /// <param name="catalog">The catalog.</param>
+    /// <param name="drawStates">What the host's maps draw.</param>
+    public IdentifyFeaturesService(IDatasetCatalog catalog, ICapabilityAccessor<IMapDrawState> drawStates)
         : this(catalog)
     {
-        ArgumentNullException.ThrowIfNull(drawState);
-        _drawState = drawState;
+        ArgumentNullException.ThrowIfNull(drawStates);
+        _drawStates = drawStates;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -285,8 +304,19 @@ public sealed class IdentifyFeaturesService
 
         // An explicit time identifies what a render then draws; without one,
         // follow the host's map: its time and the features it hides.
-        var followsMap = request.Time is null && _drawState is not null;
-        var time = request.Time ?? _drawState?.Time;
+        IMapDrawState? drawState = null;
+        if (_drawStates is not null)
+        {
+            if (MapTargets.TryResolve(_drawStates, request.Map, out drawState) is { } mapError)
+                return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Err(mapError));
+        }
+        else if (!string.IsNullOrWhiteSpace(request.Map))
+        {
+            return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Err(new MapNotFound(request.Map, [])));
+        }
+
+        var followsMap = request.Time is null && drawState is not null;
+        var time = request.Time ?? drawState?.Time;
 
         foreach (var dataset in snapshot)
         {
@@ -318,7 +348,7 @@ public sealed class IdentifyFeaturesService
                 continue;
             }
 
-            var hidden = followsMap ? FeatureAccessor.UndrawnFeatures(dataset, _drawState!.HiddenFeatures(dataset)) : null;
+            var hidden = followsMap ? FeatureAccessor.UndrawnFeatures(dataset, drawState!.HiddenFeatures(dataset)) : null;
 
             var s101 = dataset.Data as S101DatasetData;
             var aml = dataset.Data as AmlDatasetData;

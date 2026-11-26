@@ -52,6 +52,12 @@ internal sealed class MapViews : IMapViewportSet
         _converter = converter;
         _renderer = renderer;
         _planners = planners;
+
+        // An MCP tool's map argument reaches any map through the same
+        // accessors (split map D28, #1735).
+        _viewport.BindMaps(MapIds, id => Find(id)?.ViewportController);
+        _converter.BindMaps(MapIds, id => Find(id)?.CoordinateConverter);
+        _renderer.BindMaps(MapIds, id => Find(id)?.ImageRenderer);
     }
 
     /// <summary>Every map, in the order they were added.</summary>
@@ -62,6 +68,24 @@ internal sealed class MapViews : IMapViewportSet
             lock (_lock)
                 return _views.Select(r => r.View).ToArray();
         }
+    }
+
+    /// <summary>The map with id <paramref name="id"/>, or <see langword="null"/>.</summary>
+    /// <param name="id">A map id, such as <c>map-2</c>.</param>
+    /// <returns>The map, or <see langword="null"/> when none has that id.</returns>
+    public IMapViewCapabilities? Find(string id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        lock (_lock)
+            return _views.FirstOrDefault(r => r.View.Id.Value == id)?.View;
+    }
+
+    /// <summary>The map ids, in the order the maps were added.</summary>
+    /// <returns>The ids.</returns>
+    public IReadOnlyList<string> MapIds()
+    {
+        lock (_lock)
+            return _views.Select(r => r.View.Id.Value).ToArray();
     }
 
     /// <summary>The map the user is working in, or <see langword="null"/> when there's none.</summary>

@@ -452,19 +452,32 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
 }
 
 /// <summary>
-/// Static bridge that hands the render thread a reference to the live
-/// <see cref="IRenderActivitySink"/>. Needed because
-/// <see cref="InstrumentedMapControl"/> and the static
-/// <see cref="MapPaintInstrumentation"/> are not resolved from DI; the
-/// host assigns <see cref="Sink"/> from the DI singleton once it is
-/// available, mirroring the late-bound accessor pattern used elsewhere.
+/// Hands one map's paints and render activity to several sinks: the map's own
+/// monitor and the window's, which hears every map (split map, #1735).
 /// </summary>
-internal static class RenderActivityHub
+internal sealed class FanOutRenderActivitySink : IRenderActivitySink
 {
-    /// <summary>
-    /// The live sink, or <see langword="null"/> before the host wires it
-    /// (or after teardown). Render-path code must null-check before use
-    /// and skip per-paint snapshot work when this is unset.
-    /// </summary>
-    public static volatile IRenderActivitySink? Sink;
+    private readonly IRenderActivitySink[] _sinks;
+
+    /// <summary>Creates the sink.</summary>
+    /// <param name="sinks">The sinks, notified in order.</param>
+    public FanOutRenderActivitySink(params IRenderActivitySink[] sinks)
+    {
+        ArgumentNullException.ThrowIfNull(sinks);
+        _sinks = sinks;
+    }
+
+    /// <inheritdoc />
+    public void NotifyPaint(double frameDurationMs, IReadOnlyList<RenderStyleStat> styles)
+    {
+        foreach (var sink in _sinks)
+            sink.NotifyPaint(frameDurationMs, styles);
+    }
+
+    /// <inheritdoc />
+    public void NotifyActivity()
+    {
+        foreach (var sink in _sinks)
+            sink.NotifyActivity();
+    }
 }

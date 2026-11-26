@@ -433,9 +433,10 @@ public static class S100MutableTools
             ([Description("Output image width in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport width if it has one, otherwise 1024. Independently, whenever the renderer has a live viewport its width is echoed as viewportWidth — even when explicit dimensions are supplied.")] int? width = null,
              [Description("Output image height in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport height if it has one, otherwise 768. Independently, whenever the renderer has a live viewport its height is echoed as viewportHeight — even when explicit dimensions are supplied.")] int? height = null,
              [Description("Display pixel-density multiplier (1.0 = device-independent pixels; 2.0 = HiDPI). Null defaults to 1.0. Clamped to [0.5, 3.0].")] double? pixelDensity = null,
+             [Description("SoundCharts with its map split: the map to render (an id from list_maps, such as 'map-2'). Omit for the active map; the call doesn't change the active map. A host with one map takes no map id.")] string? map = null,
              CancellationToken ct = default) =>
                 DispatchRenderAsync(() => inner.InvokeAsync(
-                    new RenderToImageRequest(width, height, pixelDensity), ct)),
+                    new RenderToImageRequest(width, height, pixelDensity, map), ct)),
             new McpServerToolCreateOptions
             {
                 Name = RenderToImageTool.Name,

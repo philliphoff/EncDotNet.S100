@@ -277,6 +277,7 @@ internal static class S100McpServerToolFactory
                    [Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int maxResults = 20,
                    [Description("Optional UTC ISO-8601 time to identify at: time-dependent products (S-412, CAP, surface analyses, tropical cyclones) return only the features drawn then. Omit to follow the host's map (SoundCharts: the view time and the warnings it shows), or, in a headless host, to identify every drawable feature.")] DateTimeOffset? time = null,
                    [Description("Add each feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool includeAttributes = false,
+                   [Description("SoundCharts with its map split: the map (an id from list_maps, such as 'map-2') whose draw state to follow when time is omitted. Omit for the active map. A host with one map takes no map id.")] string? map = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -287,7 +288,8 @@ internal static class S100McpServerToolFactory
                         radiusMeters,
                         maxResults,
                         time,
-                        includeAttributes),
+                        includeAttributes,
+                        map),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -322,6 +324,7 @@ internal static class S100McpServerToolFactory
                    [Description("Optional maximum distance in metres; features farther than this are excluded. null imposes no limit.")] double? maxDistanceMeters = null,
                    [Description("Maximum ranked features to return; clamped to [1, 200]. Default 10.")] int limit = 10,
                    [Description("Add each feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool includeAttributes = false,
+                   [Description("SoundCharts with its map split: the map (an id from list_maps, such as 'map-2') whose draw state to follow when time is omitted. Omit for the active map. A host with one map takes no map id.")] string? map = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(

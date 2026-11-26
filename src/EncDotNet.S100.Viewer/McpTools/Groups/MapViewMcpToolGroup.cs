@@ -6,23 +6,27 @@ using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools.Groups;
 
-/// <summary><c>set_viewport</c> and <c>pick_features</c>: moving the map and picking features on it.</summary>
+/// <summary><c>set_viewport</c> and <c>pick_features</c>: moving the map and picking features on it;
+/// and the split-map tools (<c>list_maps</c>, <c>set_active_map</c>, <c>set_split_map</c>,
+/// <c>set_map_link</c>, <c>set_map_name</c>; D28, #1735).</summary>
 internal sealed class MapViewMcpToolGroup : IViewerMcpToolGroup
 {
     private readonly ICapabilityAccessor<IMapViewportController> _viewport;
     private readonly ICapabilityAccessor<IMapCoordinateConverter> _coordinates;
     private readonly IDatasetCatalog _catalog;
-    private readonly IMapDrawState _mapDrawState;
+    private readonly ICapabilityAccessor<IMapDrawState> _mapDrawState;
     private readonly IGeographicPickPresenter _pickPresenter;
     private readonly EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor _settle;
+    private readonly ICapabilityAccessor<MapSplitController> _split;
 
     public MapViewMcpToolGroup(
         ICapabilityAccessor<IMapViewportController> viewport,
         ICapabilityAccessor<IMapCoordinateConverter> coordinates,
         IDatasetCatalog catalog,
-        IMapDrawState mapDrawState,
+        ICapabilityAccessor<IMapDrawState> mapDrawState,
         IGeographicPickPresenter pickPresenter,
-        EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor settle)
+        EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor settle,
+        ICapabilityAccessor<MapSplitController> split)
     {
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(coordinates);
@@ -30,6 +34,7 @@ internal sealed class MapViewMcpToolGroup : IViewerMcpToolGroup
         ArgumentNullException.ThrowIfNull(mapDrawState);
         ArgumentNullException.ThrowIfNull(pickPresenter);
         ArgumentNullException.ThrowIfNull(settle);
+        ArgumentNullException.ThrowIfNull(split);
 
         _viewport = viewport;
         _coordinates = coordinates;
@@ -37,6 +42,7 @@ internal sealed class MapViewMcpToolGroup : IViewerMcpToolGroup
         _mapDrawState = mapDrawState;
         _pickPresenter = pickPresenter;
         _settle = settle;
+        _split = split;
     }
 
     /// <inheritdoc />
@@ -53,6 +59,9 @@ internal sealed class MapViewMcpToolGroup : IViewerMcpToolGroup
             new PickFeaturesTool(
                 _coordinates,
                 new EncDotNet.S100.Mcp.Tools.IdentifyFeaturesTool(_catalog, _mapDrawState),
-                _pickPresenter));
+                _pickPresenter,
+                _split));
+        foreach (var tool in SplitMapMcpAdapters.Create(new SplitMapTools(_split)))
+            yield return tool;
     }
 }

@@ -9,7 +9,11 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// reading it, so the next call's window reflects only paints observed
 /// afterwards. Lets a caller bracket a measurement phase.
 /// </param>
-internal sealed record GetRenderStatsRequest(bool ResetWindow = false);
+/// <param name="Map">
+/// With the map split, the map to report (an id from <c>list_maps</c>);
+/// <see langword="null"/> reports every map's paints together.
+/// </param>
+internal sealed record GetRenderStatsRequest(bool ResetWindow = false, string? Map = null);
 
 /// <summary>Per-style entry in a <see cref="GetRenderStatsResult"/>.</summary>
 internal sealed record RenderStyleStatDto(string Style, long Calls, double DurationMs);
@@ -50,7 +54,11 @@ internal sealed record GetRenderStatsResult(
     long? PaintSequence,
     string? CapturedAtUtc,
     System.Collections.Generic.IReadOnlyList<RenderStyleStatDto> Styles,
-    RenderWindowStatsDto Window);
+    RenderWindowStatsDto Window)
+{
+    /// <summary>The map reported, or <see langword="null"/> for every map's paints together.</summary>
+    public string? Map { get; init; }
+}
 
 /// <summary>
 /// Reports the cost of the viewer's most recently completed map paint:
@@ -71,12 +79,17 @@ internal sealed class GetRenderStatsTool
     public const string Name = "get_render_stats";
 
     private readonly IRenderActivityMonitor _monitor;
+    private readonly MapViews _views;
 
     /// <summary>Creates a new <see cref="GetRenderStatsTool"/>.</summary>
-    public GetRenderStatsTool(IRenderActivityMonitor monitor)
+    /// <param name="monitor">The window's monitor, which hears every map.</param>
+    /// <param name="views">The window's maps, whose own monitors a request's map names.</param>
+    public GetRenderStatsTool(IRenderActivityMonitor monitor, MapViews views)
     {
         ArgumentNullException.ThrowIfNull(monitor);
+        ArgumentNullException.ThrowIfNull(views);
         _monitor = monitor;
+        _views = views;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -87,8 +100,13 @@ internal sealed class GetRenderStatsTool
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var window = _monitor.GetWindowStats();
-        if (request.ResetWindow) _monitor.ResetWindow();
+        if (McpMapTargets.ResolveRenderActivity(_views, _monitor, request.Map, out var monitor) is { } mapError)
+        {
+            return Task.FromResult(ToolResult<GetRenderStatsResult>.Err(mapError));
+        }
+
+        var window = monitor.GetWindowStats();
+        if (request.ResetWindow) monitor.ResetWindow();
         var slowestFrame = window.SlowestFrame is null
             ? null
             : new SlowestRenderFrameDto(
@@ -114,7 +132,7 @@ internal sealed class GetRenderStatsTool
             FrameP50Ms = window.FrameP50Ms,
         };
 
-        var snapshot = _monitor.LatestStats;
+        var snapshot = monitor.LatestStats;
         if (snapshot is null)
         {
             return Task.FromResult(ToolResult<GetRenderStatsResult>.Ok(new GetRenderStatsResult(
@@ -125,7 +143,8 @@ internal sealed class GetRenderStatsTool
                 PaintSequence: null,
                 CapturedAtUtc: null,
                 Styles: Array.Empty<RenderStyleStatDto>(),
-                Window: windowDto)));
+                Window: windowDto)
+            { Map = NullIfBlank(request.Map) }));
         }
 
         var styles = new RenderStyleStatDto[snapshot.Styles.Count];
@@ -143,6 +162,9 @@ internal sealed class GetRenderStatsTool
             PaintSequence: snapshot.PaintSequence,
             CapturedAtUtc: snapshot.CapturedAtUtc.ToString("O"),
             Styles: styles,
-            Window: windowDto)));
+            Window: windowDto)
+        { Map = NullIfBlank(request.Map) }));
     }
+
+    private static string? NullIfBlank(string? map) => string.IsNullOrWhiteSpace(map) ? null : map;
 }

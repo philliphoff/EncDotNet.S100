@@ -90,7 +90,9 @@ internal sealed class ViewSettleMonitor
     }
 
     /// <summary>Turns on the tile renderer's settle stamps and requests a repaint the first time.</summary>
-    public void EnableTracking()
+    public void EnableTracking() => EnableTracking(RequestRedraw);
+
+    private void EnableTracking(Action? requestRedraw)
     {
         bool first;
         lock (_gate)
@@ -104,7 +106,7 @@ internal sealed class ViewSettleMonitor
             _setTileTracking(true);
             try
             {
-                RequestRedraw?.Invoke();
+                requestRedraw?.Invoke();
             }
             catch
             {
@@ -128,7 +130,9 @@ internal sealed class ViewSettleMonitor
 
     /// <summary>Takes one sample. Safe to call from any thread.</summary>
     /// <returns>The sample.</returns>
-    public SettleSample Sample()
+    public SettleSample Sample() => Sample(TileProbe);
+
+    private SettleSample Sample(Func<TileSettleState>? tileProbe)
     {
         LazyLoadVisibleWork? loads = null;
         try
@@ -143,7 +147,7 @@ internal sealed class ViewSettleMonitor
         TileSettleState tiles = default;
         try
         {
-            if (TileProbe is { } probe)
+            if (tileProbe is { } probe)
                 tiles = probe();
         }
         catch
@@ -188,13 +192,34 @@ internal sealed class ViewSettleMonitor
     /// <param name="poll">How often to sample.</param>
     /// <param name="cancellationToken">Cancels the wait.</param>
     /// <returns>The outcome.</returns>
+    public Task<SettleOutcome> WaitForSettledAsync(
+        TimeSpan confirm,
+        TimeSpan timeout,
+        TimeSpan poll,
+        CancellationToken cancellationToken = default) =>
+        WaitForSettledAsync(confirm, timeout, poll, TileProbe, RequestRedraw, cancellationToken);
+
+    /// <summary>
+    /// Waits as <see cref="WaitForSettledAsync(TimeSpan, TimeSpan, TimeSpan, CancellationToken)"/>
+    /// does, for one map of a split (#1735): its tiles through
+    /// <paramref name="tileProbe"/>, with the shared cell loads.
+    /// </summary>
+    /// <param name="confirm">How long the settled state must hold.</param>
+    /// <param name="timeout">The longest wait.</param>
+    /// <param name="poll">How often to sample.</param>
+    /// <param name="tileProbe">The map's tile settle state.</param>
+    /// <param name="requestRedraw">Repaints the map, the first time tracking starts.</param>
+    /// <param name="cancellationToken">Cancels the wait.</param>
+    /// <returns>The outcome.</returns>
     public async Task<SettleOutcome> WaitForSettledAsync(
         TimeSpan confirm,
         TimeSpan timeout,
         TimeSpan poll,
+        Func<TileSettleState>? tileProbe,
+        Action? requestRedraw,
         CancellationToken cancellationToken = default)
     {
-        EnableTracking();
+        EnableTracking(requestRedraw);
         var callStart = Stopwatch.GetTimestamp();
         long trigger;
         lock (_gate)
@@ -212,7 +237,7 @@ internal sealed class ViewSettleMonitor
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var sample = Sample();
+            var sample = Sample(tileProbe);
             if (IsSettled(sample, reference))
             {
                 if (runStart is null)

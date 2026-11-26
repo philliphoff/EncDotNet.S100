@@ -72,9 +72,11 @@ public sealed class S100McpServerOptions
     /// What the host's map draws, so the built-in <c>identify_features</c>
     /// tool, given no time, identifies what the map shows (its view time and
     /// the warnings it hides). May be <see langword="null"/> when the host has
-    /// no map, and the tool then identifies every drawable feature.
+    /// no map, and the tool then identifies every drawable feature. A host with
+    /// several maps passes an <see cref="EncDotNet.S100.Hosting.IMapCapabilityAccessor{TCapability}"/>,
+    /// so the tool's <c>map</c> argument can name one.
     /// </summary>
-    public EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState? MapDrawState { get; init; }
+    public EncDotNet.S100.Hosting.ICapabilityAccessor<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>? MapDrawState { get; init; }
 
     /// <summary>
     /// The toolsets to serve (<see cref="McpToolsets"/>), or

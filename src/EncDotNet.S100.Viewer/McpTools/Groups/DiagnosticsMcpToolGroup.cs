@@ -15,25 +15,29 @@ internal sealed class DiagnosticsMcpToolGroup : IViewerMcpToolGroup
     private readonly ViewerSettings _settings;
     private readonly ICapabilityAccessor<IMapViewportController> _viewport;
     private readonly EncDotNet.S100.Viewer.Diagnostics.LogBuffer _logBuffer;
+    private readonly MapViews _views;
 
     public DiagnosticsMcpToolGroup(
         IRenderActivityMonitor renderActivity,
         PerfHarnessServices perfHarness,
         ViewerSettings settings,
         ICapabilityAccessor<IMapViewportController> viewport,
-        EncDotNet.S100.Viewer.Diagnostics.LogBuffer logBuffer)
+        EncDotNet.S100.Viewer.Diagnostics.LogBuffer logBuffer,
+        MapViews views)
     {
         ArgumentNullException.ThrowIfNull(renderActivity);
         ArgumentNullException.ThrowIfNull(perfHarness);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(logBuffer);
+        ArgumentNullException.ThrowIfNull(views);
 
         _renderActivity = renderActivity;
         _perfHarness = perfHarness;
         _settings = settings;
         _viewport = viewport;
         _logBuffer = logBuffer;
+        _views = views;
     }
 
     /// <inheritdoc />
@@ -44,12 +48,12 @@ internal sealed class DiagnosticsMcpToolGroup : IViewerMcpToolGroup
 
     private IEnumerable<McpServerTool> CreateGroupTools()
     {
-        yield return AwaitRenderIdleMcpAdapter.Create(new AwaitRenderIdleTool(_renderActivity));
-        yield return GetRenderStatsMcpAdapter.Create(new GetRenderStatsTool(_renderActivity));
+        yield return AwaitRenderIdleMcpAdapter.Create(new AwaitRenderIdleTool(_renderActivity, _views));
+        yield return GetRenderStatsMcpAdapter.Create(new GetRenderStatsTool(_renderActivity, _views));
 
         var harness = _perfHarness;
         var settings = _settings;
-        yield return PerfHarnessMcpAdapters.Create(new AwaitSettledTool(harness.Settle));
+        yield return PerfHarnessMcpAdapters.Create(new AwaitSettledTool(harness.Settle, _views));
         yield return PerfHarnessMcpAdapters.Create(new GetProcessMetricsTool(
             harness.Metrics,
             _renderActivity,

@@ -4,7 +4,13 @@ using EncDotNet.S100.Viewer.Services;
 namespace EncDotNet.S100.Viewer.McpTools;
 
 /// <summary>Request payload for <see cref="AwaitRenderIdleTool"/>.</summary>
-internal sealed record AwaitRenderIdleRequest(int? QuietPeriodMs = null, int? TimeoutMs = null);
+/// <param name="QuietPeriodMs">Continuous inactivity that qualifies as idle.</param>
+/// <param name="TimeoutMs">Longest wait.</param>
+/// <param name="Map">
+/// With the map split, the map to wait for (an id from <c>list_maps</c>);
+/// <see langword="null"/> waits for every map.
+/// </param>
+internal sealed record AwaitRenderIdleRequest(int? QuietPeriodMs = null, int? TimeoutMs = null, string? Map = null);
 
 /// <summary>Result payload for <see cref="AwaitRenderIdleTool"/>.</summary>
 internal sealed record AwaitRenderIdleResult(
@@ -14,7 +20,11 @@ internal sealed record AwaitRenderIdleResult(
     long PaintsObserved,
     double QuietForMs,
     int QuietPeriodMs,
-    int TimeoutMs);
+    int TimeoutMs)
+{
+    /// <summary>The map waited for, or <see langword="null"/> for every map.</summary>
+    public string? Map { get; init; }
+}
 
 /// <summary>
 /// Blocks until the viewer's live map settles (no completed paint, no
@@ -50,12 +60,17 @@ internal sealed class AwaitRenderIdleTool
     internal const int MaxTimeoutMs = 120_000;
 
     private readonly IRenderActivityMonitor _monitor;
+    private readonly MapViews _views;
 
     /// <summary>Creates a new <see cref="AwaitRenderIdleTool"/>.</summary>
-    public AwaitRenderIdleTool(IRenderActivityMonitor monitor)
+    /// <param name="monitor">The window's monitor, which hears every map.</param>
+    /// <param name="views">The window's maps, whose own monitors a request's map names.</param>
+    public AwaitRenderIdleTool(IRenderActivityMonitor monitor, MapViews views)
     {
         ArgumentNullException.ThrowIfNull(monitor);
+        ArgumentNullException.ThrowIfNull(views);
         _monitor = monitor;
+        _views = views;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -68,7 +83,12 @@ internal sealed class AwaitRenderIdleTool
         var quiet = Clamp(request.QuietPeriodMs ?? DefaultQuietPeriodMs, MinQuietPeriodMs, MaxQuietPeriodMs);
         var timeout = Clamp(request.TimeoutMs ?? DefaultTimeoutMs, MinTimeoutMs, MaxTimeoutMs);
 
-        var outcome = await _monitor.WaitForIdleAsync(
+        if (McpMapTargets.ResolveRenderActivity(_views, _monitor, request.Map, out var monitor) is { } mapError)
+        {
+            return ToolResult<AwaitRenderIdleResult>.Err(mapError);
+        }
+
+        var outcome = await monitor.WaitForIdleAsync(
             TimeSpan.FromMilliseconds(quiet),
             TimeSpan.FromMilliseconds(timeout),
             cancellationToken).ConfigureAwait(false);
@@ -80,7 +100,8 @@ internal sealed class AwaitRenderIdleTool
             PaintsObserved: outcome.PaintsObserved,
             QuietForMs: outcome.QuietForMs,
             QuietPeriodMs: quiet,
-            TimeoutMs: timeout));
+            TimeoutMs: timeout)
+        { Map = string.IsNullOrWhiteSpace(request.Map) ? null : request.Map });
     }
 
     private static int Clamp(int value, int min, int max)

@@ -29,7 +29,8 @@ internal sealed record PickFeaturesRequest(
     [property: Description("Optional spec filter; null matches every vector spec.")] SpecRef? Spec = null,
     [property: Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double RadiusMeters = 50.0,
     [property: Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int MaxResults = 20,
-    [property: Description("When true, also show the pick on the live viewer: the resolved features populate the Object Information panel and the map draws a pick highlight (marker + selected-feature outline), exactly like a user click. Default false (read-only).")] bool Select = false);
+    [property: Description("When true, also show the pick on the live viewer: the resolved features populate the Object Information panel and the map draws a pick highlight (marker + selected-feature outline), exactly like a user click. Default false (read-only).")] bool Select = false,
+    [property: Description("With the map split: the map whose pixels x/y are in and whose draw state the pick follows (an id from list_maps). Null uses the active map; the call doesn't change the active map.")] string? Map = null);
 
 /// <summary>Result of <see cref="PickFeaturesTool"/>.</summary>
 [Description("Result of pick_features: the input form that resolved the pick (pixel or geo), the resolved WGS-84 point, and the ranked vector features under it (identical shape to identify_features).")]
@@ -41,7 +42,8 @@ internal sealed record PickFeaturesResult(
     [property: Description("Total number of features that matched before applying maxResults.")] int TotalMatched,
     [property: Description("True when more features matched than were returned.")] bool Truncated,
     [property: Description("True when select=true was honoured and the pick was shown on the live viewer (panel + highlight).")] bool Selected = false,
-    [property: Description("With select=true, the overlay features at the point that Object information shows too, such as own-ship; empty otherwise. Live feeds such as AIS targets, NDBC observations and predicted tide stations are datasets, so they come back as features.")] IReadOnlyList<PickDynamicFeature>? DynamicFeatures = null);
+    [property: Description("With select=true, the overlay features at the point that Object information shows too, such as own-ship; empty otherwise. Live feeds such as AIS targets, NDBC observations and predicted tide stations are datasets, so they come back as features.")] IReadOnlyList<PickDynamicFeature>? DynamicFeatures = null,
+    [property: Description("For the top-ranked feature (the one Object Information selects), each map in reading order: whether it shows the feature at the pick now, and if not why: 'dataset_hidden' (the map doesn't draw its dataset), 'not_at_time' (not at the map's time) or 'out_of_view' (the point is outside the map's view, or its pane is folded). Empty when nothing matched.")] IReadOnlyList<MapShownIn>? ShownIn = null);
 
 /// <summary>A live overlay feature a <c>pick_features</c> select showed.</summary>
 [Description("A live overlay feature at the pick: its overlay and its label.")]
@@ -91,6 +93,7 @@ internal sealed class PickFeaturesTool
     private readonly ICapabilityAccessor<IMapCoordinateConverter> _accessor;
     private readonly IdentifyFeaturesTool _identify;
     private readonly IGeographicPickPresenter? _presenter;
+    private readonly ICapabilityAccessor<MapSplitController> _split;
 
     /// <summary>
     /// Creates a new <see cref="PickFeaturesTool"/> over
@@ -100,16 +103,23 @@ internal sealed class PickFeaturesTool
     /// <see cref="PickFeaturesRequest.Select"/> by publishing the pick to the
     /// live viewer panel + highlight.
     /// </summary>
+    /// <param name="accessor">Converts the maps' pixels to positions: the active map's, or any map's by id.</param>
+    /// <param name="identify">Identifies the features at a position.</param>
+    /// <param name="presenter">Shows a pick in the viewer, for select=true.</param>
+    /// <param name="split">The window's maps, for the result's shownIn.</param>
     public PickFeaturesTool(
         ICapabilityAccessor<IMapCoordinateConverter> accessor,
         IdentifyFeaturesTool identify,
-        IGeographicPickPresenter? presenter)
+        IGeographicPickPresenter? presenter,
+        ICapabilityAccessor<MapSplitController> split)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         ArgumentNullException.ThrowIfNull(identify);
+        ArgumentNullException.ThrowIfNull(split);
         _accessor = accessor;
         _identify = identify;
         _presenter = presenter;
+        _split = split;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -166,7 +176,7 @@ internal sealed class PickFeaturesTool
         }
 
         var identified = await _identify.InvokeAsync(
-            new IdentifyFeaturesRequest(latitude, longitude, request.Spec, request.RadiusMeters, request.MaxResults),
+            new IdentifyFeaturesRequest(latitude, longitude, request.Spec, request.RadiusMeters, request.MaxResults, Map: request.Map),
             cancellationToken).ConfigureAwait(false);
 
         if (!identified.TryGetValue(out var value))
@@ -191,6 +201,15 @@ internal sealed class PickFeaturesTool
             selected = refs.Length > 0 || dynamicHits.Count > 0;
         }
 
+        // Which maps show the top feature (D10, D28): the one Object
+        // Information selects first.
+        IReadOnlyList<MapShownIn> shownIn = [];
+        if (value.Features.Count > 0 && _split.Current is { } split)
+        {
+            shownIn = await split.ShownInAsync(
+                value.Features[0].DatasetId.Value, value.Point.Latitude, value.Point.Longitude).ConfigureAwait(false);
+        }
+
         return ToolResult<PickFeaturesResult>.Ok(new PickFeaturesResult(
             source,
             value.Point.Latitude,
@@ -199,7 +218,8 @@ internal sealed class PickFeaturesTool
             value.TotalMatched,
             value.Truncated,
             selected,
-            dynamicFeatures));
+            dynamicFeatures,
+            shownIn));
     }
 
     private static ToolError? ResolvePixel(PickFeaturesRequest request)
@@ -248,7 +268,11 @@ internal sealed class PickFeaturesTool
             return null;
         }
 
-        var host = _accessor.Current;
+        if (MapTargets.TryResolve(_accessor, request.Map, out var host) is { } mapError)
+        {
+            error = mapError;
+            return null;
+        }
         if (host is null)
         {
             error = new MapNotReady("the viewer's map control has not been initialised yet");
