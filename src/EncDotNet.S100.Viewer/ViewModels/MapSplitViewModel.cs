@@ -95,6 +95,15 @@ internal sealed class MapSplitViewModel : ViewModelBase
         ToggleSplitCommand = new RelayCommand(ToggleSplit);
         CloseOtherMapsCommand = new RelayCommand(CloseSplit, () => IsSplit);
         SwapMapsCommand = new RelayCommand(Swap, () => IsSplit);
+        ToggleLinkCommand = new RelayCommand(ToggleLink, () => IsSplit);
+
+        Link = new MapViewportLink(views);
+        Link.IsLinkedChanged += (_, _) =>
+        {
+            foreach (var pane in Panes)
+                pane.IsLinked = Link.IsLinked;
+            OnPropertyChanged(nameof(IsLinked));
+        };
 
         _views.ActiveChanged += (_, _) => OnActiveChanged();
         _views.ViewportsChanged += (_, _) =>
@@ -127,6 +136,34 @@ internal sealed class MapSplitViewModel : ViewModelBase
 
     /// <summary>Swaps the panes' places.</summary>
     public IRelayCommand SwapMapsCommand { get; }
+
+    /// <summary>
+    /// Links the panes' views, or unlinks them (a header's chain, the split
+    /// menu's Link views, View › Link Map Views ⌘⇧\; D13). Only while split.
+    /// </summary>
+    public IRelayCommand ToggleLinkCommand { get; }
+
+    /// <summary>The viewport link (D13, D14): one for the window in step 1.</summary>
+    public MapViewportLink Link { get; }
+
+    /// <summary>
+    /// Whether the panes' views are linked (D13). Off by default, and not
+    /// saved with the layout: the split comes back unlinked. Closing the split
+    /// turns it off.
+    /// </summary>
+    public bool IsLinked
+    {
+        get => Link.IsLinked;
+        set
+        {
+            if (value && !IsSplit)
+                return;
+            Link.SetLinked(value);
+        }
+    }
+
+    /// <summary>Links the panes' views, or unlinks them (D13).</summary>
+    public void ToggleLink() => IsLinked = !IsLinked;
 
     /// <summary>
     /// The map area's width, which decides which panes fold (D17). Set by
@@ -308,7 +345,7 @@ internal sealed class MapSplitViewModel : ViewModelBase
     private MapPaneViewModel Open(MapViewId id, MapPaneViewport? viewport, double weight)
     {
         var view = _host.OpenPane(id, viewport);
-        var pane = new MapPaneViewModel(this, view) { Weight = weight };
+        var pane = new MapPaneViewModel(this, view) { Weight = weight, IsLinked = Link.IsLinked };
         Panes.Add(pane);
         pane.IsActive = ReferenceEquals(_views.Active, view);
         OnPanesChanged();
@@ -333,6 +370,10 @@ internal sealed class MapSplitViewModel : ViewModelBase
 
     private void OnPanesChanged()
     {
+        // One pane has nothing to link to.
+        if (!IsSplit)
+            IsLinked = false;
+
         for (var i = 0; i < Panes.Count; i++)
         {
             Panes[i].Number = i + 1;
@@ -345,6 +386,7 @@ internal sealed class MapSplitViewModel : ViewModelBase
         OnPropertyChanged(nameof(ActivePane));
         CloseOtherMapsCommand.NotifyCanExecuteChanged();
         SwapMapsCommand.NotifyCanExecuteChanged();
+        ToggleLinkCommand.NotifyCanExecuteChanged();
         UpdateFolding(force: true);
         _requestSave();
     }
@@ -396,6 +438,7 @@ internal sealed class MapPaneViewModel : ViewModelBase
     private bool _isActive;
     private bool _isFolded;
     private bool _isSplit;
+    private bool _isLinked;
 
     /// <summary>Creates a pane over <paramref name="view"/>.</summary>
     /// <param name="split">The split the pane belongs to.</param>
@@ -408,6 +451,7 @@ internal sealed class MapPaneViewModel : ViewModelBase
         View = view;
         CloseCommand = new RelayCommand(() => _split.Close(this));
         ActivateCommand = new RelayCommand(() => _split.Activate(Id));
+        ToggleLinkCommand = new RelayCommand(_split.ToggleLink);
     }
 
     /// <summary>The pane's map.</summary>
@@ -485,6 +529,23 @@ internal sealed class MapPaneViewModel : ViewModelBase
 
     /// <summary>Whether the pane's 26 px header shows: while split and not folded (D9).</summary>
     public bool IsHeaderVisible => _isSplit && !_isFolded;
+
+    /// <summary>Whether the panes' views are linked: the header's chain is on and reads "Linked" (D13).</summary>
+    public bool IsLinked
+    {
+        get => _isLinked;
+        set
+        {
+            if (SetProperty(ref _isLinked, value))
+                OnPropertyChanged(nameof(LinkText));
+        }
+    }
+
+    /// <summary>The chain's tooltip and name: "Link views" or "Unlink views".</summary>
+    public string LinkText => _isLinked ? Strings.SplitMap_Unlink : Strings.SplitMap_Link;
+
+    /// <summary>Links or unlinks every pane's view, from this pane's header (D13).</summary>
+    public IRelayCommand ToggleLinkCommand { get; }
 
     /// <summary>Closes the pane (D3).</summary>
     public IRelayCommand CloseCommand { get; }

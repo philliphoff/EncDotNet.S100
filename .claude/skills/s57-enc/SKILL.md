@@ -5,11 +5,14 @@ description: |
   reading cells and update files, detecting S-57 vs S-101/S-401/AML `.000`
   files, the S-57 → S-101 (and inland → S-401) translation that is the only
   way S-57 is drawn, and the reverse S-101 → S-57 conversion under S-65
-  Annex C with its round-trip harness. USE FOR: `src/EncDotNet.S100.Datasets.S57/**`,
+  Annex C with its round-trip harness, and the Esri S-57 NIS → S-57 cell
+  conversion. USE FOR: `src/EncDotNet.S100.Datasets.S57/**`,
   `S57DatasetProcessor`, `S57ToS101Translator`, `S101ToS57Translator`,
   `S57S101Mapping`/`DefaultRules`/`InlandRules`, `S57UpdateApplicator`,
   S-57 exchange sets (`CATALOG.031`), `s100 s57 convert`,
-  `s100 s101 convert --to s57`, translation diagnostics, SCAMIN/CSCL cell
+  `s100 s101 convert --to s57`, `src/EncDotNet.S100.Datasets.Nis/**`,
+  `NisToS57Translator`, `FileGdbNisSource`, `s100 nis convert`,
+  translation diagnostics, SCAMIN/CSCL cell
   display window, S-57 tests and the NOAA round trip.
   DO NOT USE FOR: S-101 model, ISO 8211 reading or Lua portrayal rules
   (use s101-enc), generic S-100 framework/catalogue questions (use
@@ -23,8 +26,11 @@ description: |
 - `src/EncDotNet.S100.Datasets.S57/**`, `tests/EncDotNet.S100.Datasets.S57.Tests/**`
 - `src/EncDotNet.S100.Datasets.Pipelines/S57DatasetProcessor.cs`, the S-57/AML
   registrations in `Registry/S100Products.cs`, `Registry/DatasetIso8211Matcher.cs`
-- CLI `tools/EncDotNet.S100.Cli/Commands/S57Convert*.cs`, `S101Convert*.cs`
-- Docs: `docs/s57-to-s101.md`, `docs/s101-to-s57.md`, the package README
+- CLI `tools/EncDotNet.S100.Cli/Commands/S57Convert*.cs`, `S101Convert*.cs`,
+  `NisConvert*.cs`
+- `src/EncDotNet.S100.Datasets.Nis/**`, `tests/EncDotNet.S100.Datasets.Nis.Tests/**`
+- Docs: `docs/s57-to-s101.md`, `docs/s101-to-s57.md`, `docs/nis-to-s57.md`,
+  the package READMEs
 
 ## Spec anchors
 - IHO S-57 Ed 3.1 (Part 3 encoding, Appendix A object/attribute catalogue).
@@ -38,6 +44,12 @@ description: |
   `EncDotNet.Iso8211`); its `S57DocumentWriter` encodes reverse output. S-57
   codes and List types come from `S57ObjectCatalogue.Iho` upstream — don't
   re-add local OBJL/ATTL tables (#1284).
+- `EncDotNet.S100.Datasets.Nis` reads an Esri ArcGIS Maritime S-57 NIS and
+  writes S-57 base cells (#1759). `INisSource` keeps the conversion
+  independent of storage. `FileGdbNisSource` is a managed, read-only file
+  geodatabase reader that needs no Esri software. `NisToS57Translator` turns
+  one cell into an `S57Document` for `S57DocumentWriter`. See
+  `docs/nis-to-s57.md` and the package README.
 - **No S-57 rendering path.** `S57DatasetProcessor` translates in memory and
   hands the result to the S-101 (or S-401) Part 9A Lua pipeline. Its `Spec` is
   `S-57`; `PortrayalSpec` is the translation target. Falls back to S-101 if no

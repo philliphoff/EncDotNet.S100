@@ -4,8 +4,9 @@ namespace EncDotNet.S100.Viewer.Tools;
 
 /// <summary>
 /// A pluggable map tool (Pick Mode, Measure Mode, future range/bearing,
-/// parallel index, etc.). Tools own their own gesture interpretation and
-/// any overlay layers they need; the host (<see cref="MapToolController"/>
+/// parallel index, etc.). Tools own their own gesture interpretation; their
+/// state is geographic and each map draws it (split map design note D12).
+/// The host (<see cref="MapToolController"/>
 /// + <c>MapInteractionController</c>) routes pointer/key events to the
 /// active tool and respects its <c>true</c>/<c>false</c> "handled"
 /// return value to suppress default Mapsui pan/zoom behaviour.
@@ -34,10 +35,17 @@ internal interface IMapTool
 
     /// <summary>
     /// Called by the controller when this tool is being switched out. The
-    /// tool must remove any overlay layers and stop subscribing to map
-    /// events.
+    /// tool must stop subscribing to map events.
     /// </summary>
     void OnDeactivated();
+
+    /// <summary>
+    /// Called by the controller when the tool's input moves to another map
+    /// of a split (the one under the pointer, or the active one): the tool
+    /// keeps its state and reads positions through <paramref name="context"/>
+    /// from now on (split map design note D12).
+    /// </summary>
+    void OnContextChanged(MapToolContext context);
 
     /// <summary>
     /// Routed pointer-pressed (tunnel phase). Return <c>true</c> to mark

@@ -25,6 +25,7 @@
     <Project Path="src/EncDotNet.S100.Datasets.S411/EncDotNet.S100.Datasets.S411.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S412/EncDotNet.S100.Datasets.S412.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S421/EncDotNet.S100.Datasets.S421.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.Nis/EncDotNet.S100.Datasets.Nis.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S57/EncDotNet.S100.Datasets.S57.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Grib/EncDotNet.S100.Datasets.Grib.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Weather/EncDotNet.S100.Datasets.Weather.csproj" />
@@ -85,6 +86,7 @@
     <Project Path="tests/EncDotNet.S100.DynamicSources.Nmea.Tests/EncDotNet.S100.DynamicSources.Nmea.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Nmea.Tests/EncDotNet.S100.Nmea.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.NetCdf.Tests/EncDotNet.S100.Datasets.NetCdf.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Datasets.Nis.Tests/EncDotNet.S100.Datasets.Nis.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S57.Tests/EncDotNet.S100.Datasets.S57.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.Grib.Tests/EncDotNet.S100.Datasets.Grib.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.Weather.Tests/EncDotNet.S100.Datasets.Weather.Tests.csproj" />

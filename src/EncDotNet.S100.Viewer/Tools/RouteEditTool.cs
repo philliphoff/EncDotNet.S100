@@ -86,6 +86,21 @@ internal sealed class RouteEditTool : IMapTool
         _dragActive = false;
     }
 
+    /// <summary>
+    /// The input moved to another map (D12): the route is drawn in every
+    /// map, so it can be edited from any of them.
+    /// </summary>
+    public void OnContextChanged(MapToolContext context)
+    {
+        EndDragGesture();
+        _context = context;
+        _pressPosition = null;
+        _pressIsLeftButton = false;
+        _dragWaypointIndex = null;
+        _pressHandleLeg = null;
+        _dragActive = false;
+    }
+
     public bool OnPointerPressed(PointerPressedEventArgs e)
     {
         if (_context is null) return false;

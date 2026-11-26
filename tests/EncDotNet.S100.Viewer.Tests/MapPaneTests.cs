@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.VisualTree;
 using EncDotNet.S100.Rendering.Engine.Prediction;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.Headless;
@@ -133,5 +135,38 @@ public sealed class MapPaneTests
 
         Assert.False(host.IsShown("MapPane.map-2.Header"));
         Assert.False(host.IsShown("MapPane.map-2.FoldStrip"));
+    }
+
+    [AvaloniaFact]
+    public void The_header_chain_links_the_views_and_every_header_reads_Linked()
+    {
+        // D13: the chain in any header; each linked header reads "Linked".
+        var split = TwoPanes();
+        var (host, _, _) = Show(split);
+        using var _h = host;
+
+        var leftChain = host.Find<ToggleButton>("MapPane.map-1.Link");
+        Assert.True(host.IsShown("MapPane.map-2.Link"));
+        Assert.False(leftChain.IsChecked);
+        Assert.Equal("Link views", Avalonia.Automation.AutomationProperties.GetName(leftChain));
+
+        host.Click(leftChain);
+        host.Window.UpdateLayout();
+
+        Assert.True(split.IsLinked);
+        foreach (var id in new[] { "MapPane.map-1.Link", "MapPane.map-2.Link" })
+        {
+            var chain = host.Find<ToggleButton>(id);
+            Assert.True(chain.IsChecked);
+            Assert.Equal("Unlink views", Avalonia.Automation.AutomationProperties.GetName(chain));
+            Assert.Contains(
+                chain.GetVisualDescendants().OfType<TextBlock>(),
+                t => t.Text == "Linked" && t.IsEffectivelyVisible);
+        }
+
+        host.Click(host.Find<ToggleButton>("MapPane.map-2.Link"));
+
+        Assert.False(split.IsLinked);
+        Assert.False(host.Find<ToggleButton>("MapPane.map-1.Link").IsChecked);
     }
 }

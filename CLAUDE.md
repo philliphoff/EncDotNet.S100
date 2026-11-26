@@ -20,7 +20,7 @@ messy, redesign it rather than wrapping it in a facade.
   under `Specifications/content/<SXXX>/`.
 - `src/EncDotNet.S100.Datasets.<Product>` — one project per product reader
   (S-57, S-101, S-102, S-104, S-111, S-122 … S-421, plus Weather, Grib,
-  NetCdf, Cap, Aml, TropicalCyclones). `Datasets.Pipelines` wires readers
+  NetCdf, Cap, Aml, Nis, TropicalCyclones). `Datasets.Pipelines` wires readers
   to pipelines.
 - `src/EncDotNet.S100.Renderers.*`, `Rendering.{Engine,Scene}` — Skia and
   Mapsui renderers.
@@ -103,7 +103,7 @@ reconcile them. To plan a feature against the specs first, run
 | S-100 framework, Parts 1–10, exchange-set structure, catalogues, Lua engine, Core pipelines | `s100-framework` |
 | Any GML-encoded product (S-122/124/125/127/128/129/131/201/411/412/421) | `s100-gml-products` + the product skill |
 | S-101 ENC, S-401 Inland ENC, ISO 8211, Lua portrayal | `s101-enc` |
-| S-57 ENC, S-57 ↔ S-101 conversion | `s57-enc` |
+| S-57 ENC, S-57 ↔ S-101 conversion, NIS → S-57 | `s57-enc` |
 | S-102 bathymetry | `s102-bathymetry` |
 | S-104 water level | `s104-water-level` |
 | S-111 surface currents | `s111-surface-currents` |

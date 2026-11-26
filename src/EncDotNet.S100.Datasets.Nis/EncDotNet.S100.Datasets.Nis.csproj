@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>Reads an Esri ArcGIS Maritime S-57 Nautical Information System (NIS) and converts it to S-57 ENC cells. A source-neutral NIS model and INisSource interface, a managed read-only file geodatabase reader (no native dependencies), and a translator from the model to an EncDotNet.S57 document. Not for navigation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.Nis.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EncDotNet.S57" />
+    <PackageReference Include="NetTopologySuite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
+  </ItemGroup>
+
+</Project>

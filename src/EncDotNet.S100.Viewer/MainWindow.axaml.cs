@@ -33,6 +33,8 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
     private readonly MapViews _mapViews;
     private readonly MapSplitViewModel _split;
     private readonly MapStatusFocus _statusFocus;
+    private readonly MapSplitServices _splitServices;
+    private readonly PickMapPresencePresenter _pickMapPresence;
     private bool _paneFoldPending;
     private readonly MapViewProbes _mapProbes;
     private readonly DebouncedSettingsSaver _mapLayoutSaver;
@@ -218,12 +220,26 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
         _mapViews.ActiveChanged += (_, _) => OnActiveMapChanged();
         _statusFocus = new MapStatusFocus(_mapViews);
         _statusFocus.Changed += (_, _) => OnStatusMapChanged();
+        _splitServices = new MapSplitServices(
+            _mapViews, _split, _statusFocus, new MapCursorEcho(), new PickPresence(_mapViews));
+        // Object information says which maps draw the pick (D11, #1733).
+        _pickMapPresence = new PickMapPresencePresenter(
+            App.Services.GetRequiredService<PickReportViewModel>(),
+            _splitServices,
+            App.Services.GetRequiredService<ITimeFormatProvider>(),
+            SelectDatasetRow);
         SplitMapControls.DataContext = _split;
         // View › Split Map: ⌘\ is the macOS menu item's; Ctrl+\ elsewhere (D1).
         KeyBindings.Add(new KeyBinding
         {
             Gesture = new KeyGesture(Key.OemPipe, KeyModifiers.Control),
             Command = _split.ToggleSplitCommand,
+        });
+        // View › Link Map Views: ⌘⇧\ on macOS, Ctrl+Shift+\ elsewhere (D13).
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.OemPipe, KeyModifiers.Control | KeyModifiers.Shift),
+            Command = _split.ToggleLinkCommand,
         });
 
         // Let the feedback reporter capture the whole application window.
@@ -287,6 +303,7 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
             }
             _paneViews.Clear();
             _mapProbes.Dispose();
+            _pickMapPresence.Dispose();
         };
         DataContext = _viewModel;
 

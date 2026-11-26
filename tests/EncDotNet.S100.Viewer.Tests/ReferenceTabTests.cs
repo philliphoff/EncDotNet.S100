@@ -336,6 +336,45 @@ public sealed class ReferenceTabTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Used_by_shows_feature_types_with_the_same_cases_on_one_card()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        var index = Assert.IsType<ChartReferenceIndex>(await f.Service.GetIndexAsync(S101));
+        using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
+        var entry = Assert.IsType<SymbolEntryViewModel>(ReferenceEntryViewModel.Create(
+            Item(index, ReferenceKind.Symbol, "ISODGR01"),
+            new ReferenceEntryContext { Index = index, Artwork = f.Service.GetArtwork(S101), Glyphs = cache, Open = _ => { } }));
+        entry.Start();
+
+        // Obstruction, Underwater/Awash Rock and Wreck draw it in the same cases: one card, the cases said once.
+        Assert.True(entry.UsedBy.Count > 1);
+        var card = Assert.Single(entry.UsedByGroups);
+        Assert.Equal(entry.UsedBy, card.FeatureTypes);
+        Assert.Equal(entry.UsedBy[0].CaseTerms, card.CaseTerms);
+
+        using var host = ViewHost.Show(new ReferenceEntryView { DataContext = entry }, 360, 1300);
+        var shown = Assert.Single(host.FindAll<Border>("Reference.Entry.UsedByCard"));
+        Assert.Equal(
+            entry.UsedBy.Select(l => l.Name),
+            shown.GetVisualDescendants().OfType<ReferenceTerm>().Where(t => t.Classes.Contains("crCardTitle")).Select(t => t.Text));
+        Assert.Equal(card.CaseTerms.Count, shown.GetVisualDescendants().OfType<ReferenceTermText>().Count());
+    }
+
+    [Fact]
+    public void Used_by_keeps_feature_types_with_different_cases_on_their_own_cards_in_order()
+    {
+        ChartReferenceLinkViewModel Link(string name, params string[] cases) => new(
+            new ReferenceKey(S101, ReferenceKind.FeatureType, name), name, [.. cases.Select(TermText.Plain)], null, _ => { });
+
+        var groups = UsedByGroupViewModel.Group(
+            [Link("A", "x is on"), Link("B", "y is on"), Link("C", "x is on"), Link("D")]);
+
+        Assert.Equal([["A", "C"], ["B"], ["D"]], groups.Select(g => g.FeatureTypes.Select(l => l.Name).ToArray()));
+        Assert.Equal(["x is on"], groups[0].CaseTerms.Select(c => c.Text));
+        Assert.False(groups[2].HasCases);
+    }
+
+    [AvaloniaFact]
     public async Task A_symbols_entry_has_three_palettes_its_setting_origin_and_Used_by_with_cases()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");
@@ -356,6 +395,7 @@ public sealed class ReferenceTabTests : IDisposable
         var usedBy = entry.UsedBy.Single(l => l.Code == "LateralBeacon");
         Assert.Equal("When simplified symbols is on:", usedBy.Cases[0]);
         Assert.Contains(usedBy.Cases, c => c.Contains("Beacon shape is a stake, pole, perch or post", StringComparison.Ordinal));
+        Assert.Same(usedBy, Assert.Single(Assert.Single(entry.UsedByGroups).FeatureTypes));
 
         await entry.GlyphsDrawn;
         Assert.All(entry.Palettes, p => Assert.IsAssignableFrom<Bitmap>(p.Glyph));

@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Convert an ArcGIS Maritime NIS to S-57.** `s100 nis convert` reads an
+  Esri ArcGIS Maritime S-57 Nautical Information System from a file
+  geodatabase, with a managed reader that needs no Esri software, and writes
+  one of its cells as an S-57 base cell or exchange set. The new
+  EncDotNet.S100.Datasets.Nis library does the work from a source-neutral NIS
+  model, so an ArcGIS Pro add-in can feed it from Pro's own geodatabase API.
+  See [Converting an NIS to S-57](nis-to-s57.md)
+  ([#1758](https://github.com/philliphoff/EncDotNet.S100/issues/1758)).
+
 - **Split the map.** SoundCharts can show two maps side by side, each
   panned and zoomed on its own, from the title bar's **Split map** button or
   **View** > **Split Map** (⌘\). Each map has a header with its number and
@@ -15,6 +24,15 @@ month. For package versions and release assets, see
   datasets and time, and share their tiles and textures, so a second map on
   the same view costs little memory
   ([#1732](https://github.com/philliphoff/EncDotNet.S100/issues/1732)).
+
+- **Picks, tools and the pointer across split maps.** A pick is outlined in
+  every map that shows it, and Object information says which maps show it.
+  Measure, Range & bearing and route editing work in either map, so a
+  measurement can start in one map and end in the other, and the result is
+  drawn in both. A map outlines the area of a much smaller map with its
+  number, and the pointer's position is echoed as a faint crosshair in the
+  other map
+  ([#1733](https://github.com/philliphoff/EncDotNet.S100/issues/1733)).
 
 - **Reference entries show the symbol each value and setting gives.** Open an
   attribute from a pick in Object information, or from a feature type's entry,

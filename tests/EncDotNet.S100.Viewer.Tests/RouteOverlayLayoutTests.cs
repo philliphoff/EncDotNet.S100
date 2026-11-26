@@ -196,7 +196,7 @@ public sealed class RouteOverlayLayoutTests
         route.AppendWaypoint(new GeoPosition(0, 0.130)); // 30 px: no handle
         var tool = new RouteEditTool(service);
         tool.OnActivated(new MapToolContext(
-            new MapControl(), _ => { }, _ => { }, _ => { }, () => { }, _ => null, Flat));
+            new MapControl(), _ => { }, _ => null, Flat));
 
         Assert.Equal(0, tool.HitTestHandle(new Point(52, -3)));
         Assert.Null(tool.HitTestHandle(new Point(115, 0)));

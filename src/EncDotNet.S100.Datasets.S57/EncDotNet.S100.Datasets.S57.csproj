@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="EncDotNet.S100.Datasets.S57.Tests" />
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.Nis" />
   </ItemGroup>
 
   <ItemGroup>

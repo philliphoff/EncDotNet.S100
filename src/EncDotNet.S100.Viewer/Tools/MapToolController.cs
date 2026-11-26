@@ -33,26 +33,32 @@ internal sealed class MapToolController : INotifyPropertyChanged
     /// </summary>
     public string? ActiveToolId => _activeTool?.Id;
 
+    /// <summary>The map the tools take their input from, or <see langword="null"/> before <see cref="Initialize"/>.</summary>
+    public MapToolContext? Context => _context;
+
     /// <summary>
     /// Provides the controller with the live <see cref="MapToolContext"/>
     /// once the visual tree is built. Until this is called, tool
     /// activation is recorded but tools are not actually invoked. After
     /// this call, any pre-recorded active tool is fully activated. Called
-    /// again with another map's context (the active map of a split, #1732),
-    /// the active tool moves to that map: it's deactivated on the old one
-    /// and activated on the new one.
+    /// again with another map's context (the active map of a split, or the
+    /// one an event comes from), the active tool keeps its state and takes
+    /// its input from that map (split map design note D12).
     /// </summary>
     public void Initialize(MapToolContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (ReferenceEquals(_context, context))
             return;
-        if (_activeTool is not null && _context is not null)
-            _activeTool.OnDeactivated();
+        var first = _context is null;
         _context = context;
 
-        if (_activeTool is not null)
+        if (_activeTool is null)
+            return;
+        if (first)
             _activeTool.OnActivated(context);
+        else
+            _activeTool.OnContextChanged(context);
     }
 
     /// <summary>Registers a tool. Tools are typically registered once at startup.</summary>
@@ -101,19 +107,30 @@ internal sealed class MapToolController : INotifyPropertyChanged
     public bool IsActive(string id) => string.Equals(_activeTool?.Id, id, StringComparison.Ordinal);
 
     // --- Pointer/key forwarding ---------------------------------------
+    // Pointer events carry the map they come from: in a split the tools take
+    // input from any map, so a measurement can start in one and end in
+    // another (D12, O2).
 
-    public bool OnPointerPressed(PointerPressedEventArgs e) =>
-        _activeTool is { } t && t.OnPointerPressed(e);
+    public bool OnPointerPressed(MapToolContext source, PointerPressedEventArgs e) =>
+        From(source) is { } t && t.OnPointerPressed(e);
 
-    public bool OnPointerMoved(PointerEventArgs e) =>
-        _activeTool is { } t && t.OnPointerMoved(e);
+    public bool OnPointerMoved(MapToolContext source, PointerEventArgs e) =>
+        From(source) is { } t && t.OnPointerMoved(e);
 
-    public bool OnPointerReleased(PointerReleasedEventArgs e) =>
-        _activeTool is { } t && t.OnPointerReleased(e);
+    public bool OnPointerReleased(MapToolContext source, PointerReleasedEventArgs e) =>
+        From(source) is { } t && t.OnPointerReleased(e);
 
-    public bool OnDoubleTapped(TappedEventArgs e) =>
-        _activeTool is { } t && t.OnDoubleTapped(e);
+    public bool OnDoubleTapped(MapToolContext source, TappedEventArgs e) =>
+        From(source) is { } t && t.OnDoubleTapped(e);
 
     public bool OnAction(MapToolAction action) =>
         _activeTool is { } t && t.OnAction(action);
+
+    private IMapTool? From(MapToolContext source)
+    {
+        if (_activeTool is null)
+            return null;
+        Initialize(source);
+        return _activeTool;
+    }
 }

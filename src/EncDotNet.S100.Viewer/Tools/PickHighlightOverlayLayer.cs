@@ -47,9 +47,15 @@ internal readonly record struct PickHighlightGeometry(
 /// selected or its geometry could not be resolved (e.g. coverage picks or
 /// container features without geometry).
 /// </param>
+/// <param name="GhostReason">
+/// Set when this map doesn't draw the picked feature while another map of a
+/// split does (split map design note D10): the pick is drawn as a dashed grey
+/// ghost with this text in a tag. <see langword="null"/> for the usual highlight.
+/// </param>
 internal readonly record struct PickHighlightState(
     GeoPosition? Location,
-    PickHighlightGeometry? Geometry)
+    PickHighlightGeometry? Geometry,
+    string? GhostReason = null)
 {
     /// <summary>True when there is nothing to draw.</summary>
     public bool IsEmpty => Location is null && (Geometry is null || !Geometry.Value.HasGeometry);
@@ -114,6 +120,9 @@ internal static class PickHighlightOverlayLayer
     private const double MarkerCasingWidth = 5.0;
     private const double MarkerRingWidth = 2.0;
 
+    // The ghost (D10): the same outline, grey and dashed, with no fill.
+    private static readonly MapsuiColor GhostColor = new(120, 124, 130);
+
     /// <summary>
     /// Creates a fresh, empty overlay layer. It repeats across world copies,
     /// as the chart does, so a pick on a copy is outlined there (issue #773).
@@ -135,7 +144,8 @@ internal static class PickHighlightOverlayLayer
         var features = new List<IFeature>();
 
         var accent = appearance.Accent;
-        var accentColor = new MapsuiColor(accent.R, accent.G, accent.B);
+        var ghost = state.GhostReason is not null;
+        var accentColor = ghost ? GhostColor : new MapsuiColor(accent.R, accent.G, accent.B);
         // The accent ring is cased in white so it reads against any basemap.
         // Dusk/Night palettes dim the casing to a mid grey so the marker
         // doesn't glare on a dark chart — a bright-white ring harms night
@@ -145,13 +155,19 @@ internal static class PickHighlightOverlayLayer
         // 1) Object outline (drawn first so the marker sits on top).
         if (state.Geometry is { } geometry && geometry.HasGeometry)
         {
-            AddObjectOutline(features, geometry, accentColor);
+            AddObjectOutline(features, geometry, accentColor, ghost);
         }
 
         // 2) Position marker (cursor echo) at the click location.
         if (state.Location is { } loc)
         {
-            AddPositionMarker(features, loc.Latitude, loc.Longitude, accentColor, casingColor);
+            AddPositionMarker(features, loc.Latitude, loc.Longitude, accentColor, casingColor, ghost);
+        }
+
+        // 3) The ghost's tag, beside the pick (D10).
+        if (state.GhostReason is { } reason && GhostTagAnchor(state) is { } anchor)
+        {
+            AddGhostTag(features, anchor, reason, appearance);
         }
 
         layer.Features = features;
@@ -219,32 +235,67 @@ internal static class PickHighlightOverlayLayer
     private static void AddObjectOutline(
         List<IFeature> features,
         PickHighlightGeometry geometry,
-        MapsuiColor accentColor)
+        MapsuiColor accentColor,
+        bool dashed)
     {
         // Area: faint fill under the exterior ring, then accent outlines for
-        // the exterior ring and any interior holes.
+        // the exterior ring and any interior holes. A ghost has no fill.
         if (geometry.ExteriorRing.Count >= 3)
         {
-            AddAreaFill(features, geometry.ExteriorRing, geometry.InteriorRings, accentColor);
-            AddRingOutline(features, geometry.ExteriorRing, accentColor);
+            if (!dashed)
+                AddAreaFill(features, geometry.ExteriorRing, geometry.InteriorRings, accentColor);
+            AddRingOutline(features, geometry.ExteriorRing, accentColor, dashed);
             foreach (var hole in geometry.InteriorRings)
             {
-                AddRingOutline(features, hole, accentColor);
+                AddRingOutline(features, hole, accentColor, dashed);
             }
         }
 
         // Curves: stroke each curve in the accent colour.
         foreach (var curve in geometry.Curves)
         {
-            AddPolyline(features, curve, accentColor);
+            AddPolyline(features, curve, accentColor, dashed: dashed);
         }
 
         // Points: a geometry-space ring around each point so the highlight
         // hugs the feature even if the click landed slightly off it.
         foreach (var (lat, lon) in geometry.Points)
         {
-            AddPointRing(features, lat, lon, accentColor);
+            AddPointRing(features, lat, lon, accentColor, dashed);
         }
+    }
+
+    /// <summary>Where the ghost's tag goes: at the pick, else at the feature.</summary>
+    private static GeoPosition? GhostTagAnchor(PickHighlightState state)
+    {
+        if (state.Location is { } location)
+            return location;
+        if (state.Geometry is not { } g)
+            return null;
+        if (g.Points.Count > 0)
+            return g.Points[0];
+        if (g.ExteriorRing.Count > 0)
+            return g.ExteriorRing[0];
+        return g.Curves.FirstOrDefault(c => c.Count > 0)?[0];
+    }
+
+    private static void AddGhostTag(
+        List<IFeature> features, GeoPosition anchor, string reason, PickHighlightAppearance appearance)
+    {
+        var (mx, my) = SphericalMercator.FromLonLat(anchor.Longitude, anchor.Latitude);
+        var feature = new GeometryFeature(new Point(mx, my));
+        feature.Styles.Add(new LabelStyle
+        {
+            Text = reason,
+            Font = new Font { Size = 11 },
+            ForeColor = appearance.IsDarkBasemap ? new MapsuiColor(220, 220, 220) : new MapsuiColor(60, 64, 70),
+            BackColor = new Brush(appearance.IsDarkBasemap ? new MapsuiColor(40, 40, 40, 230) : new MapsuiColor(255, 255, 255, 235)),
+            Halo = new Pen { Color = GhostColor, Width = 1 },
+            HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Left,
+            VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center,
+            Offset = new Offset(16, 0),
+        });
+        features.Add(feature);
     }
 
     private static void AddAreaFill(
@@ -302,7 +353,8 @@ internal static class PickHighlightOverlayLayer
     private static void AddRingOutline(
         List<IFeature> features,
         IReadOnlyList<GeoPosition> ring,
-        MapsuiColor accentColor)
+        MapsuiColor accentColor,
+        bool dashed)
     {
         // Close the ring for outlining (a ring's last vertex may or may not
         // repeat the first).
@@ -312,14 +364,15 @@ internal static class PickHighlightOverlayLayer
         {
             points.Add(points[0]);
         }
-        AddPolyline(features, points, accentColor);
+        AddPolyline(features, points, accentColor, dashed: dashed);
     }
 
     private static void AddPolyline(
         List<IFeature> features,
         IReadOnlyList<GeoPosition> points,
         MapsuiColor accentColor,
-        double width = OutlineWidth)
+        double width = OutlineWidth,
+        bool dashed = false)
     {
         foreach (var subPath in MarineGeodesy.SplitAtAntimeridian(points))
         {
@@ -333,7 +386,7 @@ internal static class PickHighlightOverlayLayer
             var feature = new GeometryFeature(new LineString(coords));
             feature.Styles.Add(new VectorStyle
             {
-                Line = new Pen { Color = accentColor, Width = width },
+                Line = new Pen { Color = accentColor, Width = width, PenStyle = dashed ? PenStyle.Dash : PenStyle.Solid },
                 Opacity = OutlineOpacity,
             });
             features.Add(feature);
@@ -344,7 +397,8 @@ internal static class PickHighlightOverlayLayer
         List<IFeature> features,
         double lat,
         double lon,
-        MapsuiColor accentColor)
+        MapsuiColor accentColor,
+        bool dashed)
     {
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
         var feature = new GeometryFeature(new Point(mx, my));
@@ -353,7 +407,7 @@ internal static class PickHighlightOverlayLayer
             SymbolType = SymbolType.Ellipse,
             SymbolScale = MarkerRingScale,
             Fill = null,
-            Outline = new Pen { Color = accentColor, Width = OutlineWidth },
+            Outline = new Pen { Color = accentColor, Width = OutlineWidth, PenStyle = dashed ? PenStyle.Dash : PenStyle.Solid },
         });
         features.Add(feature);
     }
@@ -363,7 +417,8 @@ internal static class PickHighlightOverlayLayer
         double lat,
         double lon,
         MapsuiColor accentColor,
-        MapsuiColor casingColor)
+        MapsuiColor casingColor,
+        bool dashed = false)
     {
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
         var point = new Point(mx, my);
@@ -388,7 +443,7 @@ internal static class PickHighlightOverlayLayer
             SymbolType = SymbolType.Ellipse,
             SymbolScale = MarkerRingScale,
             Fill = null,
-            Outline = new Pen { Color = accentColor, Width = MarkerRingWidth },
+            Outline = new Pen { Color = accentColor, Width = MarkerRingWidth, PenStyle = dashed ? PenStyle.Dash : PenStyle.Solid },
         });
         features.Add(ring);
     }

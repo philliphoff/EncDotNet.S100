@@ -33,7 +33,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// overlays are attached, in the order the window always used: construct
 /// (host only), then <see cref="Attach"/>.
 /// </remarks>
-internal sealed class MapView : IMapViewCapabilities, IDisposable
+internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IDisposable
 {
     /// <summary>Within this many pixels of the checked route, the pointer moves the profile cursor.</summary>
     private const double CheckHoverRadiusPx = 12;
@@ -66,6 +66,10 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     private float _routeCheckLegendReserve;
     private MapInteractionController? _interaction;
     private MapToolContext? _toolContext;
+    private ToolOverlayController? _toolOverlay;
+    private SplitMapOverlayController? _splitOverlay;
+    private Navigator? _linkNavigator;
+    private Navigator.ViewportChangedEventHandler? _linkViewportChanged;
     private bool _disposed;
 
     /// <summary>
@@ -112,7 +116,13 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         // synchronously in its constructor. See
         // docs/design/ais-zoom-gated-subscription.md.
         if (pane.MapControl.Map?.Navigator is { } navigator)
+        {
             _viewport.Bind(navigator);
+            // The viewport link (#1734) follows this map's view frame by frame.
+            _linkNavigator = navigator;
+            _linkViewportChanged = (_, _) => ViewChanged?.Invoke(this, EventArgs.Empty);
+            navigator.ViewportChanged += _linkViewportChanged;
+        }
     }
 
     /// <summary>The view's stable id.</summary>
@@ -141,6 +151,19 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
 
     /// <inheritdoc />
     public IMapDatasetSession DatasetSession { get; }
+
+    /// <inheritdoc />
+    public EncDotNet.S100.Rendering.Engine.ViewState? CurrentView =>
+        _linkNavigator?.Viewport is { Width: > 0, Height: > 0, Resolution: > 0 } viewport
+            ? EncDotNet.S100.Renderers.Mapsui.MapsuiChartLayers.ToViewState(viewport)
+            : null;
+
+    /// <inheritdoc />
+    public event EventHandler? ViewChanged;
+
+    /// <inheritdoc />
+    public void ShowView(double centerX, double centerY, double resolution) =>
+        Host.SetViewportToCenterAndResolution(new MPoint(centerX, centerY), resolution);
 
     /// <summary>
     /// The render-activity monitor fed by this map, or <see langword="null"/>
@@ -184,8 +207,9 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     public void RefreshGraphics() => _renderActivityMap?.RefreshGraphics();
 
     /// <summary>
-    /// Hands the map tools this map's context, so they work in it: the
-    /// window calls it for the active map (#1732, D12 lands in slice 6).
+    /// Hands the map tools this map's context, so keyboard input reaches
+    /// them through it: the window calls it for the active map (#1732). A
+    /// pointer event over any map hands them that map's (#1733, D12).
     /// </summary>
     public void BindTools()
     {
@@ -205,20 +229,17 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     /// <param name="viewModel">The window's view-model.</param>
     /// <param name="loader">The dataset loader.</param>
     /// <param name="pickService">The pick service.</param>
-    /// <param name="isActive">Whether this is the active map, whose pointer moves reach the map tools (#1732, D4).</param>
-    /// <param name="statusFocus">The map the status bar describes: told when the pointer is over this map, asked whether this map writes the scale (#1732).</param>
+    /// <param name="split">The other maps of a split: the status bar's map, the cursor echo, extent boxes and pick presence (#1732, #1733).</param>
     public void Attach(
         MainViewModel viewModel,
         IDatasetLoaderService loader,
         IPickService pickService,
-        Func<bool> isActive,
-        MapStatusFocus statusFocus)
+        MapSplitServices split)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickService);
-        ArgumentNullException.ThrowIfNull(isActive);
-        ArgumentNullException.ThrowIfNull(statusFocus);
+        ArgumentNullException.ThrowIfNull(split);
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_viewModel is not null)
             throw new InvalidOperationException("The map view is already attached.");
@@ -283,7 +304,7 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             MapZoomLimits.Apply(notifierNav);
 
         AttachDynamicSources();
-        AttachOverlays(viewModel, loader);
+        AttachOverlays(viewModel, loader, split);
 
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the
@@ -312,15 +333,15 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         {
             DepthBasis = services.GetService<DepthBasisService>(),
             Viewport = Host,
-            IsActiveMap = isActive,
-            IsStatusMap = () => statusFocus.IsCurrent(this),
+            IsStatusMap = () => split.StatusFocus.IsCurrent(this),
             PointerOverMap = over =>
             {
                 if (over)
-                    statusFocus.PointerEntered(this);
+                    split.StatusFocus.PointerEntered(this);
                 else
-                    statusFocus.PointerLeft(this);
+                    split.StatusFocus.PointerLeft(this);
             },
+            PointerPosition = position => split.CursorEcho.Report(Id, position),
             ReferenceMenu = services.GetService<ChartReference.ReferenceTerms>() is { } terms
                 ? new ChartReference.MapReferenceMenu(terms)
                 : null,
@@ -398,7 +419,7 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
     /// <summary>
     /// Adds the overlay controllers in the order they stack on the overlay tier.
     /// </summary>
-    private void AttachOverlays(MainViewModel viewModel, IDatasetLoaderService loader)
+    private void AttachOverlays(MainViewModel viewModel, IDatasetLoaderService loader, MapSplitServices split)
     {
         var services = _services;
         var appearance = services.GetRequiredService<IMeasureOverlayAppearanceProvider>();
@@ -414,7 +435,9 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             appearance,
             viewerSettingsService,
             UiThread.RunOrPost,
-            warningDrawing: services.GetService<NavigationalWarningDrawingService>());
+            warningDrawing: services.GetService<NavigationalWarningDrawingService>(),
+            // D10: a map that doesn't draw the picked feature shows a ghost.
+            ghostReason: hit => split.Picks.GhostReason(this, hit));
 
         // Hover to find (#1412, legends D19): ring a hovered Legend row's features.
         _legendFindController = new LegendFindOverlayController(
@@ -466,6 +489,18 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             services.GetRequiredService<IWaterLevelAdjustmentState>(),
             // D23: clipped to the loaded charts' water.
             () => services.GetRequiredService<ViewerWaterLevelCatalog>().WaterMask);
+
+        // The other panes of a split (#1733): the extent boxes of much smaller
+        // panes (D15) and the cursor echo (D16).
+        _splitOverlay = new SplitMapOverlayController(
+            Host,
+            Id,
+            split.Views,
+            split.CursorEcho,
+            split.Split,
+            appearance,
+            UiThread.RunOrPost,
+            Host.RequestRedraw);
 
         // On-chart overscale curtain: paint a subtle vertical-line pattern over
         // the region of each cell displayed beyond its compilation scale (#441).
@@ -534,20 +569,28 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
 
         var context = _toolContext = new MapToolContext(
             mapControl: Pane.MapControl,
-            addLayer: Host.AddToolLayer,
-            removeLayer: Host.RemoveToolLayer,
             setStatusSummary: text => Dispatcher.UIThread.Post(() => viewModel.MapTools.MeasureSummary = text),
-            refreshGraphics: Host.RequestRedraw,
             screenToLatLon: ScreenToLatLon,
             latLonToScreen: LatLonToScreen);
 
         // Tools (pick, measure) were registered by the view-model in its
         // constructor; the window hands them the active map's context
-        // (BindTools), so they work in the map the user is in (#1732).
+        // (BindTools), and a pointer event over this map hands them this
+        // one, so a tool works from any pane (#1733, D12).
 
         // Hand the same controller to the interaction controller so pointer
         // events are offered to the active tool first.
-        interactionController.SetToolController(tools);
+        interactionController.SetToolController(tools, context);
+
+        // The measure and range and bearing state is shared: every map draws it (D12).
+        _toolOverlay = new ToolOverlayController(
+            Host,
+            _services.GetRequiredService<MeasureSession>(),
+            viewModel.MapTools.RangeBearing.State,
+            _services.GetRequiredService<IMeasureOverlayAppearanceProvider>(),
+            _services.GetRequiredService<ViewerSettingsService>(),
+            UiThread.RunOrPost,
+            Host.RequestRedraw);
 
         // The route overlay is persistent (unlike the measure overlay, which
         // only exists while its tool is active): routes stay visible whether
@@ -754,6 +797,11 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
         _disposed = true;
         var services = _services;
 
+        if (_linkNavigator is not null && _linkViewportChanged is not null)
+            _linkNavigator.ViewportChanged -= _linkViewportChanged;
+        _linkNavigator = null;
+        _linkViewportChanged = null;
+
         _validationOverlay?.Dispose();
         _validationOverlay = null;
 
@@ -796,6 +844,10 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             services.GetRequiredService<DynamicSources.DynamicFeatureSourceRegistryAccessor>().Detach(_dynamicSourceOverlayHost);
         _dynamicSourceOverlayHost?.Dispose();
         _dynamicSourceOverlayHost = null;
+        _toolOverlay?.Dispose();
+        _toolOverlay = null;
+        _splitOverlay?.Dispose();
+        _splitOverlay = null;
         _pickHighlightController?.Dispose();
         _pickHighlightController = null;
         _legendFindController?.Dispose();
