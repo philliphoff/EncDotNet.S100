@@ -16,6 +16,15 @@ month. For package versions and release assets, see
   the same view costs little memory
   ([#1732](https://github.com/philliphoff/EncDotNet.S100/issues/1732)).
 
+- **Picks, tools and the pointer across split maps.** A pick is outlined in
+  every map that shows it, and Object information says which maps show it.
+  Measure, Range & bearing and route editing work in either map, so a
+  measurement can start in one map and end in the other, and the result is
+  drawn in both. A map outlines the area of a much smaller map with its
+  number, and the pointer's position is echoed as a faint crosshair in the
+  other map
+  ([#1733](https://github.com/philliphoff/EncDotNet.S100/issues/1733)).
+
 - **Reference entries show the symbol each value and setting gives.** Open an
   attribute from a pick in Object information, or from a feature type's entry,
   and each of its values shows the symbol that feature type gets with it, in

@@ -1,46 +1,40 @@
 using Avalonia;
 using EncDotNet.S100.DataModel;
-using Mapsui.Layers;
 using Mapsui.UI.Avalonia;
 
 namespace EncDotNet.S100.Viewer.Tools;
 
 /// <summary>
-/// Services made available to <see cref="IMapTool"/> implementations while
-/// they are active. Hides the host window/view-model from tools so they
-/// remain testable and don't accumulate cross-cutting dependencies.
+/// One map's input services for <see cref="IMapTool"/> implementations: its
+/// control and the projection between its pointer positions and lat/lon.
+/// Hides the host window/view-model from tools so they remain testable and
+/// don't accumulate cross-cutting dependencies.
 /// </summary>
+/// <remarks>
+/// A tool's state is geographic, so it is shared by every map of a split;
+/// each map draws it with its own overlay (<see cref="Services.ToolOverlayController"/>).
+/// The context only says which map the input comes from, and moves to the
+/// map under the pointer (split map design note D12).
+/// </remarks>
 internal sealed class MapToolContext
 {
-    private readonly Action<ILayer> _addLayer;
-    private readonly Action<ILayer> _removeLayer;
     private readonly Action<string?> _setStatusSummary;
-    private readonly Action _refreshGraphics;
     private readonly Func<Point, GeoPosition?> _screenToLatLon;
     private readonly Func<GeoPosition, Point?> _latLonToScreen;
 
     public MapToolContext(
         MapControl mapControl,
-        Action<ILayer> addLayer,
-        Action<ILayer> removeLayer,
         Action<string?> setStatusSummary,
-        Action refreshGraphics,
         Func<Point, GeoPosition?> screenToLatLon,
         Func<GeoPosition, Point?> latLonToScreen)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
-        ArgumentNullException.ThrowIfNull(addLayer);
-        ArgumentNullException.ThrowIfNull(removeLayer);
         ArgumentNullException.ThrowIfNull(setStatusSummary);
-        ArgumentNullException.ThrowIfNull(refreshGraphics);
         ArgumentNullException.ThrowIfNull(screenToLatLon);
         ArgumentNullException.ThrowIfNull(latLonToScreen);
 
         MapControl = mapControl;
-        _addLayer = addLayer;
-        _removeLayer = removeLayer;
         _setStatusSummary = setStatusSummary;
-        _refreshGraphics = refreshGraphics;
         _screenToLatLon = screenToLatLon;
         _latLonToScreen = latLonToScreen;
     }
@@ -48,27 +42,15 @@ internal sealed class MapToolContext
     /// <summary>
     /// The Mapsui control the tool is operating on. Tools should avoid
     /// calling pan/zoom on it directly — those gestures still belong to
-    /// Mapsui — but may read viewport state for their own rendering.
+    /// Mapsui — but may read viewport state for hit testing.
     /// </summary>
     public MapControl MapControl { get; }
-
-    /// <summary>Adds an overlay layer to the map.</summary>
-    public void AddLayer(ILayer layer) => _addLayer(layer);
-
-    /// <summary>Removes an overlay layer from the map.</summary>
-    public void RemoveLayer(ILayer layer) => _removeLayer(layer);
 
     /// <summary>
     /// Sets a tool-owned summary string (e.g. measure-leg / total) on the
     /// status bar, or <c>null</c> to clear it.
     /// </summary>
     public void SetStatusSummary(string? text) => _setStatusSummary(text);
-
-    /// <summary>
-    /// Asks the host to schedule a redraw of map graphics. Tools call this
-    /// after mutating their overlay layer's feature list.
-    /// </summary>
-    public void RefreshGraphics() => _refreshGraphics();
 
     /// <summary>
     /// Converts a pointer position (in <see cref="MapControl"/> client

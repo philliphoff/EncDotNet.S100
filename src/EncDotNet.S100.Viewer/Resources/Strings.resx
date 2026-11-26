@@ -10550,6 +10550,30 @@
     <value>Map {0}</value>
     <comment>A map pane's label in reading order (split map D19), e.g. Map 1</comment>
   </data>
+  <data name="SplitMap_GhostHiddenFormat" xml:space="preserve">
+    <value>{0} hidden in this map</value>
+    <comment>Tag on a pick's ghost outline in a pane that doesn't draw the picked feature (split map D10), e.g. S-57 hidden in this map</comment>
+  </data>
+  <data name="SplitMap_ShownInFormat" xml:space="preserve">
+    <value>Shown in {0}</value>
+    <comment>Object information chip: the picked feature is drawn in that map (split map D11), e.g. Shown in Map 1</comment>
+  </data>
+  <data name="SplitMap_HiddenInFormat" xml:space="preserve">
+    <value>Hidden in {0}</value>
+    <comment>Object information chip: the picked feature isn't drawn in that map (split map D11), e.g. Hidden in Map 2</comment>
+  </data>
+  <data name="SplitMap_HiddenInTooltip" xml:space="preserve">
+    <value>Select its dataset in Datasets</value>
+    <comment>Tooltip of a Hidden in chip in Object information (split map D11)</comment>
+  </data>
+  <data name="SplitMap_OtherMaps" xml:space="preserve">
+    <value>Other maps</value>
+    <comment>Object information heading for the other maps of a split, at their own times (split map D11)</comment>
+  </data>
+  <data name="SplitMap_OtherMapAtFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>An Other maps row label: the map and its time (split map D11), e.g. Map 1 · 08:06</comment>
+  </data>
   <data name="SplitMap_Toggle" xml:space="preserve">
     <value>Split map</value>
     <comment>Title-bar button and split menu item: shows a second map pane or closes the others (D1)</comment>

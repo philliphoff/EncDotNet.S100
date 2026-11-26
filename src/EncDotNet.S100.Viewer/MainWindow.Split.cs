@@ -41,8 +41,7 @@ public partial class MainWindow
             _viewModel,
             _loader,
             _pickService,
-            isActive: () => ReferenceEquals(_mapViews.Active, view),
-            statusFocus: _statusFocus);
+            _splitServices);
         view.SetRouteCheckLegendReserve(_routeCheckLegendReserve);
         // The first map became active before it was attached: hand it the
         // tools and the Legend source now.
@@ -332,4 +331,14 @@ public partial class MainWindow
         _viewModel.StatusBar.StatusMapLabel = _split.IsSplit
             ? _split.Panes.FirstOrDefault(p => ReferenceEquals(p.View, _statusFocus.Current))?.Label ?? string.Empty
             : string.Empty;
+
+    /// <summary>
+    /// A "Hidden in" chip in Object information was clicked (D11): selects
+    /// the picked feature's dataset row in Datasets.
+    /// </summary>
+    private void SelectDatasetRow(string datasetId)
+    {
+        if (_viewModel.Datasets.Entries.FirstOrDefault(e => e.Id.Value == datasetId) is { } entry)
+            _viewModel.Datasets.SelectDataset(entry);
+    }
 }

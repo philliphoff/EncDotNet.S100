@@ -898,6 +898,56 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         return new DepthOverTimeViewModel(card, _charts) { ChartBasisLine = _chartBasisLine };
     }
 
+    /// <summary>
+    /// While the map is split, which maps draw the picked feature (split map
+    /// design note D11), as chips under the title; empty with one map.
+    /// </summary>
+    public IReadOnlyList<PickShownInChip> ShownIn { get; private set; } = [];
+
+    /// <summary>Whether the "Shown in" chips show.</summary>
+    public bool HasShownIn => ShownIn.Count > 0;
+
+    /// <summary>
+    /// The other maps of a split whose time isn't the picked map's (D11);
+    /// empty while every map shows the same time, as in step 1.
+    /// </summary>
+    public IReadOnlyList<PickOtherMapRow> OtherMaps { get; private set; } = [];
+
+    /// <summary>Whether the "Other maps" block shows.</summary>
+    public bool HasOtherMaps => OtherMaps.Count > 0;
+
+    /// <summary>Sets <see cref="ShownIn"/> and <see cref="OtherMaps"/> (the split's pick presenter does).</summary>
+    /// <param name="shownIn">The chips.</param>
+    /// <param name="otherMaps">The other maps' rows.</param>
+    public void SetMapPresence(IReadOnlyList<PickShownInChip> shownIn, IReadOnlyList<PickOtherMapRow> otherMaps)
+    {
+        ArgumentNullException.ThrowIfNull(shownIn);
+        ArgumentNullException.ThrowIfNull(otherMaps);
+        if (!shownIn.SequenceEqual(ShownIn, PickShownInComparer.Instance))
+        {
+            ShownIn = shownIn;
+            OnPropertyChanged(nameof(ShownIn));
+            OnPropertyChanged(nameof(HasShownIn));
+        }
+        if (!otherMaps.SequenceEqual(OtherMaps))
+        {
+            OtherMaps = otherMaps;
+            OnPropertyChanged(nameof(OtherMaps));
+            OnPropertyChanged(nameof(HasOtherMaps));
+        }
+    }
+
+    /// <summary>Chips are equal when they read the same; a new command alone doesn't redraw them.</summary>
+    private sealed class PickShownInComparer : IEqualityComparer<PickShownInChip>
+    {
+        public static PickShownInComparer Instance { get; } = new();
+
+        public bool Equals(PickShownInChip? x, PickShownInChip? y) =>
+            x is not null && y is not null && x.Text == y.Text && x.IsShown == y.IsShown && x.AutomationId == y.AutomationId;
+
+        public int GetHashCode(PickShownInChip obj) => HashCode.Combine(obj.Text, obj.IsShown, obj.AutomationId);
+    }
+
     /// <summary>Clears all pick state and sets <see cref="HasPick"/> to false.</summary>
     public void Clear()
     {

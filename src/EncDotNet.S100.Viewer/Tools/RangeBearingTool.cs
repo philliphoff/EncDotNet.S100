@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Input;
-using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Tools;
 
@@ -14,7 +13,9 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// </summary>
 /// <remarks>
 /// The model is the shared <see cref="RangeBearingState"/>, which the card and
-/// the MCP tools also change; the tool redraws its overlay whenever it does.
+/// the MCP tools also change. Each map draws it
+/// (<see cref="Services.ToolOverlayController"/>), so it shows in every pane of
+/// a split, and a click in any pane places a point (split map design note D12).
 /// </remarks>
 internal sealed class RangeBearingTool : IMapTool
 {
@@ -24,22 +25,17 @@ internal sealed class RangeBearingTool : IMapTool
     private const double DragThresholdPx = 3.0;
 
     private readonly RangeBearingState _state;
-    private readonly IMeasureOverlayAppearanceProvider _appearance;
     private readonly Func<DistanceUnit> _unit;
     private MapToolContext? _context;
-    private MemoryLayer? _layer;
     private Point? _pressPosition;
 
     /// <param name="state">The shared model.</param>
-    /// <param name="appearance">Accent and theme for the overlay.</param>
-    /// <param name="unit">The Distance unit setting, for map labels.</param>
-    public RangeBearingTool(RangeBearingState state, IMeasureOverlayAppearanceProvider appearance, Func<DistanceUnit> unit)
+    /// <param name="unit">The Distance unit setting, for the status summary.</param>
+    public RangeBearingTool(RangeBearingState state, Func<DistanceUnit> unit)
     {
         ArgumentNullException.ThrowIfNull(state);
-        ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(unit);
         _state = state;
-        _appearance = appearance;
         _unit = unit;
     }
 
@@ -55,27 +51,27 @@ internal sealed class RangeBearingTool : IMapTool
     public void OnActivated(MapToolContext context)
     {
         _context = context;
-        _layer = RangeBearingOverlayLayer.Create();
-        context.AddLayer(_layer);
-        _appearance.Changed += OnRedraw;
         _state.Changed += OnRedraw;
         Refresh();
     }
 
     public void OnDeactivated()
     {
-        _appearance.Changed -= OnRedraw;
         _state.Changed -= OnRedraw;
-        if (_context is not null && _layer is not null)
-            _context.RemoveLayer(_layer);
         _context?.SetStatusSummary(null);
-        _layer = null;
         _context = null;
         _pressPosition = null;
     }
 
-    /// <summary>Redraws when the Distance unit changes.</summary>
-    public void InvalidateOverlay() => Refresh();
+    /// <summary>The input moved to another map (D12): the origin stays.</summary>
+    public void OnContextChanged(MapToolContext context)
+    {
+        _context = context;
+        _pressPosition = null;
+    }
+
+    /// <summary>The Distance unit changed: the summary is written again.</summary>
+    public void InvalidateSummary() => Refresh();
 
     private void OnRedraw(object? sender, EventArgs e) => Refresh();
 
@@ -133,12 +129,5 @@ internal sealed class RangeBearingTool : IMapTool
         _ => false,
     };
 
-    private void Refresh()
-    {
-        if (_layer is null || _context is null)
-            return;
-        RangeBearingOverlayLayer.Update(_layer, _state, _appearance.Current, _unit());
-        _context.SetStatusSummary(RangeBearingText.Summary(_state, _unit()));
-        _context.RefreshGraphics();
-    }
+    private void Refresh() => _context?.SetStatusSummary(RangeBearingText.Summary(_state, _unit()));
 }

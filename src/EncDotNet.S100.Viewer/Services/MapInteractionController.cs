@@ -79,11 +79,11 @@ internal sealed class MapInteractionController
     public ChartReference.MapReferenceMenu? ReferenceMenu { get; init; }
 
     /// <summary>
-    /// Whether this map is the active one of a split (#1732, D4): only its
-    /// pointer moves reach the map tools. Null in hosts with one map, where it
-    /// always is.
+    /// Told where the pointer is over this map, or <see langword="null"/> when
+    /// it leaves it, for the cursor echo in the other panes of a split
+    /// (#1733, D16). Null in hosts with one map.
     /// </summary>
-    public Func<bool>? IsActiveMap { get; init; }
+    public Action<EncDotNet.S100.DataModel.GeoPosition?>? PointerPosition { get; init; }
 
     /// <summary>
     /// Whether the status bar describes this map (#1732): the map under the
@@ -98,7 +98,6 @@ internal sealed class MapInteractionController
     /// </summary>
     public Action<bool>? PointerOverMap { get; init; }
 
-    private bool IsActive => IsActiveMap?.Invoke() ?? true;
 
     private bool IsStatus => IsStatusMap?.Invoke() ?? true;
 
@@ -143,16 +142,23 @@ internal sealed class MapInteractionController
     /// </summary>
     private MapToolController? _toolController;
 
+    /// <summary>This map's tool context: pointer events go to the tools with it (D12).</summary>
+    private MapToolContext? _toolContext;
+
     /// <summary>
     /// Called by <see cref="MainWindow"/> after construction to inject the
     /// tool controller. Kept as a setter (rather than a constructor param)
     /// because the controller is owned by the view-model and the
     /// interaction-controller is built before the view-model is fully wired.
     /// </summary>
-    public void SetToolController(MapToolController controller)
+    /// <param name="controller">The window's tool controller, shared by every map.</param>
+    /// <param name="context">This map's context, sent with each pointer event (#1733, D12).</param>
+    public void SetToolController(MapToolController controller, MapToolContext context)
     {
         ArgumentNullException.ThrowIfNull(controller);
+        ArgumentNullException.ThrowIfNull(context);
         _toolController = controller;
+        _toolContext = context;
     }
 
     public MapInteractionController(
@@ -428,7 +434,7 @@ internal sealed class MapInteractionController
         _lastDoubleTapTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
 
         // Active tool gets first refusal (e.g. measure-mode finalises on double-tap).
-        if (_toolController?.OnDoubleTapped(e) == true)
+        if (_toolController?.OnDoubleTapped(_toolContext!, e) == true)
         {
             e.Handled = true;
             return;
@@ -609,7 +615,7 @@ internal sealed class MapInteractionController
         // Offer the gesture to the active tool first (e.g. measure-mode
         // begins drag-vs-click tracking here). If the tool handles it,
         // skip the long-press / pick wiring entirely.
-        if (_toolController?.OnPointerPressed(e) == true)
+        if (_toolController?.OnPointerPressed(_toolContext!, e) == true)
         {
             e.Handled = true;
             return;
@@ -652,9 +658,9 @@ internal sealed class MapInteractionController
 
         // Forward to active tool (e.g. measure-mode rubber-band update).
         // Move events are advisory: tools may set Handled but we still want
-        // the lat/lon readout updated above. The tools work in the active
-        // map of a split (#1732); a move over another map isn't theirs.
-        if (IsActive && _toolController?.OnPointerMoved(e) == true)
+        // the lat/lon readout updated above. In a split the tools follow the
+        // pointer into any map, so the rubber band follows it there (D12).
+        if (_toolController?.OnPointerMoved(_toolContext!, e) == true)
         {
             e.Handled = true;
         }
@@ -677,6 +683,7 @@ internal sealed class MapInteractionController
         _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
         _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
         PointerOverMap?.Invoke(false);
+        PointerPosition?.Invoke(null);
     }
 
     private void HandleViewportChangedForMouseLatLon()
@@ -704,6 +711,7 @@ internal sealed class MapInteractionController
             _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
             _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
             PointerOverMap?.Invoke(false);
+            PointerPosition?.Invoke(null);
             return;
         }
 
@@ -719,6 +727,7 @@ internal sealed class MapInteractionController
         {
             _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
             _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+            PointerPosition?.Invoke(null);
             return;
         }
 
@@ -730,6 +739,7 @@ internal sealed class MapInteractionController
         {
             _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
             _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+            PointerPosition?.Invoke(null);
             return;
         }
 
@@ -738,11 +748,12 @@ internal sealed class MapInteractionController
         lon = ((lon + 540.0) % 360.0) - 180.0;
         _viewModel.StatusBar.MouseLatText = LatLonFormatter.FormatLatitude(lat);
         _viewModel.StatusBar.MouseLonText = LatLonFormatter.FormatLongitude(lon);
+        PointerPosition?.Invoke(new EncDotNet.S100.DataModel.GeoPosition(lat, lon));
     }
 
     private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_toolController?.OnPointerReleased(e) == true)
+        if (_toolController?.OnPointerReleased(_toolContext!, e) == true)
         {
             e.Handled = true;
         }

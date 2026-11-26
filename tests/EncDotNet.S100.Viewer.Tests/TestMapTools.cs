@@ -11,7 +11,6 @@ internal static class TestMapTools
     {
         var measure = new MeasureSession(settings: null);
         return new MapToolsViewModel(
-            new StubMeasureOverlayAppearanceProvider(),
             measure,
             new MeasureCardViewModel(measure),
             new RangeBearingState(settings: null),
