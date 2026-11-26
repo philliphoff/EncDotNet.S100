@@ -2349,10 +2349,8 @@ Design notes for features that cross several projects:
 - [Own-ship symbology](../../docs/design/own-ship-symbology.md)
 - [S-98 interoperability](../../docs/design/s98-interoperability.md)
 
-The internationalization conventions, the `IActivityTab` and activity-bar
-contract, the `IDynamicFeatureSource` abstraction, the
-`ICoverageStyle` and `IVectorPortrayalCatalogue` contracts, and
-the `.resx` string convention are in
-[`viewer.instructions.md`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/instructions/viewer.instructions.md).
+The `.resx` string convention and the tooltip, accessibility,
+splitter and panel rules for viewer UI are in
+[`.claude/rules/viewer.md`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.claude/rules/viewer.md).
 The app icon and installer art are described in
 [Branding assets](Branding/README.md).

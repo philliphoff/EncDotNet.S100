@@ -174,9 +174,9 @@ code is migrated toward it opportunistically.
 - For constants, enums, attribute names, group paths, and element names taken
   from an IHO S-100 product specification, cite the spec and section in the XML
   doc comment (e.g. `S-104 §10.2.3 WaterLevel attribute names`).
-- Consult the matching per-spec skill/instruction file before writing
-  spec-semantic code (see the routing table in
-  [`CONTRIBUTING.md`](../CONTRIBUTING.md#spec-routing-skills--instructions)).
+- Load the matching per-spec skill before writing spec-semantic code (see
+  the routing table in
+  [`CONTRIBUTING.md`](../CONTRIBUTING.md#spec-routing-skills)).
 
 ## 9. Async
 
