@@ -6,16 +6,13 @@
 
 ## Spec alignment
 
-Check each spec this PR touches and confirm the relevant skill was
-consulted (`.github/skills/<spec>/SKILL.md`):
+Check each area this PR touches and confirm the matching skill was
+consulted (`.claude/skills/<skill>/SKILL.md`; see the table in `CLAUDE.md`):
 
-- [ ] S-100 framework (`s100-framework`)
-- [ ] S-101 ENC (`s101-enc`)
-- [ ] S-102 bathymetry (`s102-bathymetry`)
-- [ ] S-104 water level (`s104-water-level`)
-- [ ] S-111 surface currents (`s111-surface-currents`)
-- [ ] S-124 navigational warnings (`s124-nav-warnings`)
-- [ ] S-129 under keel clearance (`s129-ukc`)
+- [ ] S-100 framework / GML products (`s100-framework`, `s100-gml-products`)
+- [ ] Product specification(s): <!-- e.g. s101-enc, s104-water-level -->
+- [ ] Cross-cutting (`marine-weather`, `s100-data-protection`,
+      `s100-interoperability`, `route-check`, `chart-cartography`)
 - [ ] N/A — change is purely infrastructural (build, CI, docs, tooling)
 
 **Spec section references cited in code/docs:**
@@ -28,7 +25,7 @@ consulted (`.github/skills/<spec>/SKILL.md`):
 - [ ] Tests requiring real data files skip via `Assert.SkipUnless`/`Assert.SkipWhen`
 - [ ] `dotnet test --configuration Release` passes locally
 - [ ] New or changed viewer UI has automation ids and accessible names (see
-      `.github/instructions/viewer.instructions.md`, Accessibility and automation)
+      `.claude/rules/viewer.md`, Accessibility and automation)
 
 ## Documentation
 
@@ -41,7 +38,7 @@ consulted (`.github/skills/<spec>/SKILL.md`):
 
 - [ ] No new NuGet dependencies, OR versions added to
       `Directory.Packages.props` (not in the `.csproj`)
-- [ ] `gh-advisory-database` security check run for any new dependency
+- [ ] New dependencies checked for known advisories (`dotnet list package --vulnerable`)
 
 ## Breaking changes
 

@@ -71,8 +71,9 @@ All NuGet versions are managed centrally via **Central Package Management** in
 
 - Do **not** add `Version` attributes to individual `.csproj` files.
 - Add or update versions in `Directory.Packages.props` instead.
-- Before introducing any new dependency, run the `gh-advisory-database`
-  security check and confirm the package is free of known advisories.
+- Before introducing any new dependency, confirm the package is free of known
+  advisories (check the GitHub Advisory Database, and run
+  `dotnet list package --vulnerable` after adding it).
 
 ## Published packages
 
@@ -96,32 +97,15 @@ then restores a small consumer of `EncDotNet.S100`,
 `EncDotNet.S100.Collections` and `EncDotNet.S100.Routes.Rtz` from `nupkgs`
 plus nuget.org.
 
-## Spec routing (skills & instructions)
+## Spec routing (skills)
 
 This repository is organized around individual IHO S-100 product
-specifications. Per-spec **skills** live under `.github/skills/<spec>/SKILL.md`
-and matching **instructions** under `.github/instructions/`. Before designing
-or implementing any non-trivial change that touches a spec's semantics
-(encoding, attribute names, feature-catalogue rules, portrayal pipelines),
-consult the matching skill/instruction file:
-
-| Area | Skill / instruction |
-|---|---|
-| S-100 framework, exchange sets, portrayal engine | `s100-framework` |
-| S-101 ENC, ISO 8211, Lua portrayal | `s101-enc` |
-| S-102 bathymetry | `s102-bathymetry` |
-| S-104 water level | `s104-water-level` |
-| S-111 surface currents | `s111-surface-currents` |
-| S-122 marine protected areas | `s122-marine-protected-areas` |
-| S-124 navigational warnings | `s124-nav-warnings` |
-| S-125 marine aids to navigation | `s125-aton` |
-| S-127 marine resources and services | `s127-marine-services` |
-| S-128 catalogue of nautical products | `s128-catalogue` |
-| S-129 under keel clearance | `s129-ukc` |
-| S-131 marine harbour infrastructure | `s131-marine-harbour` |
-| S-201 IALA aids to navigation information | `s201-aton-information` |
-| S-411 sea ice | `s411-sea-ice` |
-| S-421 route plans | `s421-route-plans` |
+specifications. Per-spec agent **skills** live under
+`.claude/skills/<skill>/SKILL.md`, and folder-scoped rules under
+`.claude/rules/`; [`CLAUDE.md`](CLAUDE.md) holds the repository-wide rules and
+the table that maps each area to its skill. Before designing or implementing
+any non-trivial change that touches a spec's semantics (encoding, attribute
+names, feature-catalogue rules, portrayal pipelines), read the matching skill.
 
 For cross-spec changes (e.g. a change to `CoveragePipeline` affecting
 S-102/S-104/S-111), reconcile the guidance from all affected specs before
@@ -201,7 +185,7 @@ dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn 
   EncDotNet.ArcGIS repository, and a new or renamed page there needs a
   matching entry in `docs/toc.yml` here.
 - When editing the viewer (`src/EncDotNet.S100.Viewer/**`), follow the
-  localization and UI rules in `.github/instructions/viewer.instructions.md`
+  localization and UI rules in [`.claude/rules/viewer.md`](.claude/rules/viewer.md)
   (every user-facing string lives in `Resources/Strings.resx`).
 
 ## Release signing

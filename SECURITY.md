@@ -45,6 +45,6 @@ publicly while the issue is being investigated and fixed.
 ## Dependencies
 
 This project uses Central Package Management (`Directory.Packages.props`) and
-runs `gh-advisory-database` security checks before introducing new
-dependencies. If you find a vulnerability that stems from a third-party
+checks new dependencies against the GitHub Advisory Database before
+introducing them. If you find a vulnerability that stems from a third-party
 package, please include the package name and version in your report.
