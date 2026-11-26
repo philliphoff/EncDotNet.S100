@@ -38,6 +38,7 @@ internal sealed class SymbolEntryViewModel : ReferenceEntryViewModel
         Members = [.. item.Members.Select(m => LinkTo(new ReferenceKey(Index.Spec, ReferenceKind.Symbol, m))).OfType<ChartReferenceLinkViewModel>()];
         Origin = OriginOf(item, Index.Spec.Name);
         UsedBy = UsedByOf(item);
+        UsedByGroups = UsedByGroupViewModel.Group(UsedBy);
         UsedIn = [.. item.UsedIn.Select(key => LinkTo(key)).OfType<ChartReferenceLinkViewModel>()];
         Places =
         [
@@ -101,6 +102,12 @@ internal sealed class SymbolEntryViewModel : ReferenceEntryViewModel
 
     /// <summary>The feature types that use it, each with the cases in which it draws it.</summary>
     public IReadOnlyList<ChartReferenceLinkViewModel> UsedBy { get; }
+
+    /// <summary>
+    /// <see cref="UsedBy"/> as the view shows it: a card per set of cases, so
+    /// feature types that draw it the same way share one.
+    /// </summary>
+    public IReadOnlyList<UsedByGroupViewModel> UsedByGroups { get; }
 
     /// <summary>Whether a feature type uses it.</summary>
     public bool HasUsedBy => UsedBy.Count > 0;
