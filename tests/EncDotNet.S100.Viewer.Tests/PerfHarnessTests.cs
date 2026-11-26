@@ -315,7 +315,7 @@ public sealed class PerfHarnessTests
         }));
         using var sampler = new ProcessMetricsSampler(
             new FakeSource(), interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: stalls);
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), tileCount: null, schedulerStats: null, predictionStats: null);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), tileMemory: null, schedulerStats: null, predictionStats: null);
 
         Assert.True(tool.Invoke("start").TryGetValue(out _));
         var deadline = Stopwatch.StartNew();
@@ -353,11 +353,13 @@ public sealed class PerfHarnessTests
     {
         var source = new FakeSource();
         using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), () => 7, schedulerStats: null, predictionStats: null);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), () => new EncDotNet.S100.Rendering.Engine.TileCacheMemory(0, 4096, 7, 1, 2), schedulerStats: null, predictionStats: null);
 
         Assert.True(tool.Invoke(null).TryGetValue(out var none));
         Assert.Null(none!.Window);
         Assert.Equal(7, none.Memory.TileCount);
+        Assert.Equal(4096, none.Memory.TileGpuBytes);
+        Assert.Equal(2, none.Memory.TileGpuTextures);
 
         Assert.True(tool.Invoke("start").TryGetValue(out var started));
         Assert.NotNull(started!.Window);
@@ -376,7 +378,7 @@ public sealed class PerfHarnessTests
         var source = new FakeSource();
         using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
         using var scheduler = new WorkScheduler(new WorkSchedulerOptions { WorkerCount = 2, ThreadName = "metrics test" });
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), schedulerStats: scheduler.GetStats, tileCount: null, predictionStats: null);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), schedulerStats: scheduler.GetStats, tileMemory: null, predictionStats: null);
 
         Assert.True(tool.Invoke(null).TryGetValue(out var none));
         Assert.Null(none!.Scheduler);
@@ -516,7 +518,7 @@ public sealed class PerfHarnessTests
         Assert.NotNull(settleJson["loads"]!["loaded"]);
 
         using var sampler = new ProcessMetricsSampler(new FakeSource(), interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), tileCount: null, schedulerStats: null, predictionStats: null);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), tileMemory: null, schedulerStats: null, predictionStats: null);
         Assert.True(tool.Invoke("start").TryGetValue(out var metrics));
         var metricsJson = Reply(ToolResultOk(metrics!));
         foreach (var field in new[]

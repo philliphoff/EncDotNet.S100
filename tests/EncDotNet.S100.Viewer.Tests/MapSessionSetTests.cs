@@ -251,4 +251,57 @@ public sealed class MapSessionSetTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             set.AddAsync(new MapViewId("map-1"), new FakeMapDatasetSession(), null, Presentation, Ct));
     }
+
+    [Fact]
+    public async Task The_reader_is_the_named_view_and_forwards_its_layer_changes()
+    {
+        // Split map (#1732, D6): the layer stack, Legend and picks read the active map.
+        var (set, first, second) = await TwoAsync();
+        var readerChanges = 0;
+        var layerChanges = 0;
+        set.ReaderChanged += (_, _) => readerChanges++;
+        set.LayersChanged += (_, _) => layerChanges++;
+        Assert.Same(first, set.Reader);
+
+        set.SetReader(new MapViewId("map-2"));
+
+        Assert.Same(second, set.Reader);
+        Assert.Equal(1, readerChanges);
+        first.RaiseLayersChanged();
+        Assert.Equal(0, layerChanges);
+        second.RaiseLayersChanged();
+        Assert.Equal(1, layerChanges);
+    }
+
+    [Fact]
+    public async Task Removing_the_reader_falls_back_to_the_primary()
+    {
+        var (set, first, _) = await TwoAsync();
+        set.SetReader(new MapViewId("map-2"));
+        var readerChanges = 0;
+        set.ReaderChanged += (_, _) => readerChanges++;
+
+        set.Remove(new MapViewId("map-2"));
+
+        Assert.Same(first, set.Reader);
+        Assert.Equal(1, readerChanges);
+    }
+
+    [Fact]
+    public async Task A_reader_named_before_its_view_joins_takes_over_when_it_does()
+    {
+        var set = new MapSessionSet(NullLogger.Instance);
+        var first = new FakeMapDatasetSession();
+        var second = new FakeMapDatasetSession();
+        await set.AddAsync(new MapViewId("map-1"), first, null, Presentation, Ct);
+        set.SetReader(new MapViewId("map-2"));
+        Assert.Same(first, set.Reader);
+        var readerChanges = 0;
+        set.ReaderChanged += (_, _) => readerChanges++;
+
+        await set.AddAsync(new MapViewId("map-2"), second, null, Presentation, Ct);
+
+        Assert.Same(second, set.Reader);
+        Assert.Equal(1, readerChanges);
+    }
 }

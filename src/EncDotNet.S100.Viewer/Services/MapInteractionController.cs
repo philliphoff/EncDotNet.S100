@@ -78,6 +78,30 @@ internal sealed class MapInteractionController
     /// </summary>
     public ChartReference.MapReferenceMenu? ReferenceMenu { get; init; }
 
+    /// <summary>
+    /// Whether this map is the active one of a split (#1732, D4): only its
+    /// pointer moves reach the map tools. Null in hosts with one map, where it
+    /// always is.
+    /// </summary>
+    public Func<bool>? IsActiveMap { get; init; }
+
+    /// <summary>
+    /// Whether the status bar describes this map (#1732): the map under the
+    /// pointer, else the active map. Only that map writes the scale, overscale
+    /// and depth basis. Null in hosts with one map, where it always does.
+    /// </summary>
+    public Func<bool>? IsStatusMap { get; init; }
+
+    /// <summary>
+    /// Told when the pointer moves onto this map (true) or off it (false), so
+    /// the status bar can follow the map under the pointer (#1732).
+    /// </summary>
+    public Action<bool>? PointerOverMap { get; init; }
+
+    private bool IsActive => IsActiveMap?.Invoke() ?? true;
+
+    private bool IsStatus => IsStatusMap?.Invoke() ?? true;
+
     /// <summary>The context menu shown last, while it may still be open.</summary>
     internal ContextMenu? OpenContextMenu { get; private set; }
 
@@ -279,6 +303,22 @@ internal sealed class MapInteractionController
     {
         scaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
         compassRose.UpdateForViewport(viewport.Rotation);
+        if (IsStatus)
+            UpdateStatusReadouts(viewport);
+    }
+
+    /// <summary>
+    /// Writes this map's scale, overscale and depth basis to the status bar,
+    /// as when the status bar starts describing it (#1732).
+    /// </summary>
+    public void RefreshStatusReadouts()
+    {
+        if (_mapControl?.Map?.Navigator is { } nav)
+            UpdateStatusReadouts(nav.Viewport);
+    }
+
+    private void UpdateStatusReadouts(Viewport viewport)
+    {
         _viewModel.StatusBar.MapScaleText = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
         UpdateOverscale(viewport);
         DepthBasis?.Invalidate();
@@ -612,8 +652,9 @@ internal sealed class MapInteractionController
 
         // Forward to active tool (e.g. measure-mode rubber-band update).
         // Move events are advisory: tools may set Handled but we still want
-        // the lat/lon readout updated above.
-        if (_toolController?.OnPointerMoved(e) == true)
+        // the lat/lon readout updated above. The tools work in the active
+        // map of a split (#1732); a move over another map isn't theirs.
+        if (IsActive && _toolController?.OnPointerMoved(e) == true)
         {
             e.Handled = true;
         }
@@ -635,6 +676,7 @@ internal sealed class MapInteractionController
         _lastMouseScreenPos = null;
         _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
         _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+        PointerOverMap?.Invoke(false);
     }
 
     private void HandleViewportChangedForMouseLatLon()
@@ -661,9 +703,12 @@ internal sealed class MapInteractionController
             _lastMouseScreenPos = null;
             _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
             _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+            PointerOverMap?.Invoke(false);
             return;
         }
 
+        if (_lastMouseScreenPos is null)
+            PointerOverMap?.Invoke(true);
         _lastMouseScreenPos = position;
         UpdateMouseLatLonFromScreen(position);
     }

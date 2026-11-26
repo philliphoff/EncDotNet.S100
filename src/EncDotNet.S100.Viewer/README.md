@@ -570,6 +570,30 @@ The map is drawn in Web Mercator (EPSG:3857). Coverage grids in UTM
 coordinate reference systems, which are common for S-102, are reprojected as
 they're drawn.
 
+### Split the map
+
+Show two maps side by side, each panned and zoomed on its own, with the
+**Split map** button in the title bar, its menu, or **View** > **Split Map**
+(⌘\ on macOS, Ctrl+\ elsewhere). The new map opens where the map was
+looking. Both maps show the same datasets and time.
+
+While the map is split, each map has a header with its number, such as
+**Map 2**, and a close button; closing either map keeps the other. **Close
+other maps** in the button's menu, or the button again, keeps the map you
+last used and closes the rest. The map you last pressed, scrolled, zoomed or
+used a tool in is the active one: its header is white with an accent line,
+and the Legend, the tools and the map keys follow it. The status bar's
+position, scale, overscale and DEPTHS describe the map under the pointer, or
+the active map when the pointer isn't over a map; a badge such as **Map 2**
+says which.
+
+Each map is at least 320 pixels wide. When the window is too narrow for
+both, the map you aren't using folds to a strip with its number; click the
+strip to switch. To fold a map yourself, drag the splitter on past where
+the map stops shrinking; it stays a strip until you click it. Object information and the Legend open over the maps while
+the map is split. The split and each map's view come back the next time you
+start SoundCharts.
+
 ### Basemap
 
 Choose the basemap in **Settings** > **Chart display** > **Basemap**:

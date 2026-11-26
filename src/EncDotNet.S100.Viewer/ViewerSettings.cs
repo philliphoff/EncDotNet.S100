@@ -164,6 +164,13 @@ internal sealed partial class ViewerSettings
     /// </summary>
     public WindowPlacement? MainWindowPlacement { get; set; }
 
+    /// <summary>
+    /// The map panes of a split and each one's view (split map, #1732, D2);
+    /// <see langword="null"/> before the first save. Keyed by map id, not by
+    /// position.
+    /// </summary>
+    public MapLayoutSettings? MapLayout { get; set; }
+
     /// <summary>Global symbol scale factor (1.0 = default). Scales all point symbols.</summary>
     public double SymbolScale { get; set; } = 1.0;
 
@@ -1031,6 +1038,41 @@ public sealed class PanelSizes
     /// its splitter is dragged (#1174); <c>null</c> is the default 380.
     /// </summary>
     public double? LogsDetailsWidth { get; set; }
+}
+
+/// <summary>
+/// The persisted map layout (split map, #1732; dual-map architecture §2.6):
+/// the panes in reading order, which one is active, and each one's view.
+/// </summary>
+public sealed class MapLayoutSettings
+{
+    /// <summary>The panes, in reading order (left to right).</summary>
+    public List<MapPaneSettings> Panes { get; set; } = [];
+
+    /// <summary>The id of the active pane, such as <c>map-2</c>.</summary>
+    public string? ActiveMap { get; set; }
+}
+
+/// <summary>One persisted map pane: its id, share of the map area and view.</summary>
+public sealed class MapPaneSettings
+{
+    /// <summary>The pane's opaque id, such as <c>map-1</c>.</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>The pane's share of the map area's width, relative to the others.</summary>
+    public double Weight { get; set; } = 1;
+
+    /// <summary>Whether the user folded the pane to its strip (a splitter dragged past its minimum).</summary>
+    public bool Folded { get; set; }
+
+    /// <summary>The view's centre, x in Web Mercator metres; <see langword="null"/> when not saved.</summary>
+    public double? CenterX { get; set; }
+
+    /// <summary>The view's centre, y in Web Mercator metres.</summary>
+    public double? CenterY { get; set; }
+
+    /// <summary>The view's resolution, Web Mercator metres per pixel.</summary>
+    public double? Resolution { get; set; }
 }
 
 /// <summary>

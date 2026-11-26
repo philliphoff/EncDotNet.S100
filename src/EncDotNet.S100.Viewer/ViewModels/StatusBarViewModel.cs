@@ -48,7 +48,11 @@ internal sealed class StatusBarViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _mouseLatText, value))
+            {
                 OnPropertyChanged(nameof(IsMouseLatLonVisible));
+                OnPropertyChanged(nameof(IsPointerGroupVisible));
+                OnPropertyChanged(nameof(IsScaleSeparatorVisible));
+            }
         }
     }
 
@@ -67,6 +71,39 @@ internal sealed class StatusBarViewModel : ViewModelBase
     /// <summary>True when the cursor is over the map and a lat/long is shown.</summary>
     public bool IsMouseLatLonVisible => _mouseLatText.Length > 0;
 
+    private string _statusMapLabel = string.Empty;
+    /// <summary>
+    /// While the map is split, the label of the map the status bar describes
+    /// ("Map 2"): the map under the pointer, else the active map (#1732). A
+    /// badge before the lat/lon, scale, overscale and DEPTHS, which all read
+    /// that map; empty with one map.
+    /// </summary>
+    public string StatusMapLabel
+    {
+        get => _statusMapLabel;
+        set
+        {
+            if (SetProperty(ref _statusMapLabel, value))
+            {
+                OnPropertyChanged(nameof(IsStatusMapLabelVisible));
+                OnPropertyChanged(nameof(IsPointerGroupVisible));
+                OnPropertyChanged(nameof(IsScaleSeparatorVisible));
+            }
+        }
+    }
+
+    /// <summary>True while the map is split and the badge naming the described map is shown.</summary>
+    public bool IsStatusMapLabelVisible => _statusMapLabel.Length > 0;
+
+    /// <summary>True when the separator before the map badge and lat/lon is shown.</summary>
+    public bool IsPointerGroupVisible => IsMouseLatLonVisible || IsStatusMapLabelVisible;
+
+    /// <summary>
+    /// True when the separator before the scale is shown: not between the map
+    /// badge and the scale, which belong together, when no lat/lon sits between.
+    /// </summary>
+    public bool IsScaleSeparatorVisible => IsMapScaleVisible && (IsMouseLatLonVisible || !IsStatusMapLabelVisible);
+
     private string _mapScaleText = string.Empty;
     /// <summary>
     /// The current map scale denominator, formatted as <c>"1:180 000"</c>,
@@ -79,7 +116,10 @@ internal sealed class StatusBarViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _mapScaleText, value))
+            {
                 OnPropertyChanged(nameof(IsMapScaleVisible));
+                OnPropertyChanged(nameof(IsScaleSeparatorVisible));
+            }
         }
     }
 

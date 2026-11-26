@@ -30,19 +30,19 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 /// </remarks>
 internal sealed class DynamicFeatureSourceRegistryAccessor : IS100DynamicSourceRegistry
 {
+    private readonly List<IS100DynamicSourceRegistry> _attached = [];
     private IS100DynamicSourceRegistry? _current;
 
     /// <summary>
-    /// The attached registry, or <see langword="null"/> when no host
-    /// has been constructed yet. Assignment subscribes / unsubscribes
-    /// <see cref="SourcesChanged"/> passthrough and fires the event
-    /// once so existing subscribers rebuild against the freshly
-    /// attached registry.
+    /// The registry reads go to: the first attached one, or
+    /// <see langword="null"/> when no host has been constructed yet.
+    /// A change fires <see cref="SourcesChanged"/> once so existing
+    /// subscribers rebuild against it.
     /// </summary>
     public IS100DynamicSourceRegistry? Current
     {
         get => _current;
-        set
+        private set
         {
             if (ReferenceEquals(_current, value)) return;
 
@@ -52,6 +52,38 @@ internal sealed class DynamicFeatureSourceRegistryAccessor : IS100DynamicSourceR
 
             RaiseSourcesChanged();
         }
+    }
+
+    /// <summary>
+    /// Attaches a map's dynamic-source host (split map, #1732). Every map
+    /// draws the same sources, so <see cref="SetVisible"/> goes to every
+    /// attached host; reads go to <see cref="Current"/>, the first one.
+    /// </summary>
+    /// <param name="registry">The host to attach.</param>
+    public void Attach(IS100DynamicSourceRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        if (_attached.Contains(registry))
+            return;
+        if (_current is { } current)
+        {
+            // A late host starts with the visibility the others have.
+            foreach (var info in current.Sources)
+                registry.SetVisible(info.Id, current.GetVisible(info.Id));
+        }
+        _attached.Add(registry);
+        Current ??= registry;
+    }
+
+    /// <summary>Detaches a host; reads move to the next attached one.</summary>
+    /// <param name="registry">The host to detach.</param>
+    public void Detach(IS100DynamicSourceRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        if (!_attached.Remove(registry))
+            return;
+        if (ReferenceEquals(_current, registry))
+            Current = _attached.Count > 0 ? _attached[0] : null;
     }
 
     public IDisposable Register(IDynamicFeatureSource source) =>
@@ -71,8 +103,11 @@ internal sealed class DynamicFeatureSourceRegistryAccessor : IS100DynamicSourceR
     public IReadOnlyList<DynamicSourceHit> HitTest(MPoint mapPoint, double resolution) =>
         _current?.HitTest(mapPoint, resolution) ?? Array.Empty<DynamicSourceHit>();
 
-    public void SetVisible(string sourceId, bool visible) =>
-        _current?.SetVisible(sourceId, visible);
+    public void SetVisible(string sourceId, bool visible)
+    {
+        foreach (var registry in _attached.ToArray())
+            registry.SetVisible(sourceId, visible);
+    }
 
     public event Action? SourcesChanged;
 

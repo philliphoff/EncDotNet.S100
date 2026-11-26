@@ -193,6 +193,57 @@
 
     <shadui:Window.RightWindowTitleBarContent>
         <StackPanel Orientation="Horizontal" Spacing="0">
+            <!-- The split (#1732, D1): the button toggles it, the chevron
+                 opens its menu. DataContext is the MapSplitViewModel (code). -->
+            <StackPanel x:Name="SplitMapControls"
+                        x:DataType="vm:MapSplitViewModel"
+                        Orientation="Horizontal"
+                        Spacing="0">
+                <ToggleButton x:Name="SplitMapButton"
+                              AutomationProperties.AutomationId="MainWindow.SplitMap"
+                              AutomationProperties.Name="{x:Static loc:Strings.SplitMap_Toggle}"
+                              ToolTip.Tip="{OnPlatform {x:Static loc:Strings.Tooltip_SplitMapCtrl}, macOS={x:Static loc:Strings.Tooltip_SplitMap}}"
+                              IsChecked="{Binding IsSplit, Mode=OneWay}"
+                              Command="{Binding ToggleSplitCommand}"
+                              Width="32" Height="28"
+                              Padding="0"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Background="Transparent"
+                              BorderThickness="0">
+                    <ic:FluentIcon Icon="SplitVertical" IconVariant="Regular" FontSize="16"
+                                   Foreground="{DynamicResource ForegroundColor}" />
+                </ToggleButton>
+                <Button x:Name="SplitMapMenuButton"
+                        AutomationProperties.AutomationId="MainWindow.SplitMapMenu"
+                        AutomationProperties.Name="{x:Static loc:Strings.SplitMap_MenuTooltip}"
+                        ToolTip.Tip="{x:Static loc:Strings.SplitMap_MenuTooltip}"
+                        Width="16" Height="28"
+                        Padding="0"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        Background="Transparent"
+                        BorderThickness="0">
+                    <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10"
+                                   Foreground="{DynamicResource ForegroundColor}" />
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuItem Header="{x:Static loc:Strings.SplitMap_Toggle}"
+                                      AutomationProperties.AutomationId="MainWindow.SplitMapMenu.Split"
+                                      ToggleType="CheckBox"
+                                      IsChecked="{Binding IsSplit, Mode=OneWay}"
+                                      Command="{Binding ToggleSplitCommand}"
+                                      InputGesture="{OnPlatform Ctrl+OemPipe, macOS=Cmd+OemPipe}" />
+                            <MenuItem Header="{x:Static loc:Strings.SplitMap_CloseOthers}"
+                                      AutomationProperties.AutomationId="MainWindow.SplitMapMenu.CloseOthers"
+                                      Command="{Binding CloseOtherMapsCommand}" />
+                            <MenuItem Header="{x:Static loc:Strings.SplitMap_Swap}"
+                                      AutomationProperties.AutomationId="MainWindow.SplitMapMenu.Swap"
+                                      Command="{Binding SwapMapsCommand}" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+            </StackPanel>
             <Button Command="{Binding AppCommands.ShowFeedbackCommand}"
                     AutomationProperties.AutomationId="MainWindow.Feedback"
                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ReportFeedback}"
@@ -290,7 +341,23 @@
                                VerticalAlignment="Center" />
 
                     <!-- Cursor latitude / longitude -->
-                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMouseLatLonVisible}" />
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsPointerGroupVisible}" />
+                    <!-- While split, the lat/lon, scale, overscale and DEPTHS all
+                         read one map, the one under the pointer or else the
+                         active one; the badge says which (#1732). -->
+                    <Border IsVisible="{Binding StatusBar.IsStatusMapLabelVisible}"
+                            AutomationProperties.AutomationId="StatusBar.Map"
+                            AutomationProperties.Name="{Binding StatusBar.StatusMapLabel}"
+                            Background="{DynamicResource AccentBrush}"
+                            CornerRadius="4"
+                            Padding="6,1"
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StatusBar.StatusMapLabel}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="White" />
+                    </Border>
                     <ic:FluentIcon Icon="MyLocation" IconVariant="Regular" FontSize="14"
                                    Opacity="0.6"
                                    VerticalAlignment="Center"
@@ -318,7 +385,7 @@
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
 
                     <!-- Map scale, with the overscale pill immediately after -->
-                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMapScaleVisible}" />
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsScaleSeparatorVisible}" />
                     <TextBlock Text="{x:Static loc:Strings.Status_ScaleLabel}"
                                FontSize="12"
                                Opacity="0.5"
@@ -580,7 +647,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600"
-                                  bh:CollapsibleColumn.IsVisible="{Binding Layout.IsRightDockShown}"
+                                  bh:CollapsibleColumn.IsVisible="{Binding Layout.IsRightDockDocked}"
                                   bh:CollapsibleColumn.ExpandedWidth="360"
                                   bh:CollapsibleColumn.MinWidthWhenVisible="240"
                                   bh:CollapsibleColumn.MaxWidthWhenVisible="600"
@@ -627,18 +694,22 @@
                     shrinks.
                 -->
                 <Grid x:Name="MapArea" Grid.Row="0" DragDrop.AllowDrop="True" ClipToBounds="True">
-                <!-- The map pane (#1729): the map control and its own chrome
-                     (scale bar, map stamp); MainWindow wires it to a MapView. -->
-                <views:MapPane x:Name="InitialMapPane" />
+                <!-- The map panes (#1729, #1732): one per map, side by side with
+                     splitters between; MainWindow builds the columns. -->
+                <Grid x:Name="MapPanesGrid" />
+                <!-- Window chrome over the whole map area (D8). While split it
+                     starts under the panes' 26 px headers and leaves out folded
+                     strips (MainWindow sets its margin). -->
+                <Panel x:Name="MapWindowOverlays">
                 <!-- Time HUD (#712, handoff Part F): the Timeline's controls at the
                      bottom centre of the map while the Timeline tab isn't shown
                      (dock closed, on another tab, or the window too narrow). -->
-                <views:TimeHudView DataContext="{Binding Timeline}"
+                <views:TimeHudView x:Name="TimeHud"
+                                   DataContext="{Binding Timeline}"
                                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.IsTimeHudVisible}"
                                    DockCommand="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.ToggleTimelineDockCommand}"
                                    IsDockOpen="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.IsBottomDockShown}"
                                    IsDockAvailable="{Binding !$parent[Window].((vm:MainViewModel)DataContext).Layout.IsWindowNarrow}"
-                                   MapWidth="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.MapWidth}"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Bottom"
                                    Margin="0,0,0,14" />
@@ -1195,41 +1266,9 @@
                             <ic:FluentIcon Icon="ColorLine" IconVariant="Regular" FontSize="16" />
                         </views:MapToggleButton>
                     </StackPanel>
-                    <StackPanel x:Name="MapNavigation" Orientation="Vertical" Spacing="2" Margin="0,2,0,0">
-                        <!--
-                          StackPanel with vertical margin gives the cluster its
-                          own visual grouping (separated from the Pick Mode
-                          button above and the compass rose below).
-                        -->
-                        <StackPanel Orientation="Vertical" Spacing="2" Margin="0,16,0,16">
-                            <Button x:Name="ZoomInButton"
-                                    AutomationProperties.AutomationId="Map.ZoomIn"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomIn}"
-                                    Classes="Icon MapOverlay"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomIn}">
-                                <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="16" />
-                            </Button>
-                            <Button x:Name="ZoomOutButton"
-                                    AutomationProperties.AutomationId="Map.ZoomOut"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomOut}"
-                                    Classes="Icon MapOverlay"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomOut}">
-                                <ic:FluentIcon Icon="ZoomOut" IconVariant="Regular" FontSize="16" />
-                            </Button>
-                            <Button x:Name="ZoomToExtentButton"
-                                    AutomationProperties.AutomationId="Map.ZoomToExtent"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomToExtent}"
-                                    Classes="Icon MapOverlay"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToExtent}">
-                                <ic:FluentIcon Icon="ZoomFit" IconVariant="Regular" FontSize="16" />
-                            </Button>
-                        </StackPanel>
-                        <views:CompassRoseView x:Name="CompassRose"
-                                               Margin="0,4,0,0"
-                                               Width="{Binding Bounds.Width, ElementName=ZoomInButton}"
-                                               Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
-                    </StackPanel>
+                    <!-- The rightmost pane's zoom buttons and compass go here (D8). -->
                 </views:MapOverlayColumnPanel>
+                </Panel>
                 </Grid>
 
                 <!-- Resize grip between map and bottom dock -->
@@ -1326,7 +1365,7 @@
                           Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
-                          IsVisible="{Binding Layout.IsRightDockShown}"
+                          IsVisible="{Binding Layout.IsRightDockDocked}"
                           bh:HoverDelay.DelayMilliseconds="500"
                           Name="PickPanelSplitter" />
 

@@ -37,11 +37,18 @@ internal sealed class MapToolController : INotifyPropertyChanged
     /// Provides the controller with the live <see cref="MapToolContext"/>
     /// once the visual tree is built. Until this is called, tool
     /// activation is recorded but tools are not actually invoked. After
-    /// this call, any pre-recorded active tool is fully activated.
+    /// this call, any pre-recorded active tool is fully activated. Called
+    /// again with another map's context (the active map of a split, #1732),
+    /// the active tool moves to that map: it's deactivated on the old one
+    /// and activated on the new one.
     /// </summary>
     public void Initialize(MapToolContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        if (ReferenceEquals(_context, context))
+            return;
+        if (_activeTool is not null && _context is not null)
+            _activeTool.OnDeactivated();
         _context = context;
 
         if (_activeTool is not null)

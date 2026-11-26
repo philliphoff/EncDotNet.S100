@@ -168,7 +168,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         get
         {
             var layers = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
-            if (_sessions.Primary is not { } session)
+            if (_sessions.Reader is not { } session)
                 return layers;
 
             foreach (var snapshot in session.GetDatasets())
@@ -181,15 +181,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     }
 
     public IReadOnlyList<ILayer> CurrentStackedLayers =>
-        _sessions.Primary?.GetStackedLayers() ?? [];
+        _sessions.Reader?.GetStackedLayers() ?? [];
 
     public Task<IReadOnlyList<S100Pick>> PickAsync(GeographicPickQuery query, CancellationToken cancellationToken = default) =>
-        _sessions.Primary is not { } session
+        _sessions.Reader is not { } session
             ? Task.FromResult<IReadOnlyList<S100Pick>>([])
             : session.Query.PickAsync(query, cancellationToken);
 
     public IReadOnlyList<LayerStackEntry> CurrentStackEntries =>
-        _sessions.Primary?.GetLayerStackEntries() ?? [];
+        _sessions.Reader?.GetLayerStackEntries() ?? [];
 
     public event Action? LayerStackChanged;
 
@@ -282,7 +282,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         _views = views;
         _sessions.LayersChanged += OnSessionLayersChanged;
-        _sessions.PrimaryChanged += OnSessionLayersChanged;
+        _sessions.ReaderChanged += OnSessionLayersChanged;
+        // The layer stack, Legend, picks and overscale read the active map (#1732, D6).
+        _sessions.SetReader(views.Active?.Id);
+        views.ActiveChanged += (_, _) => _sessions.SetReader(views.Active?.Id);
         _sessions.DatasetRenderFailed += OnDatasetRenderFailed;
         if (_timeProgress is { } progress)
         {
@@ -1650,7 +1653,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public IReadOnlyList<OverscaleCellInput> GetOverscaleCells()
     {
         List<OverscaleCellInput>? cells = null;
-        if (_sessions.Primary is not { } session)
+        if (_sessions.Reader is not { } session)
             return [];
 
         foreach (var snapshot in session.GetDatasets())

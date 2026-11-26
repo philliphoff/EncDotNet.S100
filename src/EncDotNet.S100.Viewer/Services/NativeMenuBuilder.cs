@@ -41,6 +41,7 @@ internal sealed class NativeMenuBuilder
     /// <param name="openDatasetAsync">Invoked when the user selects File › Open Dataset…</param>
     /// <param name="openExchangeSetAsync">Invoked when the user selects File › Open Exchange Set…</param>
     /// <param name="openExchangeSetZipAsync">Invoked when the user selects File › Open Exchange Set (ZIP)…</param>
+    /// <param name="split">Backs View › Split Map (⌘\, split map D1).</param>
     /// <param name="libraryImporter">
     /// Backs the File › Add to Library submenu (issue #655); the submenu is
     /// omitted when <see langword="null"/>.
@@ -50,8 +51,10 @@ internal sealed class NativeMenuBuilder
         Func<Task> openDatasetAsync,
         Func<Task> openExchangeSetAsync,
         Func<Task> openExchangeSetZipAsync,
+        MapSplitViewModel split,
         ViewModels.ILibraryImporter? libraryImporter = null)
     {
+        ArgumentNullException.ThrowIfNull(split);
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(openDatasetAsync);
         ArgumentNullException.ThrowIfNull(openExchangeSetAsync);
@@ -150,9 +153,19 @@ internal sealed class NativeMenuBuilder
             Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, legendItem, pickModeItem, measureModeItem, rangeBearingModeItem, routeEditModeItem },
         };
 
+        // View › Split Map (⌘\), with the existing view items (split map D1).
+        var splitMapItem = BuildToggleItem(
+            Strings.Menu_SplitMap,
+            split,
+            initiallyChecked: split.IsSplit,
+            execute: () => split.ToggleSplitCommand.Execute(null),
+            propertyName: nameof(MapSplitViewModel.IsSplit),
+            checkedSelector: () => split.IsSplit,
+            gesture: new KeyGesture(Key.OemPipe, KeyModifiers.Meta));
+
         var viewMenu = new NativeMenuItem(Strings.Menu_View)
         {
-            Menu = new NativeMenu { appearanceMenu },
+            Menu = new NativeMenu { appearanceMenu, splitMapItem },
         };
 
         var fileMenu = BuildFileMenu();

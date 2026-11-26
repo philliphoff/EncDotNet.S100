@@ -50,7 +50,9 @@ internal sealed record MemoryDto(
     [property: Description("Resident set (working set).")] long WorkingSetBytes,
     [property: Description("Private memory.")] long PrivateBytes,
     [property: Description("Native bytes held by the tile raster and GPU caches.")] long TileNativeBytes,
-    [property: Description("Raster tiles resident across layers.")] int TileCount);
+    [property: Description("Raster tiles resident across layers.")] int TileCount,
+    [property: Description("Native bytes of GPU-resident tile textures; a texture several maps draw counts once.")] long TileGpuBytes,
+    [property: Description("GPU-resident tile textures; a texture several maps draw counts once.")] int TileGpuTextures);
 
 /// <summary>Window metrics in a <see cref="ProcessMetricsDto"/>.</summary>
 [Description("CPU, GC and allocation over the window since the last start or restart.")]
@@ -254,7 +256,7 @@ internal sealed class GetProcessMetricsTool(
     ProcessMetricsSampler sampler,
     IRenderActivityMonitor? renderMonitor,
     Func<PerfEnvironmentDto> environment,
-    Func<int>? tileCount,
+    Func<EncDotNet.S100.Rendering.Engine.TileCacheMemory>? tileMemory,
     Func<WorkSchedulerStats>? schedulerStats,
     Func<EncDotNet.S100.Rendering.Engine.Prediction.PredictionStatsSnapshot>? predictionStats)
 {
@@ -264,7 +266,7 @@ internal sealed class GetProcessMetricsTool(
     private readonly ProcessMetricsSampler _sampler = sampler ?? throw new ArgumentNullException(nameof(sampler));
     private readonly Func<PerfEnvironmentDto> _environment = environment ?? throw new ArgumentNullException(nameof(environment));
     private readonly IRenderActivityMonitor? _renderMonitor = renderMonitor;
-    private readonly Func<int>? _tileCount = tileCount;
+    private readonly Func<EncDotNet.S100.Rendering.Engine.TileCacheMemory>? _tileMemory = tileMemory;
     private readonly Func<WorkSchedulerStats>? _schedulerStats = schedulerStats;
     private WorkSchedulerStats? _schedulerStart;
     private readonly Func<EncDotNet.S100.Rendering.Engine.Prediction.PredictionStatsSnapshot>? _predictionStats = predictionStats;
@@ -309,10 +311,11 @@ internal sealed class GetProcessMetricsTool(
         }
 
         var now = measured?.End ?? _sampler.ReadNow();
+        var tiles = SafeTileMemory();
         var frames = _renderMonitor?.GetWindowStats() ?? RenderWindowStats.Empty;
         return ToolResult<ProcessMetricsDto>.Ok(new ProcessMetricsDto(
             measured is null ? null : ToDto(measured),
-            new MemoryDto(now.GcHeapBytes, now.GcCommittedBytes, now.WorkingSetBytes, now.PrivateBytes, now.TileNativeBytes, SafeTileCount()),
+            new MemoryDto(now.GcHeapBytes, now.GcCommittedBytes, now.WorkingSetBytes, now.PrivateBytes, now.TileNativeBytes, tiles.Tiles, tiles.GpuBytes, tiles.GpuTiles),
             new FrameTimesDto(frames.Count, frames.FrameP50Ms, frames.FrameP95Ms, frames.FrameMaxMs),
             _environment(),
             measured is not null && schedulerNow is not null && schedulerStart is not null
@@ -346,15 +349,15 @@ internal sealed class GetProcessMetricsTool(
             end.AllocationHeavyLimit);
     }
 
-    private int SafeTileCount()
+    private EncDotNet.S100.Rendering.Engine.TileCacheMemory SafeTileMemory()
     {
         try
         {
-            return _tileCount?.Invoke() ?? 0;
+            return _tileMemory?.Invoke() ?? default;
         }
         catch
         {
-            return 0;
+            return default;
         }
     }
 
