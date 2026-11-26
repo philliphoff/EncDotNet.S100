@@ -19,12 +19,34 @@
         </Style>
         <Style Selector="TextBlock.crHeading">
             <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="LetterSpacing" Value="0.4" />
-            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LetterSpacing" Value="0.66" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
         </Style>
+        <!-- A heading sits 6 px over its content (mock C2), so it reads as the content's label. -->
         <Style Selector="StackPanel.crPart">
-            <Setter Property="Spacing" Value="2" />
+            <Setter Property="Spacing" Value="6" />
+        </Style>
+        <!-- A link's cases: a gap between them, so a wrapped case reads as one and the
+             next starts visibly. (Not LineHeight or LineSpacing: with terms inline,
+             either measures a blank line under the text.) -->
+        <Style Selector="ItemsControl.crCases">
+            <Setter Property="ItemsPanel">
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="4" />
+                </ItemsPanelTemplate>
+            </Setter>
+        </Style>
+        <!-- Used by (mock C2): a bordered card per set of cases, its feature types the
+             card's title, so where one card's cases end and the next begins is plain. -->
+        <Style Selector="Border.crCard">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,8" />
+        </Style>
+        <Style Selector="Border.crCard views|ReferenceTerm.crCardTitle">
+            <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <!-- A link: a plain template, so its text wraps to the panel's width
              rather than to the theme button's measure (#1657). -->
@@ -155,7 +177,7 @@
                                      IsKnown="{Binding IsKnown}"
                                      Command="{Binding OpenCommand}"
                                      AutomationProperties.AutomationId="Reference.Term" />
-                <ItemsControl ItemsSource="{Binding CaseTerms}" IsVisible="{Binding HasCases}">
+                <ItemsControl ItemsSource="{Binding CaseTerms}" IsVisible="{Binding HasCases}" Classes="crCases">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="crs:TermText">
                             <views:ReferenceTermText Terms="{Binding}" Classes="crCaption" TextWrapping="Wrap" />
@@ -490,7 +512,45 @@
                 </StackPanel>
                 <StackPanel Classes="crPart" IsVisible="{Binding HasUsedBy}">
                     <TextBlock Text="{x:Static loc:Strings.ChartReference_UsedBy}" Classes="crHeading" />
-                    <ItemsControl ItemsSource="{Binding UsedBy}" AutomationProperties.AutomationId="Reference.Entry.UsedBy" />
+                    <ItemsControl ItemsSource="{Binding UsedByGroups}" AutomationProperties.AutomationId="Reference.Entry.UsedBy">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="8" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="cr:UsedByGroupViewModel">
+                                <Border Classes="crCard" AutomationProperties.AutomationId="Reference.Entry.UsedByCard">
+                                    <StackPanel Spacing="6">
+                                        <ItemsControl ItemsSource="{Binding FeatureTypes}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Spacing="2" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="cr:ChartReferenceLinkViewModel">
+                                                    <views:ReferenceTerm Text="{Binding Name}"
+                                                                         Key="{Binding Key}"
+                                                                         IsKnown="{Binding IsKnown}"
+                                                                         Command="{Binding OpenCommand}"
+                                                                         Classes="crCardTitle"
+                                                                         AutomationProperties.AutomationId="Reference.Term" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <ItemsControl ItemsSource="{Binding CaseTerms}" IsVisible="{Binding HasCases}" Classes="crCases">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="crs:TermText">
+                                                    <views:ReferenceTermText Terms="{Binding}" Classes="crCaption" TextWrapping="Wrap" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
                 <StackPanel Classes="crPart" IsVisible="{Binding HasUsedIn}">
                     <TextBlock Text="{x:Static loc:Strings.ChartReference_UsedInside}" Classes="crHeading" />

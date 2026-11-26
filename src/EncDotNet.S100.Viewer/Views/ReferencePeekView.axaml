@@ -41,8 +41,9 @@
         </Style>
     </UserControl.Styles>
 
+    <!-- A floating surface needs an opaque fill: ShadUI's BackgroundColor is transparent. -->
     <Border Width="288"
-            Background="{DynamicResource BackgroundColor}"
+            Background="{DynamicResource CardBackgroundColor}"
             BorderBrush="{DynamicResource BorderColor}"
             BorderThickness="1"
             CornerRadius="8"
