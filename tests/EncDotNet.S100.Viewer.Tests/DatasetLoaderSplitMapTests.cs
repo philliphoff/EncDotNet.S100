@@ -192,6 +192,75 @@ public sealed class DatasetLoaderSplitMapTests : IDisposable
     }
 
     [Fact]
+    public async Task Hiding_a_dataset_in_one_map_hides_it_in_that_maps_session_only()
+    {
+        // Split map step 2 §2.2: each session gets the entry's state with its
+        // own map's visibility, and a change in one map re-sets that map only.
+        var first = new MapViewsTests.FakeMapView("map-1");
+        var second = new MapViewsTests.FakeMapView("map-2");
+        _views.Add(first);
+        _views.Add(second);
+        _loader.Initialize(_views, options: null);
+        var entry = CapEntry("gale");
+        await _loader.LoadAsync(entry, Ct);
+        var firstSets = first.Session.SetDatasets.Count;
+
+        entry.SetVisibleIn(second.Id, false);
+
+        Assert.True(first.Session.GetDataset(entry.Id)?.Dataset.IsVisible);
+        Assert.False(second.Session.GetDataset(entry.Id)?.Dataset.IsVisible);
+        Assert.Equal(firstSets, first.Session.SetDatasets.Count);
+        // Still held, so the Layer stack can switch it back on there.
+        Assert.Contains(entry.Id, second.Session.Order);
+
+        entry.SetVisible(true);
+
+        Assert.True(first.Session.GetDataset(entry.Id)?.Dataset.IsVisible);
+        Assert.True(second.Session.GetDataset(entry.Id)?.Dataset.IsVisible);
+
+        // The display hide (an AML band) still hides it in every map.
+        entry.IsHiddenByDisplay = true;
+
+        Assert.False(first.Session.GetDataset(entry.Id)?.Dataset.IsVisible);
+        Assert.False(second.Session.GetDataset(entry.Id)?.Dataset.IsVisible);
+    }
+
+    [Fact]
+    public async Task A_pane_opened_from_a_pane_that_hides_a_dataset_never_shows_it()
+    {
+        // Step 2 §2.1–§2.2: the new map's visibility is seeded from the active
+        // map before the set catches its session up, and the catch-up asks
+        // the entry, so the session never gets the dataset visible.
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        using var visibility = new MapDatasetVisibility(_views, datasets);
+        var first = new MapViewsTests.FakeMapView("map-1");
+        var second = new MapViewsTests.FakeMapView("map-2");
+        _views.Add(first);
+        _views.Add(second);
+        _loader.Initialize(_views, options: null);
+        var entry = CapEntry("gale");
+        datasets.Entries.Add(entry);
+        await _loader.LoadAsync(entry, Ct);
+        entry.SetVisibleIn(second.Id, false);
+        _views.Activate(second);
+
+        var third = new MapViewsTests.FakeMapView("map-3");
+        _views.Add(third);
+
+        Assert.False(entry.IsVisibleIn(third.Id));
+        var sets = third.Session.SetDatasets.Where(d => d.Id == entry.Id).ToArray();
+        Assert.NotEmpty(sets);
+        Assert.All(sets, d => Assert.False(d.IsVisible));
+        Assert.True(first.Session.GetDataset(entry.Id)?.Dataset.IsVisible);
+
+        // Showing it in the new pane re-sets that pane alone.
+        entry.SetVisibleIn(third.Id, true);
+
+        Assert.True(third.Session.GetDataset(entry.Id)?.Dataset.IsVisible);
+        Assert.False(second.Session.GetDataset(entry.Id)?.Dataset.IsVisible);
+    }
+
+    [Fact]
     public void The_loader_is_ready_only_while_there_is_a_map()
     {
         var map = new MapViewsTests.FakeMapView("map-1");

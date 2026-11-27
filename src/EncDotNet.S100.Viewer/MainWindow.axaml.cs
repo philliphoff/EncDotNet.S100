@@ -319,6 +319,7 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
             _paneViews.Clear();
             _mapProbes.Dispose();
             _pickMapPresence.Dispose();
+            _splitServices.Picks.Dispose();
         };
         DataContext = _viewModel;
 

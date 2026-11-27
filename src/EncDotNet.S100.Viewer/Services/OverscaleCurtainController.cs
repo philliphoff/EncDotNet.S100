@@ -1,16 +1,15 @@
-using System.Collections.Specialized;
-using System.ComponentModel;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Rendering.Engine;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Keeps the on-chart overscale "curtain" overlay (issue #441, S-52 / S-101
-/// <c>AP(OVERSC01)</c> Form A) in sync with the live viewport and loaded
-/// datasets: a subtle vertical-line pattern is painted over the region of each
-/// cell that is currently displayed beyond its compilation scale.
+/// <c>AP(OVERSC01)</c> Form A) in sync with the live viewport and the cells
+/// its map draws: a subtle vertical-line pattern is painted over the region of
+/// each cell that is currently displayed beyond its compilation scale. Each
+/// map of a split reads its own session, so a cell hidden in one pane has no
+/// curtain there (split map step 2 §2.6).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,7 +19,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// coordinates (EPSG:3857) and <see cref="OverscaleCurtainRenderer"/>
 /// re-projects and clips the fill per frame. The controller therefore caches the
 /// last resolution and skips recomputation on a pure pan, recomputing only when
-/// the zoom changes, a dataset is added/removed/(re)loaded/hidden/shown, or the
+/// the zoom changes, the session's layers change, or the
 /// mariner toggles <see cref="ViewerSettingsService.ShowOverscaleIndication"/>.
 /// Because a zoom leaves the cells unchanged, the per-cell regions are
 /// memoised in an <see cref="OverscaleCurtainRegionCache"/>, so a zoom step
@@ -44,15 +43,15 @@ internal sealed class OverscaleCurtainController : IDisposable
     private const string OverlayLayerName = "Overscale Curtain";
 
     private readonly IMapLayerCollection _layers;
-    private readonly DatasetsViewModel _datasets;
-    private readonly IDatasetLoaderService _loader;
+    private readonly IMapDatasetSession _session;
     private readonly IMapViewportNotifier _viewport;
     private readonly ViewerSettingsService _settings;
     private readonly Action<Action> _marshal;
+    private readonly Action<Action> _coalesce;
     private readonly S100OverscaleCurtainLayer _curtain;
     private readonly OverscaleCurtainRegionCache _regions = new();
-    private readonly HashSet<DatasetEntry> _subscribed = new();
     private double _lastResolution = double.NaN;
+    private int _rebuildPending;
     private bool _disposed;
 
     /// <summary>
@@ -60,39 +59,40 @@ internal sealed class OverscaleCurtainController : IDisposable
     /// initialised so the curtain overlay lands above the chart slice.
     /// </summary>
     /// <param name="layers">Target map layer collection.</param>
-    /// <param name="datasets">The datasets view-model to observe.</param>
-    /// <param name="loader">Supplies the overscale cell inputs.</param>
+    /// <param name="session">The map's dataset session, whose drawn cells get a curtain.</param>
     /// <param name="viewport">Publishes viewport (resolution) changes.</param>
     /// <param name="settings">Settings service supplying the on/off toggle.</param>
     /// <param name="marshal">Runs work on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
+    /// <param name="coalesce">
+    /// Queues work on the UI thread, even from it (the app passes
+    /// <see cref="UiThread.Post"/>): a burst of layer changes, such as a load,
+    /// rebuilds once.
+    /// </param>
     public OverscaleCurtainController(
         IMapLayerCollection layers,
-        DatasetsViewModel datasets,
-        IDatasetLoaderService loader,
+        IMapDatasetSession session,
         IMapViewportNotifier viewport,
         ViewerSettingsService settings,
-        Action<Action> marshal)
+        Action<Action> marshal,
+        Action<Action> coalesce)
     {
         ArgumentNullException.ThrowIfNull(layers);
-        ArgumentNullException.ThrowIfNull(datasets);
-        ArgumentNullException.ThrowIfNull(loader);
+        ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(marshal);
+        ArgumentNullException.ThrowIfNull(coalesce);
 
         _layers = layers;
-        _datasets = datasets;
-        _loader = loader;
+        _session = session;
         _viewport = viewport;
         _settings = settings;
         _marshal = marshal;
+        _coalesce = coalesce;
 
         _curtain = new S100OverscaleCurtainLayer(name: OverlayLayerName);
 
-        _datasets.Entries.CollectionChanged += OnEntriesChanged;
-        foreach (var entry in _datasets.Entries)
-            Subscribe(entry);
-
+        _session.LayersChanged += OnLayersChanged;
         _viewport.ViewportChanged += OnViewportChanged;
         _settings.OverscaleIndicationChanged += OnToggleChanged;
 
@@ -117,47 +117,17 @@ internal sealed class OverscaleCurtainController : IDisposable
         _marshal(Rebuild);
     }
 
-    private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    // A dataset added, removed, rendered, hidden or shown in this map. The
+    // session can raise this off the UI thread.
+    private void OnLayersChanged(object? sender, EventArgs e)
     {
-        if (e.OldItems is not null)
-            foreach (DatasetEntry entry in e.OldItems)
-                Unsubscribe(entry);
-
-        if (e.NewItems is not null)
-            foreach (DatasetEntry entry in e.NewItems)
-                Subscribe(entry);
-
-        if (e.Action == NotifyCollectionChangedAction.Reset)
+        if (Interlocked.Exchange(ref _rebuildPending, 1) == 1)
+            return;
+        _coalesce(() =>
         {
-            foreach (var entry in _subscribed)
-                entry.PropertyChanged -= OnEntryChanged;
-            _subscribed.Clear();
-            foreach (var entry in _datasets.Entries)
-                Subscribe(entry);
-        }
-
-        _marshal(Rebuild);
-    }
-
-    private void Subscribe(DatasetEntry entry)
-    {
-        if (_subscribed.Add(entry))
-            entry.PropertyChanged += OnEntryChanged;
-    }
-
-    private void Unsubscribe(DatasetEntry entry)
-    {
-        if (_subscribed.Remove(entry))
-            entry.PropertyChanged -= OnEntryChanged;
-    }
-
-    private void OnEntryChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(DatasetEntry.IsLoaded)
-            or nameof(DatasetEntry.IsVisibleAnywhere))
-        {
-            _marshal(Rebuild);
-        }
+            Volatile.Write(ref _rebuildPending, 0);
+            Rebuild();
+        });
     }
 
     private void OnToggleChanged() => _marshal(Rebuild);
@@ -170,7 +140,7 @@ internal sealed class OverscaleCurtainController : IDisposable
 
         if (_settings.ShowOverscaleIndication && !double.IsNaN(_lastResolution))
         {
-            var cells = _loader.GetOverscaleCells();
+            var cells = MapOverscaleCells.Of(_session);
             if (cells.Count > 0)
                 regions = _regions.ComputeRegions(cells, _lastResolution);
         }
@@ -194,10 +164,7 @@ internal sealed class OverscaleCurtainController : IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        _datasets.Entries.CollectionChanged -= OnEntriesChanged;
-        foreach (var entry in _subscribed)
-            entry.PropertyChanged -= OnEntryChanged;
-        _subscribed.Clear();
+        _session.LayersChanged -= OnLayersChanged;
 
         _viewport.ViewportChanged -= OnViewportChanged;
         _settings.OverscaleIndicationChanged -= OnToggleChanged;

@@ -499,13 +499,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             entry.AvailableTimes = [];
             entry.CurrentTime = null;
             entry.SetLoadedState(processor.Metadata);
-            var mapDataset = entry.MapDataset
-                ?? throw new InvalidOperationException(
+            if (entry.MapDataset is null)
+                throw new InvalidOperationException(
                     "A loaded entry must expose renderer-neutral dataset state.");
-            _sessions.SetDataset(
-                mapDataset,
-                entry.MinimumDisplayScale,
-                entry.MaximumDisplayScale);
+            SetSessionDataset(entry);
             ProjectSessionState(entry);
             SubscribeEntry(entry);
             var initialTime = entry.CurrentTime;
@@ -791,14 +788,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             }
         }
 
-        if (result is null || !IsCurrentLoad(entry, loadGeneration) || entry.MapDataset is not { } mapDataset)
+        if (result is null || !IsCurrentLoad(entry, loadGeneration) || entry.MapDataset is null)
             return new StoredPublish(key, Published: false, WasKnownBySession: false);
 
         var wasKnownBySession = _sessions.Primary!.GetDataset(entry.Id) is not null;
         _sessionEntries[entry.Id] = entry;
         try
         {
-            _sessions.SetDataset(mapDataset, entry.MinimumDisplayScale, entry.MaximumDisplayScale);
+            SetSessionDataset(entry);
             ProjectSessionState(entry);
             SubscribeEntry(entry);
             // Each other map draws its own copy of the stored scene.
@@ -1520,8 +1517,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         UnsubscribeSubLayers(entry);
         entry.SubLayers.Clear();
-        if (_subscribedEntries.Remove(entry))
-            entry.PropertyChanged -= OnEntryPropertyChanged;
+        UnsubscribeEntry(entry);
         // The loader owns the processor and retires it once; the map removes
         // the dataset without retiring it (split map, #1728).
         _processorOwner.Retire([entry.Id], () => _sessions.RemoveDataset(entry.Id));
@@ -1652,32 +1648,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<OverscaleCellInput> GetOverscaleCells()
-    {
-        List<OverscaleCellInput>? cells = null;
-        if (_sessions.Reader is not { } session)
-            return [];
-
-        foreach (var snapshot in session.GetDatasets())
-        {
-            if (snapshot.MaximumDisplayScale is not int compilationScale
-                || compilationScale <= 0
-                || !snapshot.IsDrawing
-                || snapshot.CoverageGeometry is not { IsEmpty: false } coverage)
-            {
-                continue;
-            }
-
-            (cells ??= []).Add(new OverscaleCellInput
-            {
-                Name = snapshot.Dataset.Name,
-                Coverage = coverage,
-                CompilationScaleDenominator = compilationScale,
-            });
-        }
-
-        return (IReadOnlyList<OverscaleCellInput>?)cells ?? [];
-    }
+    public IReadOnlyList<OverscaleCellInput> GetOverscaleCells() =>
+        _sessions.Reader is { } session ? MapOverscaleCells.Of(session) : [];
 
     private void ProjectSessionState(DatasetEntry entry)
     {
@@ -1773,20 +1745,52 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private void SubscribeEntry(DatasetEntry entry)
     {
         if (_subscribedEntries.Add(entry))
+        {
             entry.PropertyChanged += OnEntryPropertyChanged;
+            entry.VisibilityChanged += OnEntryVisibilityChanged;
+        }
     }
+
+    private void UnsubscribeEntry(DatasetEntry entry)
+    {
+        if (_subscribedEntries.Remove(entry))
+        {
+            entry.PropertyChanged -= OnEntryPropertyChanged;
+            entry.VisibilityChanged -= OnEntryVisibilityChanged;
+        }
+    }
+
+    // Each map's session gets the entry's state with that map's visibility
+    // (split map step 2 §2.2). The set asks the entry again when it replays
+    // the dataset to a map opened later, which MapDatasetVisibility has
+    // seeded by then.
+    private void SetSessionDataset(DatasetEntry entry) =>
+        _sessions.SetDataset(
+            entry.Id,
+            entry.MapDatasetFor,
+            entry.MinimumDisplayScale,
+            entry.MaximumDisplayScale);
 
     private void ApplyEntryState(DatasetEntry entry)
     {
-        if (_sessions.Primary is not { } primary || entry.MapDataset is not { } dataset)
+        if (_sessions.Primary is not { } primary || entry.MapDataset is null)
             return;
 
-        _sessions.SetDataset(
-            dataset,
-            entry.MinimumDisplayScale,
-            entry.MaximumDisplayScale);
+        SetSessionDataset(entry);
         entry.ContentMaxVisibleResolution =
             primary.GetDataset(entry.Id)?.ContentMaxVisibleResolution;
+    }
+
+    // A change in one map re-sets that map's session only; one in every map
+    // re-sets them all.
+    private void OnEntryVisibilityChanged(object? sender, MapViewId? map)
+    {
+        if (sender is not DatasetEntry entry || entry.MapDataset is null)
+            return;
+        if (map is { } one)
+            _sessions.ReapplyDataset(entry.Id, one);
+        else
+            ApplyEntryState(entry);
     }
 
     private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1799,9 +1803,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             _ = RenderViewingGroupsAsync(entry);
             return;
         }
+        // Visibility arrives through VisibilityChanged, per map.
         if (e.PropertyName is not (
-            nameof(DatasetEntry.IsVisibleAnywhere)
-            or nameof(DatasetEntry.IsHiddenByDisplay)
+            nameof(DatasetEntry.IsHiddenByDisplay)
             or nameof(DatasetEntry.IsActive)
             or nameof(DatasetEntry.Opacity)))
             return;
@@ -1910,8 +1914,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _sessions.RemoveDataset(entry.Id);
         UnsubscribeSubLayers(entry);
         entry.SubLayers.Clear();
-        if (_subscribedEntries.Remove(entry))
-            entry.PropertyChanged -= OnEntryPropertyChanged;
+        UnsubscribeEntry(entry);
         _library.RemoveSessionCatalogue(entry.DisplayName);
         entry.IsLoaded = false;
         entry.Info = null;

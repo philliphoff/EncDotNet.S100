@@ -23,6 +23,9 @@ internal sealed class FakeMapDatasetSession : IMapDatasetSession
     /// <summary>Every call, in order, as "Name(argument)".</summary>
     public List<string> Calls { get; } = [];
 
+    /// <summary>Every dataset state set on this session, in order.</summary>
+    public List<MapDataset> SetDatasets { get; } = [];
+
     /// <summary>The datasets drawn on this map.</summary>
     public HashSet<MapDatasetId> Drawn { get; } = [];
 
@@ -105,6 +108,7 @@ internal sealed class FakeMapDatasetSession : IMapDatasetSession
     public void SetDataset(MapDataset dataset, int? minimumDisplayScale, int? maximumDisplayScale)
     {
         Calls.Add($"SetDataset({dataset.Id.Value})");
+        SetDatasets.Add(dataset);
         if (!_datasets.ContainsKey(dataset.Id))
             _order.Add(dataset.Id);
         _datasets[dataset.Id] = dataset;

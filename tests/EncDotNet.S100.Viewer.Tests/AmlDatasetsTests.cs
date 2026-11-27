@@ -191,7 +191,7 @@ public sealed class AmlDatasetsTests : IDisposable
         datasets.Add("/x/GB500001.000", "S-57");
 
         using var controller = new AmlCoverageOutlineController(
-            host, datasets, new StubMeasureOverlayAppearanceProvider(), a => a(), a => a());
+            host, new MapViewId("map-1"), datasets, new StubMeasureOverlayAppearanceProvider(), a => a(), a => a());
         var layer = host.OverlayLayers.OfType<MemoryLayer>().Single(l => l.Name == AmlCoverageOutlineController.LayerName);
         Assert.Empty(layer.Features);
 
@@ -221,7 +221,7 @@ public sealed class AmlDatasetsTests : IDisposable
         entry.SetAml(Cell("UK6U0100.000") with { Drawn = true });
 
         using var controller = new AmlCoverageOutlineController(
-            host, datasets, new StubMeasureOverlayAppearanceProvider(), a => a(), a => a());
+            host, new MapViewId("map-1"), datasets, new StubMeasureOverlayAppearanceProvider(), a => a(), a => a());
 
         Assert.Empty(controller.Outlines);
     }
@@ -231,7 +231,7 @@ public sealed class AmlDatasetsTests : IDisposable
     {
         var host = new FakeMapHost();
         var controller = new AmlCoverageOutlineController(
-            host, NewDatasets(), new StubMeasureOverlayAppearanceProvider(), a => a(), a => a());
+            host, new MapViewId("map-1"), NewDatasets(), new StubMeasureOverlayAppearanceProvider(), a => a(), a => a());
 
         controller.Dispose();
 

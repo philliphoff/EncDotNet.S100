@@ -52,7 +52,9 @@ internal sealed class PickHighlightController : IDisposable
     private readonly Action<Action> _marshal;
     private readonly MemoryLayer _layer;
     private readonly NavigationalWarningDrawingService? _warningDrawing;
-    private readonly Func<PickHit, string?>? _ghostReason;
+    private readonly PickPresence? _presence;
+    private readonly IMapViewCapabilities? _view;
+    private string? _ghost;
     private bool _disposed;
 
     /// <summary>
@@ -75,12 +77,13 @@ internal sealed class PickHighlightController : IDisposable
     /// switch off, a warning's pick isn't highlighted either (#995).
     /// <see langword="null"/> always highlights.
     /// </param>
-    /// <param name="ghostReason">
-    /// Why this map shows a pick as a ghost (split map design note D10): the
-    /// tag text when the map doesn't draw the picked feature while another map
-    /// does, else <see langword="null"/>. <see langword="null"/> (one map)
-    /// never draws a ghost.
+    /// <param name="presence">
+    /// Which maps draw a pick (split map design note D10): this map shows a
+    /// ghost with its reason when it doesn't draw the picked feature while
+    /// another map does, and re-checks when a map's datasets change.
+    /// <see langword="null"/> never draws a ghost.
     /// </param>
+    /// <param name="view">This map, which <paramref name="presence"/> is asked about.</param>
     public PickHighlightController(
         IMapLayerCollection layers,
         PickReportViewModel pickReport,
@@ -89,7 +92,8 @@ internal sealed class PickHighlightController : IDisposable
         ViewerSettingsService settings,
         Action<Action> marshal,
         NavigationalWarningDrawingService? warningDrawing,
-        Func<PickHit, string?>? ghostReason)
+        PickPresence? presence,
+        IMapViewCapabilities? view)
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -105,7 +109,8 @@ internal sealed class PickHighlightController : IDisposable
         _settings = settings;
         _marshal = marshal;
         _warningDrawing = warningDrawing;
-        _ghostReason = ghostReason;
+        _presence = presence;
+        _view = view;
 
         _layer = PickHighlightOverlayLayer.Create();
 
@@ -114,6 +119,8 @@ internal sealed class PickHighlightController : IDisposable
         _settings.PaletteChanged += OnPaletteChanged;
         if (_warningDrawing is not null)
             _warningDrawing.PropertyChanged += OnWarningDrawingChanged;
+        if (_presence is not null)
+            _presence.Changed += OnPresenceChanged;
 
         _marshal(() =>
         {
@@ -147,6 +154,21 @@ internal sealed class PickHighlightController : IDisposable
             _marshal(Rebuild);
     }
 
+    // A map's datasets changed (a toggle in any pane, split map step 2
+    // §2.6): only the ghost can differ, so rebuild only when it does. Loads
+    // raise this often.
+    private void OnPresenceChanged(object? sender, EventArgs e) =>
+        _marshal(() =>
+        {
+            if (!_disposed && GhostOf(_pickReport.PreviewHit ?? _pickReport.SelectedHit) != _ghost)
+                Rebuild();
+        });
+
+    private string? GhostOf(PickHit? hit) =>
+        hit is not null && _view is not null && _warningDrawing?.IsHighlightHidden(hit) != true
+            ? _presence?.GhostReason(_view, hit)
+            : null;
+
     private void Rebuild()
     {
         if (_disposed) return;
@@ -178,7 +200,8 @@ internal sealed class PickHighlightController : IDisposable
 
         // In a split, a map that doesn't draw the picked feature while another
         // does draws a ghost with the reason (D10); every other map, the pick.
-        var ghost = !hidden && hit is not null ? _ghostReason?.Invoke(hit) : null;
+        var ghost = GhostOf(hit);
+        _ghost = ghost;
         var state = new PickHighlightState(location, geometry, ghost);
 
         // The marker's casing dims against a dark chart basemap. That is the
@@ -278,6 +301,8 @@ internal sealed class PickHighlightController : IDisposable
         _settings.PaletteChanged -= OnPaletteChanged;
         if (_warningDrawing is not null)
             _warningDrawing.PropertyChanged -= OnWarningDrawingChanged;
+        if (_presence is not null)
+            _presence.Changed -= OnPresenceChanged;
 
         _marshal(() => _layers.RemoveOverlayLayer(_layer));
     }

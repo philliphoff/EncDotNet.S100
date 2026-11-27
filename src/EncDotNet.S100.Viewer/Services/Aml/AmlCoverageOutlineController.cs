@@ -19,7 +19,8 @@ namespace EncDotNet.S100.Viewer.Services.Aml;
 /// </summary>
 /// <remarks>
 /// <para>
-/// An outline follows its row's <see cref="DatasetEntry.ShowsAmlCoverageOutline"/>:
+/// An outline follows its row's <see cref="DatasetEntry.ShowsAmlCoverageOutlineIn"/>
+/// for this map:
 /// the row's eye turns it off, and a cell the AML portrayal draws has none
 /// unless its layers are hidden. The coverage is the cell's <c>M_COVR</c>
 /// areas, or its bounding box when it has none.
@@ -40,6 +41,7 @@ internal sealed class AmlCoverageOutlineController : IDisposable
     private static readonly SKColor NightInk = new(0x8A, 0x8A, 0x90);
 
     private readonly IMapLayerCollection _layers;
+    private readonly MapViewId _map;
     private readonly DatasetsViewModel _datasets;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
     private readonly Action<Action> _marshal;
@@ -52,12 +54,14 @@ internal sealed class AmlCoverageOutlineController : IDisposable
 
     /// <summary>Creates the controller and adds its layer to the overlay band.</summary>
     /// <param name="layers">The map's layer bands.</param>
+    /// <param name="map">The map, whose own visibility the outlines follow (split map step 2 §2.6).</param>
     /// <param name="datasets">The Datasets panel, whose AML rows are outlined.</param>
     /// <param name="appearance">The chart palette, which picks the ink.</param>
     /// <param name="marshal">Runs work on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
     /// <param name="coalesce">Queues a rebuild on the UI thread, even from it (the app passes <see cref="UiThread.Post"/>).</param>
     public AmlCoverageOutlineController(
         IMapLayerCollection layers,
+        MapViewId map,
         DatasetsViewModel datasets,
         IMeasureOverlayAppearanceProvider appearance,
         Action<Action> marshal,
@@ -71,6 +75,7 @@ internal sealed class AmlCoverageOutlineController : IDisposable
 
         AmlCoverageOutlineRenderer.Register();
         _layers = layers;
+        _map = map;
         _datasets = datasets;
         _appearance = appearance;
         _marshal = marshal;
@@ -188,7 +193,7 @@ internal sealed class AmlCoverageOutlineController : IDisposable
         var features = new List<IFeature>();
         foreach (var entry in _datasets.Entries)
         {
-            if (!entry.ShowsAmlCoverageOutline || entry.Aml is not { } aml || ToMercator(aml.Coverage) is not { } geometry)
+            if (!entry.ShowsAmlCoverageOutlineIn(_map) || entry.Aml is not { } aml || ToMercator(aml.Coverage) is not { } geometry)
                 continue;
 
             var (title, subtitle) = LabelOf(entry);
