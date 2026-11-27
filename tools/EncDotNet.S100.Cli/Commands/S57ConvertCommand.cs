@@ -147,7 +147,8 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
         }
     }
 
-    private static void PrintDiagnosticsSummary(S57TranslationDiagnostics diagnostics)
+    /// <summary>Prints the S-57 → S-101 translation summary table (also used by <c>nis convert --to s101</c>).</summary>
+    internal static void PrintDiagnosticsSummary(S57TranslationDiagnostics diagnostics)
     {
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("Coverage");

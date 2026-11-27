@@ -21,7 +21,7 @@ internal sealed class NisConvertCommandSettings : CommandSettings
     public string OutputPath { get; init; } = string.Empty;
 
     [CommandOption("--to <FORMAT>")]
-    [Description("The format to write. Only s57 (an S-57 Edition 3.1 base cell) is supported.")]
+    [Description("The format to write: s57 (an S-57 Edition 3.1 base cell) or s101 (an S-101 dataset, translated through S-57 as s57 convert does).")]
     [DefaultValue("s57")]
     public string To { get; init; } = "s57";
 
@@ -85,8 +85,11 @@ internal sealed class NisConvertCommandSettings : CommandSettings
         if (List)
             return Spectre.Console.ValidationResult.Success();
 
-        if (!string.Equals(To, "s57", StringComparison.OrdinalIgnoreCase))
-            return Spectre.Console.ValidationResult.Error($"Invalid --to value '{To}'. Only s57 is supported.");
+        if (!string.Equals(To, "s57", StringComparison.OrdinalIgnoreCase) && !IsS101(To))
+            return Spectre.Console.ValidationResult.Error($"Invalid --to value '{To}'. Use s57 or s101.");
+
+        if (IsS101(To) && ExchangeSet)
+            return Spectre.Console.ValidationResult.Error("--exchange-set applies only with --to s57.");
 
         if (string.IsNullOrWhiteSpace(OutputPath))
             return Spectre.Console.ValidationResult.Error("An output path is required (-o|--output).");
@@ -139,6 +142,9 @@ internal sealed class NisConvertCommandSettings : CommandSettings
             SynthesiseCoverage = !NoCoverage,
         };
     }
+
+    /// <summary>Whether a <c>--to</c> value asks for S-101.</summary>
+    internal static bool IsS101(string? to) => string.Equals(to, "s101", StringComparison.OrdinalIgnoreCase);
 
     internal static bool TryParseBbox(string text, out NisBounds bounds)
     {

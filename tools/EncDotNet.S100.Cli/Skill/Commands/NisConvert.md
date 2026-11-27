@@ -1,7 +1,8 @@
 #### Agent guidance
 
-Pass the NIS file geodatabase (the `.gdb` directory), `--to s57` and an
-explicit output path. An NIS usually holds many cells: run
+Pass the NIS file geodatabase (the `.gdb` directory), `--to s57` (or
+`--to s101`, which translates the S-57 cell on to S-101 as `s57 convert` does)
+and an explicit output path. An NIS usually holds many cells: run
 `s100 nis convert --list <source.gdb>` first to see the source cell names
 (`DSNM`, such as `US5CA98M.005`) and their feature counts, then choose one with
 `--cell`, by its full name or without the extension (`US5CA98M`). With one
@@ -30,3 +31,10 @@ that read S-57; it is not a production ENC. Check it with
 `s100 validate <cell>.000`, look at it with `s100 render`, and convert it on to
 S-101 with `s100 s57 convert`. With `--exchange-set`, `-o` names a directory
 and the command writes `ENC_ROOT/CATALOG.031` and `ENC_ROOT/<cell>/<cell>.000`.
+
+To draw, tile or identify an NIS, `nis convert` isn't needed: `tiles serve`,
+`tiles export`, `identify` and `mcp serve` take the `.gdb` as a folder (one
+S-57 dataset per cell), and `render`, `info`, `validate` and `--layer` take a
+cell path, `<path>.gdb/<DSNM>`, such as `production.gdb/US5CA98M`. The cells
+are translated once and cached under local application data until the
+geodatabase changes.
