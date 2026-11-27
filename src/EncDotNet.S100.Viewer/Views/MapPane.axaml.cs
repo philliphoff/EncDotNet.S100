@@ -1,6 +1,9 @@
 using System.ComponentModel;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Views;
@@ -20,6 +23,9 @@ public partial class MapPane : UserControl
     public MapPane()
     {
         InitializeComponent();
+        // Tunnel, and even when handled: the window's Escape binding (leave
+        // pick mode) would otherwise take Esc before the editor sees it.
+        NameEditor.AddHandler(KeyDownEvent, OnNameEditorKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     /// <summary>
@@ -57,6 +63,8 @@ public partial class MapPane : UserControl
         AutomationProperties.SetAutomationId(CloseButton, $"{prefix}.Close");
         AutomationProperties.SetAutomationId(LinkButton, $"{prefix}.Link");
         AutomationProperties.SetAutomationId(FoldStrip, $"{prefix}.FoldStrip");
+        AutomationProperties.SetAutomationId(TitleText, $"{prefix}.Title");
+        AutomationProperties.SetAutomationId(NameEditor, $"{prefix}.NameEditor");
     }
 
     /// <summary>
@@ -77,7 +85,48 @@ public partial class MapPane : UserControl
 
     private void OnPanePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MapPaneViewModel.IsFolded) && _pane is { } pane)
+        if (_pane is not { } pane)
+            return;
+        if (e.PropertyName == nameof(MapPaneViewModel.IsFolded))
             MapContent.IsVisible = !pane.IsFolded;
+        else if (e.PropertyName == nameof(MapPaneViewModel.IsRenaming) && pane.IsRenaming)
+            // The editor shows on this layout pass; focus it once it can take focus.
+            Dispatcher.UIThread.Post(FocusNameEditor, DispatcherPriority.Loaded);
     }
+
+    private void FocusNameEditor()
+    {
+        if (_pane is not { IsRenaming: true })
+            return;
+        NameEditor.Focus(NavigationMethod.Pointer);
+        NameEditor.SelectAll();
+    }
+
+    private void OnTitleDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (_pane is null)
+            return;
+        _pane.BeginRename();
+        e.Handled = true;
+    }
+
+    private void OnNameEditorKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_pane is null)
+            return;
+        switch (e.Key)
+        {
+            case Key.Enter:
+                _pane.CommitRename();
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                _pane.CancelRename();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    // Clicking elsewhere keeps what was typed, as Enter does.
+    private void OnNameEditorLostFocus(object? sender, RoutedEventArgs e) => _pane?.CommitRename();
 }

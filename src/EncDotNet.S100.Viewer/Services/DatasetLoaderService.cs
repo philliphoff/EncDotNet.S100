@@ -1219,7 +1219,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 if (DuplicateCoverageDetector.IsSameCoverage(
                         entry.RelativePath, other.RelativePath))
                 {
-                    entry.IsVisible = false;
+                    // A load policy: hidden in every map (split map step 2 §2.3).
+                    entry.SetVisible(false);
                     break;
                 }
             }
@@ -1239,7 +1240,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (processor is S104DatasetProcessor { IsGriddedSurface: true }
             && !wasKnownBySession)
         {
-            entry.IsVisible = false;
+            // A load policy: hidden in every map (split map step 2 §2.3).
+            entry.SetVisible(false);
         }
 
         // Surface any S-101 update-application diagnostics. Updates are
@@ -1798,7 +1800,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             return;
         }
         if (e.PropertyName is not (
-            nameof(DatasetEntry.IsVisible)
+            nameof(DatasetEntry.IsVisibleAnywhere)
             or nameof(DatasetEntry.IsHiddenByDisplay)
             or nameof(DatasetEntry.IsActive)
             or nameof(DatasetEntry.Opacity)))

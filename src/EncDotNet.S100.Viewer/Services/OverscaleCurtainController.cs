@@ -154,7 +154,7 @@ internal sealed class OverscaleCurtainController : IDisposable
     private void OnEntryChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(DatasetEntry.IsLoaded)
-            or nameof(DatasetEntry.IsVisible))
+            or nameof(DatasetEntry.IsVisibleAnywhere))
         {
             _marshal(Rebuild);
         }

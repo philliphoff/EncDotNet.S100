@@ -125,8 +125,8 @@ public class DatasetsPanelTabsTests
 
         header.ToggleVisibilityCommand.Execute(null);
 
-        Assert.False(d1.IsVisible);
-        Assert.False(d2.IsVisible);
+        Assert.False(d1.IsVisibleAnywhere);
+        Assert.False(d2.IsVisibleAnywhere);
         Assert.False(header.IsAnyDatasetVisible);
     }
 
@@ -138,15 +138,15 @@ public class DatasetsPanelTabsTests
         var header = vm.RegisterExchangeSetHeader(src, "/a", null, null, 2, _ => { });
         var d1 = vm.AddFromExchangeSet(src, "a/d1.000", "S-101");
         var d2 = vm.AddFromExchangeSet(src, "a/d2.000", "S-101");
-        d1.IsVisible = false;
-        d2.IsVisible = false;
+        d1.SetVisible(false);
+        d2.SetVisible(false);
 
         Assert.False(header.IsAnyDatasetVisible);
 
         header.ToggleVisibilityCommand.Execute(null);
 
-        Assert.True(d1.IsVisible);
-        Assert.True(d2.IsVisible);
+        Assert.True(d1.IsVisibleAnywhere);
+        Assert.True(d2.IsVisibleAnywhere);
         Assert.True(header.IsAnyDatasetVisible);
     }
 
@@ -164,7 +164,7 @@ public class DatasetsPanelTabsTests
             if (e.PropertyName == nameof(ExchangeSetHeader.IsAnyDatasetVisible)) raised = true;
         };
 
-        d1.IsVisible = false;
+        d1.SetVisible(false);
 
         Assert.True(raised);
         Assert.False(header.IsAnyDatasetVisible);

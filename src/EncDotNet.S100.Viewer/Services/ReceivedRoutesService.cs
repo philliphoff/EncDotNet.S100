@@ -354,13 +354,13 @@ internal sealed class ReceivedRoutesService
         // Decision 15: while checked, the route renderer draws the legs and
         // waypoints, so the dataset keeps only its action points.
         var viewingGroups = isChecked ? CheckedViewingGroups : null;
-        if (entry.IsVisible == visible && Equals(entry.ViewingGroups, viewingGroups))
-            return;
         _syncing = true;
         try
         {
+            // Routes are drawn in every pane, so the mode sets every map
+            // (split map step 2, Q4). Both setters do nothing when unchanged.
             entry.ViewingGroups = viewingGroups;
-            entry.IsVisible = visible;
+            entry.SetVisible(visible);
         }
         finally
         {
@@ -371,11 +371,11 @@ internal sealed class ReceivedRoutesService
     // The dataset's eye follows the route's mode; toggling the eye sets it.
     private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (_syncing || e.PropertyName != nameof(DatasetEntry.IsVisible) || sender is not DatasetEntry entry)
+        if (_syncing || e.PropertyName != nameof(DatasetEntry.IsVisibleAnywhere) || sender is not DatasetEntry entry)
             return;
         if (RouteOf(entry) is not { } route || IsChecked(_routes, route))
             return;
-        route.SetDisplayMode(entry.IsVisible ? RouteDisplayMode.Native : RouteDisplayMode.Planning);
+        route.SetDisplayMode(entry.IsVisibleAnywhere ? RouteDisplayMode.Native : RouteDisplayMode.Planning);
     }
 
     // Reads the entry's own bytes: a Library entry's FilePath is relative to

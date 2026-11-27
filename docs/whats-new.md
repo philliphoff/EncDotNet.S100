@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Rename a split map.** Double-click a map's name in its header, or choose
+  **Rename map…** in the **Split map** menu, to name it, such as **S-57** or
+  **Low water**. Enter saves it, Esc cancels, and an empty name goes
+  back to **Map 1** or **Map 2**. Names are saved with the split
+  ([#1761](https://github.com/philliphoff/EncDotNet.S100/issues/1761)).
+
 - **Drive split maps over MCP.** New tools split the map
   (`set_split_map`), list the maps with their views (`list_maps`), make one
   active (`set_active_map`), link their views (`set_map_link`) and name a

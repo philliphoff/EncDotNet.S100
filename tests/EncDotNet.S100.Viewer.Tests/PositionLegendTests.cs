@@ -173,7 +173,7 @@ public sealed class PositionLegendTests : IDisposable
     public void A_hidden_cell_is_not_the_chart_at_the_centre()
     {
         var entry = Cell("101US00TEST", (0, 0, 0.1, 0.1), 22_000, 12_000);
-        entry.IsVisible = false;
+        entry.SetVisible(false);
         _f.Viewport.Publish(0.04, 0.04, 0.06, 0.06);
         using var legend = _f.Create();
         using var position = Position(legend);

@@ -28,7 +28,7 @@ has to set each one by hand:
 | Viewing groups (incl. the three S-101 text groups) | **ECDIS Display Controls** panel, **Text ▾** pill | `EcdisDisplayState` hidden set → `ViewerSettings.EcdisHiddenViewingGroups` |
 | Per-product display mode (S-411) | Display mode selector | `ViewerSettings.EcdisActiveDisplayModes` |
 | Optional product layers (weather isobars, wind fill, wave arrows) | **ECDIS Display Controls** › Weather | `ViewerSettings.EcdisLayerVisibility` |
-| Whether a dataset draws | Datasets panel eye | `DatasetEntry.IsVisible` (per dataset, in memory) |
+| Whether a dataset draws | Datasets panel eye | `DatasetEntry.IsVisibleIn` (per map and dataset, in memory) |
 | Whether a dataset takes part in S-98 rules and pick | Layer stack **Active** toggle | `IDatasetLoaderService.SetActive` (per dataset, in memory) |
 | Sub-layers (S-111 arrows, S-104 isolines and stations) | Datasets panel sub-layer eye | `DatasetSubLayer.IsVisible` (per dataset) |
 
@@ -90,7 +90,7 @@ not just hidden.
 
 Visibility alone is wrong here. `S98DefaultRules.HasActiveProductSet` keys
 every inter-product rule on `LoadedDatasetInfo.Active`, not on
-`DatasetEntry.IsVisible`. A "Charted only" combination that only hid S-102
+`DatasetEntry.IsVisibleIn`. A "Charted only" combination that only hid S-102
 would leave R-101-102-B suppressing the S-101 depth areas and contours
 under the hidden surface, and the chart would show holes. Making S-102
 inactive takes it out of the rule set, so the ENC depth shading comes back.

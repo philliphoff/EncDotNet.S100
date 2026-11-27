@@ -246,6 +246,9 @@
                             <MenuItem Header="{x:Static loc:Strings.SplitMap_Swap}"
                                       AutomationProperties.AutomationId="MainWindow.SplitMapMenu.Swap"
                                       Command="{Binding SwapMapsCommand}" />
+                            <MenuItem Header="{x:Static loc:Strings.SplitMap_Rename}"
+                                      AutomationProperties.AutomationId="MainWindow.SplitMapMenu.Rename"
+                                      Command="{Binding RenameActiveCommand}" />
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>

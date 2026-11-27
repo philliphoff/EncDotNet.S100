@@ -696,8 +696,11 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         && IsShown(entry)
         && (entry.ContentMaxVisibleResolution is not { } max || double.IsNaN(resolution) || resolution <= max);
 
-    /// <summary>Whether the user has the cell switched on at full opacity.</summary>
-    private static bool IsShown(DatasetEntry entry) => entry.IsVisible && entry.Opacity >= 1.0;
+    /// <summary>
+    /// Whether the user has the cell switched on, in some map, at full
+    /// opacity. Lazy loading serves every pane (split map step 2 §2.5).
+    /// </summary>
+    private static bool IsShown(DatasetEntry entry) => entry.IsVisibleAnywhere && entry.Opacity >= 1.0;
 
     private static LoadTier? Classify(DatasetEntry entry, ViewFrame frame) =>
         LoadPrioritizer.Classify(
