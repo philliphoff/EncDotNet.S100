@@ -71,6 +71,27 @@ public sealed partial class FileGdbNisSource : INisSource
         return new FileGdbNisSource(path, database, tables);
     }
 
+    /// <summary>
+    /// Whether a directory is a file geodatabase holding an S-57 NIS: it has a
+    /// system catalogue and at least one table with <c>FCSubtype</c> and
+    /// <c>LNAM</c> fields.
+    /// </summary>
+    /// <param name="path">The directory.</param>
+    /// <returns><see langword="true"/> when it is one.</returns>
+    public static bool IsNisGeodatabase(string? path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(System.IO.Path.Combine(path, "a00000001.gdbtable"))) return false;
+        try
+        {
+            Open(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     /// <inheritdoc />
     public IReadOnlyList<string> GetDatasetNames()
     {

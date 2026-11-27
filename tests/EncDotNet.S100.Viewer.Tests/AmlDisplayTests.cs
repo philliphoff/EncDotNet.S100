@@ -31,6 +31,7 @@ public sealed class AmlDisplayTests : IDisposable
     private readonly FakeDatasetLoaderService _loader = new();
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = [];
     private readonly FakeNotifier _viewport = new();
+    private readonly FakeActiveMap _activeMap = new();
     private readonly EcdisDisplayState _state = new();
     private readonly DatasetsViewModel _datasets;
 
@@ -71,7 +72,7 @@ public sealed class AmlDisplayTests : IDisposable
 
     private AmlDisplayService CreateService()
     {
-        var service = new AmlDisplayService(_state, _viewport, action => action());
+        var service = new AmlDisplayService(_state, _viewport, _activeMap, action => action());
         service.Attach(_datasets, _loader);
         return service;
     }
@@ -271,6 +272,30 @@ public sealed class AmlDisplayTests : IDisposable
         Assert.False(section.IsClbChipShown);
         Assert.False(presence.IsClbDrawn);
         Assert.Equal(2, raised);
+    }
+
+    [Fact]
+    public void Counts_and_the_clb_chip_follow_the_active_map()
+    {
+        // Split map step 2 §2.6: map 2 hides the CLB cell that map 1 draws.
+        var second = new MapViewId("map-2");
+        using var service = CreateService();
+        _viewport.ZoomTo(50_000);
+        var clb = LoadDrawnClb();
+        clb.SetVisibleIn(second, false);
+        var presence = (IAmlClbPresence)service;
+        Assert.Equal(1, service.Products.Single(p => p.Code == "CLB").ShownCount);
+        Assert.True(presence.IsClbDrawn);
+
+        _activeMap.Activate(second);
+        var row = service.Products.Single(p => p.Code == "CLB");
+        Assert.Equal(1, row.CellCount);
+        Assert.Equal(0, row.ShownCount);
+        Assert.False(presence.IsClbDrawn);
+
+        _activeMap.Activate(FakeViewportSet.First);
+        Assert.Equal(1, service.Products.Single(p => p.Code == "CLB").ShownCount);
+        Assert.True(presence.IsClbDrawn);
     }
 
     [Fact]

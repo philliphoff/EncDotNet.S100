@@ -141,7 +141,9 @@ internal sealed record TimelineLaneDto(
     [property: Description("The lane's sub line under its label, e.g. 'adv 20 · 6 h' for a tropical cyclone or 'analysis · 3 h'.")] string Sub = "",
     [property: Description("UTC time of the lane's solid diamond, when the dataset was issued (a cyclone advisory); null when not marked.")] DateTime? Issued = null,
     [property: Description("UTC time of the lane's hollow diamond, when the next is expected (NHC's next advisory); null when not marked.")] DateTime? NextIssue = null,
-    [property: Description("How many step ticks the lane draws, one per forecast point of a tropical cyclone; 0 for none.")] int StepTicks = 0);
+    [property: Description("How many step ticks the lane draws, one per forecast point of a tropical cyclone; 0 for none.")] int StepTicks = 0,
+    [property: Description("While the map is split, the ids of the maps that draw the lane, in reading order (its number chips); null while it isn't.")] IReadOnlyList<string>? ShownIn = null,
+    [property: Description("True when the active map doesn't draw the lane, so it's dimmed in place.")] bool Dimmed = false);
 
 /// <summary>A loaded dataset's display state before and after set_dataset_state.</summary>
 [Description("A loaded dataset's display state before and after a change.")]
@@ -282,7 +284,7 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
         [.. state.Lanes.Select(lane => new TimelineLaneDto(
             lane.Id, lane.Label, lane.Group, lane.Listed, lane.InMapView, lane.Expired, lane.Time, lane.Library, lane.NewRun,
             [.. lane.Windows.Select(w => new TimelineLibraryWindowDto(w.ItemId, WindowState(w.State), w.Start, w.End, w.Run, w.NewRun, w.Expired))],
-            lane.Sub, lane.Issued, lane.NextIssue, lane.StepTicks))],
+            lane.Sub, lane.Issued, lane.NextIssue, lane.StepTicks, lane.ShownIn, lane.Dimmed))],
         state.ShowOnline,
         state.Passage is { } passage
             ? new TimelinePassageDto(

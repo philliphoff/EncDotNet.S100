@@ -16,6 +16,9 @@ internal sealed class TimelineLaneViewModel : ViewModelBase
 {
     private static readonly IBrush ExpiredBrush = new ImmutableSolidColorBrush(Color.Parse("#A1A1AA"));
 
+    /// <summary>The opacity of a lane the active pane doesn't draw (split map D20).</summary>
+    internal const double DimmedOpacity = 0.4;
+
     private readonly IBrush _color;
     private readonly ILibraryTimeSource? _library;
     private MapsuiMapTimedDataset? _dataset;
@@ -31,6 +34,8 @@ internal sealed class TimelineLaneViewModel : ViewModelBase
     private bool _isHidden;
     private bool _isExpired;
     private bool? _isInMapView;
+    private IReadOnlyList<TimelineLaneChip> _chips = [];
+    private bool _isDimmed;
     private DateTime? _nearest;
     private IReadOnlyList<NormalizedCoverageBand> _bands = [];
     private IReadOnlyList<NormalizedCoverageBand> _pastBands = [];
@@ -250,6 +255,44 @@ internal sealed class TimelineLaneViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// The number chips of the panes that draw the lane's dataset, in reading
+    /// order (split map D20); empty while the map isn't split.
+    /// </summary>
+    public IReadOnlyList<TimelineLaneChip> Chips
+    {
+        get => _chips;
+        internal set
+        {
+            if (_chips.SequenceEqual(value))
+                return;
+            _chips = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasChips));
+        }
+    }
+
+    /// <summary>True when the lane label shows pane chips.</summary>
+    public bool HasChips => _chips.Count > 0;
+
+    /// <summary>
+    /// True when the active pane doesn't draw the lane's dataset: the lane is
+    /// dimmed but keeps its place, so switching panes doesn't reflow the dock
+    /// (split map D20).
+    /// </summary>
+    public bool IsDimmed
+    {
+        get => _isDimmed;
+        internal set
+        {
+            if (SetProperty(ref _isDimmed, value))
+                OnPropertyChanged(nameof(LaneOpacity));
+        }
+    }
+
+    /// <summary>The lane's opacity: faded while <see cref="IsDimmed"/>.</summary>
+    public double LaneOpacity => _isDimmed ? DimmedOpacity : 1.0;
+
     /// <summary>Whether the layer's footprint intersects the map view; null when unknown.</summary>
     public bool? IsInMapView
     {
@@ -308,6 +351,18 @@ internal sealed class TimelineLaneViewModel : ViewModelBase
     /// <summary>Moves the view time to the layer's nearest data (clicking its layer time).</summary>
     public ICommand JumpCommand { get; }
 }
+
+/// <summary>
+/// A pane's number chip on a Timeline lane label (split map D20): the lane's
+/// dataset is drawn in that pane. Every chip has the automation id
+/// <c>Timeline.Lane.Chip</c>, scoped by its lane and its <see cref="Name"/>.
+/// </summary>
+/// <param name="Map">The pane's map.</param>
+/// <param name="Number">The pane's number in reading order (D19).</param>
+/// <param name="IsActive">True for the active pane's chip, filled in the accent colour.</param>
+/// <param name="Name">The chip's accessible name, the pane's label: "Map 2".</param>
+/// <param name="Tooltip">"Drawn in Map 2", with the pane's name when it has one.</param>
+internal sealed record TimelineLaneChip(MapViewId Map, int Number, bool IsActive, string Name, string Tooltip);
 
 /// <summary>A product group of lanes: <c>▾ S-111 Surface currents  2</c> (#710, handoff E1).</summary>
 internal sealed class TimelineLaneGroupViewModel : ViewModelBase

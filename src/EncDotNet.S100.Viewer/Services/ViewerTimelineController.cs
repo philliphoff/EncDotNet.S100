@@ -222,6 +222,8 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
                 Issued = lane.Marks.Any(m => m.Kind == TimelineLaneMarkKind.Issued) ? lane.Dataset?.IssueTime : null,
                 NextIssue = lane.Marks.Any(m => m.Kind == TimelineLaneMarkKind.NextIssue) ? lane.Dataset?.NextIssueTime : null,
                 StepTicks = lane.Marks.Count(m => m.Kind == TimelineLaneMarkKind.Step),
+                ShownIn = lane.HasChips ? [.. lane.Chips.Select(c => c.Map.Value)] : null,
+                Dimmed = lane.IsDimmed,
             };
         var listed = _timeline.LaneGroups.SelectMany(g => g.Lanes.Select(lane => State(lane, g.Title, true)));
         var folded = _timeline.HasOutsideLanes

@@ -10,7 +10,8 @@ applies: validate it, render it, or [bring it into the S-101
 pipeline](s57-to-s101.md).
 
 Use it to look at production data as a mariner would see it without an Esri
-export, and as a first step towards serving an NIS directly.
+export: convert a cell, or [open the NIS directly](#open-an-nis-directly) with
+`tiles serve`, `render` and `identify`.
 
 > [!IMPORTANT]
 > The output isn't a production ENC and mustn't be used for navigation. It
@@ -53,6 +54,36 @@ s100 validate US5CA98M.000
 s100 render US5CA98M.000 tahoe.png
 s100 s57 convert -o 101US5CA98M.000 US5CA98M.000
 ```
+
+## Open an NIS directly
+
+The dataset commands open an NIS without a separate conversion. A `.gdb`
+folder counts as a folder of datasets, with one S-57 dataset per cell, and
+`<path>.gdb/<DSNM>` names one cell wherever a dataset file goes:
+
+```bash
+s100 tiles serve path/to/production.gdb
+s100 identify path/to/production.gdb --lat 39.0956 --lon -120.0386
+s100 render path/to/production.gdb/US5CA98M.005 tahoe.png
+s100 render --layer path/to/production.gdb/US5CA98M --layer path/to/production.gdb/US5NY1DM -o both.png
+s100 info path/to/production.gdb/US5CA98M
+```
+
+A cell path takes the source name with or without its extension. Each cell is
+translated the way `nis convert` translates it, written as a `.000` and kept
+under your local application data (`EncDotNet.S100/NisCells`), so the
+commands then read an ordinary S-57 cell: `info` shows that cached file. The
+cache is keyed on the geodatabase's files, their sizes and write times. An
+edited geodatabase is translated again the next time it's opened, and a
+geodatabase open in ArcGIS isn't, because its lock files are ignored. The
+first time, translating takes a few seconds for each cell.
+
+`tiles serve` with a `.gdb` checks its files for changes as it does any
+folder, so an edit is picked up while serving. A cell path given with
+`--layer` is read when the command starts.
+
+To write S-101 instead, use `nis convert --to s101`. It translates the S-57
+cell on to S-101 the way `s100 s57 convert` does.
 
 ## What the NIS holds
 

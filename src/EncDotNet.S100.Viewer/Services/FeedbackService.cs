@@ -32,6 +32,7 @@ internal sealed class FeedbackService : IFeedbackService
 
     private readonly DatasetsViewModel _datasets;
     private readonly IMapViewportNotifier _viewport;
+    private readonly IActiveMap _activeMap;
     private readonly ILastErrorTracker _errors;
     private readonly ICrashHistory _crashes;
     private readonly IThemeService _theme;
@@ -44,6 +45,7 @@ internal sealed class FeedbackService : IFeedbackService
     public FeedbackService(
         DatasetsViewModel datasets,
         IMapViewportNotifier viewport,
+        IActiveMap activeMap,
         ILastErrorTracker errors,
         ICrashHistory crashes,
         IThemeService theme,
@@ -55,6 +57,7 @@ internal sealed class FeedbackService : IFeedbackService
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(viewport);
+        ArgumentNullException.ThrowIfNull(activeMap);
         ArgumentNullException.ThrowIfNull(errors);
         ArgumentNullException.ThrowIfNull(crashes);
         ArgumentNullException.ThrowIfNull(theme);
@@ -64,6 +67,7 @@ internal sealed class FeedbackService : IFeedbackService
 
         _datasets = datasets;
         _viewport = viewport;
+        _activeMap = activeMap;
         _errors = errors;
         _crashes = crashes;
         _theme = theme;
@@ -123,8 +127,9 @@ internal sealed class FeedbackService : IFeedbackService
             datasets.Add(new FeedbackDatasetInfo(
                 DisplayName: entry.DisplayName,
                 ProductSpec: entry.ProductSpec,
-                // The map the user reports on: the active map's once split map step 2 slice 3 (#1768) wires it; with one map they agree.
-                IsVisible: entry.IsVisibleAnywhere,
+                // The map the user reports on is the active one, whose view
+                // the report carries too (split map step 2 §2.6).
+                IsVisible: _activeMap.Shows(entry),
                 ValidationErrorCount: entry.ValidationErrorCount,
                 ValidationWarningCount: entry.ValidationWarningCount));
         }

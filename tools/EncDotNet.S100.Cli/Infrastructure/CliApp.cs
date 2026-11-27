@@ -188,11 +188,12 @@ internal static class CliApp
                 nis.SetDescription("Esri ArcGIS Maritime S-57 Nautical Information System (NIS) operations.");
 
                 nis.AddCommand<NisConvertCommand>("convert")
-                    .WithDescription("Convert one cell of an S-57 Nautical Information System (NIS) in a file geodatabase to an S-57 base cell or exchange set, for testing, previewing and tools that read S-57. The output is not a production ENC.")
+                    .WithDescription("Convert one cell of an S-57 Nautical Information System (NIS) in a file geodatabase to an S-57 base cell or exchange set, or to an S-101 dataset, for testing, previewing and tools that read S-57 or S-101. The output is not a production ENC.")
                     .WithExample("nis", "convert", "--list", "TUTORIAL_NIS.gdb")
                     .WithExample("nis", "convert", "--to", "s57", "--cell", "US5CA98M", "-o", "US5CA98M.000", "TUTORIAL_NIS.gdb")
                     .WithExample("nis", "convert", "--to", "s57", "--cell", "US5CA98M.005", "-o", "US5CA98M.000", "--report", "report.json", "TUTORIAL_NIS.gdb")
-                    .WithExample("nis", "convert", "--to", "s57", "--cell", "US5NY1DM", "--exchange-set", "-o", "s57set", "TUTORIAL_NIS.gdb");
+                    .WithExample("nis", "convert", "--to", "s57", "--cell", "US5NY1DM", "--exchange-set", "-o", "s57set", "TUTORIAL_NIS.gdb")
+                    .WithExample("nis", "convert", "--to", "s101", "--cell", "US5CA98M", "-o", "101US00US5CA98M.000", "TUTORIAL_NIS.gdb");
             });
 
             config.AddBranch("reference", reference =>

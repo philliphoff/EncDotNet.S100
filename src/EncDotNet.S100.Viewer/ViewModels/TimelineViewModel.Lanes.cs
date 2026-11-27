@@ -47,6 +47,7 @@ internal sealed partial class TimelineViewModel
 
 
     private ITimelineMapScope? _scope;
+    private ITimelinePanes? _panes;
     private bool? _inMapViewChoice;
     private bool _collapsedToStrip;
     private bool _outsideExpanded;
@@ -67,6 +68,54 @@ internal sealed partial class TimelineViewModel
         ToggleOutsideCommand = new RelayCommand(() => IsOutsideExpanded = !IsOutsideExpanded);
         if (_scope is not null)
             _scope.Changed += OnMapScopeChanged;
+    }
+
+    /// <summary>
+    /// Follows the map panes (split map step 2 §2.6, D20): each lane gets the
+    /// number chips of the panes that draw it, and is dimmed when the active
+    /// pane doesn't. The lane order doesn't depend on the panes, so switching
+    /// the active pane never reflows the dock.
+    /// </summary>
+    /// <param name="panes">The panes and which of them draw each dataset.</param>
+    internal void AttachPanes(ITimelinePanes panes)
+    {
+        ArgumentNullException.ThrowIfNull(panes);
+        if (_panes is not null)
+            _panes.Changed -= UpdateLanePanes;
+        _panes = panes;
+        _panes.Changed += UpdateLanePanes;
+        UpdateLanePanes();
+    }
+
+    /// <summary>Refreshes every lane's pane chips and dimming.</summary>
+    private void UpdateLanePanes()
+    {
+        foreach (var lane in _lanes.Values)
+            UpdateLanePanes(lane);
+    }
+
+    private void UpdateLanePanes(TimelineLaneViewModel lane)
+    {
+        if (_panes is null || lane.DatasetId is not { } id)
+        {
+            lane.Chips = [];
+            lane.IsDimmed = false;
+            return;
+        }
+
+        var panes = _panes.Panes;
+        var active = _panes.Active;
+        lane.IsDimmed = active is { } map && !_panes.Draws(id, map);
+        lane.Chips = panes.Count < 2
+            ? []
+            : [.. panes
+                .Where(p => _panes.Draws(id, p.Map))
+                .Select(p => new TimelineLaneChip(
+                    p.Map,
+                    p.Number,
+                    p.Map == active,
+                    string.Format(CultureInfo.CurrentCulture, Strings.SplitMap_PaneLabelFormat, p.Number),
+                    string.Format(CultureInfo.CurrentCulture, Strings.Timeline_LaneDrawnInFormat, p.Title)))];
     }
 
     /// <summary>The lanes in scope, by product.</summary>
@@ -305,6 +354,7 @@ internal sealed partial class TimelineViewModel
             lane.PastBands = pastBands;
             lane.Marks = axis is null ? [] : LaneMarks(axis, dataset);
             lane.Gaps = _gaps;
+            UpdateLanePanes(lane);
             lanes.Add((lane, !filtering || IsInView(dataset)));
         }
 

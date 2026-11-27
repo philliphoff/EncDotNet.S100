@@ -21,7 +21,8 @@ command offers it, and treat paths as local filesystem paths.
 | Serve a built tile set, or datasets rendered on demand, to a local web map on XYZ URLs or to a GIS as WMTS or WMS | `s100 tiles serve` |
 | Convert an S-57 base cell to S-101 (or an inland ENC cell to S-401) | `s100 s57 convert` |
 | Convert an S-101 dataset to an S-57 cell or exchange set for testing or S-57-only tools (not a production ENC) | `s100 s101 convert --to s57` |
-| Convert one cell of an Esri ArcGIS Maritime S-57 NIS (a file geodatabase) to an S-57 cell or exchange set (not a production ENC) | `s100 nis convert --to s57` |
+| Convert one cell of an Esri ArcGIS Maritime S-57 NIS (a file geodatabase) to an S-57 cell or exchange set, or to S-101 (not a production ENC) | `s100 nis convert --to s57` or `--to s101` |
+| Draw, tile or identify an NIS without converting it | pass the `.gdb`, or a cell path `<path>.gdb/<DSNM>`, to `tiles serve`, `render`, `identify` |
 | Serve the read-only query tools to an MCP client over stdio | `s100 mcp serve` |
 | Publish datasets to other machines' viewers over HTTP | `s100 feed serve` |
 | Write datasets as a static feed for any web host | `s100 feed export` |

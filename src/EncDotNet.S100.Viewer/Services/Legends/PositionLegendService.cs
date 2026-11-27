@@ -82,6 +82,7 @@ internal sealed class PositionLegendService : IDisposable
     private readonly IDatasetLoaderService _loader;
     private readonly DatasetsViewModel _datasets;
     private readonly IMapViewportNotifier? _viewport;
+    private readonly IActiveMap _activeMap;
     private readonly IMarinerSettingsProvider _mariner;
     private readonly DepthBasisService? _depthBasis;
     private readonly LegendService _legend;
@@ -96,6 +97,10 @@ internal sealed class PositionLegendService : IDisposable
     /// <param name="loader">The loaded chart cells.</param>
     /// <param name="datasets">The loaded datasets: names, visibility and stack order.</param>
     /// <param name="viewport">The map view; null in hosts without a map.</param>
+    /// <param name="activeMap">
+    /// The map the user is working in: DEPTHS reads the cells it shows (split
+    /// map step 2 §2.6), again when another map becomes active.
+    /// </param>
     /// <param name="mariner">The Mariner settings: depth unit and safety contour.</param>
     /// <param name="depthBasis">The status bar's depth basis, for the datum when no cell is at the centre; optional.</param>
     /// <param name="legend">The legend, whose rebuilds (pan end, the layer stack) this follows.</param>
@@ -105,6 +110,7 @@ internal sealed class PositionLegendService : IDisposable
         IDatasetLoaderService loader,
         DatasetsViewModel datasets,
         IMapViewportNotifier? viewport,
+        IActiveMap activeMap,
         IMarinerSettingsProvider mariner,
         DepthBasisService? depthBasis,
         LegendService legend,
@@ -113,6 +119,7 @@ internal sealed class PositionLegendService : IDisposable
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(activeMap);
         ArgumentNullException.ThrowIfNull(mariner);
         ArgumentNullException.ThrowIfNull(legend);
         ArgumentNullException.ThrowIfNull(post);
@@ -120,6 +127,7 @@ internal sealed class PositionLegendService : IDisposable
         _loader = loader;
         _datasets = datasets;
         _viewport = viewport;
+        _activeMap = activeMap;
         _mariner = mariner;
         _depthBasis = depthBasis;
         _legend = legend;
@@ -129,6 +137,7 @@ internal sealed class PositionLegendService : IDisposable
 
         _legend.Changed += OnInputChanged;
         _mariner.Changed += OnMarinerChanged;
+        _activeMap.ActiveChanged += OnInputChanged;
         if (_depthBasis is not null)
             _depthBasis.Changed += OnInputChanged;
         Invalidate();
@@ -178,6 +187,7 @@ internal sealed class PositionLegendService : IDisposable
         _disposed = true;
         _legend.Changed -= OnInputChanged;
         _mariner.Changed -= OnMarinerChanged;
+        _activeMap.ActiveChanged -= OnInputChanged;
         if (_depthBasis is not null)
             _depthBasis.Changed -= OnInputChanged;
     }
@@ -230,8 +240,8 @@ internal sealed class PositionLegendService : IDisposable
         var cells = new List<(DatasetEntry Entry, IChartDepthCell Cell)>();
         foreach (var (entry, processor) in processors)
         {
-            // DEPTHS follows the user's view: the active map's once split map step 2 slice 3 (#1768) wires it; with one map they agree.
-            if (processor is IChartDepthCell cell && entry.IsVisibleAnywhere && _loader.GetActive(entry.Id.Value))
+            // DEPTHS follows the active map (split map step 2 §2.6).
+            if (processor is IChartDepthCell cell && _activeMap.Shows(entry) && _loader.GetActive(entry.Id.Value))
                 cells.Add((entry, cell));
         }
         cells.Sort((a, b) => Order(a.Entry).CompareTo(Order(b.Entry)));

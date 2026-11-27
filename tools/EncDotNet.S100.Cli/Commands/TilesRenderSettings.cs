@@ -20,7 +20,9 @@ internal abstract class TilesRenderSettings : CommandSettings
 {
     [CommandArgument(0, "[input]")]
     [Description("The dataset to tile, an exchange set (a directory containing a CATALOG.XML, a CATALOG.XML, or an exchange-set .zip), or a folder of datasets, searched recursively (an S-57 ENC_ROOT with a CATALOG.031 is read this way). tiles serve also takes a built tile set: a {z}/{x}/{y} directory, a .pmtiles archive, a .mbtiles database or a .gpkg GeoPackage. Omit when using --layer or --exchange-set.")]
-    public string? Input { get; init; }
+    public string? Input { get => _input; init => _input = value; }
+
+    private string? _input;
 
     [CommandOption("--layer <PATH>")]
     [Description("Add a dataset as a composite layer (repeatable). The S-98 authority orders layers by display plane, so --layer order is only a within-plane tiebreak.")]
@@ -277,6 +279,10 @@ internal abstract class TilesRenderSettings : CommandSettings
             return ValidationResult.Success();
         var result = LayerListFile.Expand(ref _layers, LayersFrom);
         _layerListsRead = result.Successful;
+
+        // A cell of an NIS file geodatabase (<path>.gdb/<DSNM>) is tiled as its translated S-57 cell (#1777).
+        _layers = Infrastructure.NisCells.ResolveArguments(_layers);
+        _input = Infrastructure.NisCells.ResolveArgument(_input);
         return result;
     }
 
@@ -306,7 +312,7 @@ internal abstract class TilesRenderSettings : CommandSettings
                 if (string.IsNullOrWhiteSpace(layer))
                     return ValidationResult.Error("A --layer value cannot be empty.");
                 if (!File.Exists(layer))
-                    return ValidationResult.Error($"Layer file not found: {layer}");
+                    return ValidationResult.Error(Infrastructure.NisCells.ErrorFor(layer) ?? $"Layer file not found: {layer}");
             }
         }
         else
@@ -314,7 +320,7 @@ internal abstract class TilesRenderSettings : CommandSettings
             if (string.IsNullOrWhiteSpace(Input))
                 return ValidationResult.Error("A dataset, folder or exchange-set path is required (or use --layer / --exchange-set).");
             if (!File.Exists(Input))
-                return ValidationResult.Error($"Dataset file not found: {Input}");
+                return ValidationResult.Error(Infrastructure.NisCells.ErrorFor(Input) ?? $"Dataset file not found: {Input}");
         }
 
         if (Only is not null && !IsExchangeSet && !IsFolder)

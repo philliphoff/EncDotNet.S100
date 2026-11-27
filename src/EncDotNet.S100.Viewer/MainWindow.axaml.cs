@@ -34,6 +34,7 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
     private readonly MapSplitViewModel _split;
     private readonly MapStatusFocus _statusFocus;
     private readonly MapDatasetVisibility _datasetVisibility;
+    private readonly TimelinePanes _timelinePanes;
     private readonly MapSplitServices _splitServices;
     private readonly PickMapPresencePresenter _pickMapPresence;
     private bool _paneFoldPending;
@@ -222,6 +223,10 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
         // Each map's dataset visibility (split map step 2 §2.1, #1766): a new
         // pane starts from the active one, a closed pane's state is dropped.
         _datasetVisibility = new MapDatasetVisibility(_mapViews, _viewModel.Datasets);
+        // Timeline lanes carry the chips of the panes that draw them and dim
+        // when the active pane doesn't (split map step 2 §2.6, D20, #1771).
+        _timelinePanes = new TimelinePanes(_split, _viewModel.Datasets);
+        _viewModel.Timeline.AttachPanes(_timelinePanes);
         _statusFocus = new MapStatusFocus(_mapViews);
         _statusFocus.Changed += (_, _) => OnStatusMapChanged();
         _splitServices = new MapSplitServices(
@@ -286,6 +291,7 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
             _closing = true;
             _mapLayoutSaver.Dispose();
             _datasetVisibility.Dispose();
+            _timelinePanes.Dispose();
             _windowLifetimeCancellation.Cancel();
             _windowLifetimeCancellation.Dispose();
             App.Services.GetRequiredService<DatasetProcessorOwner>().Dispose();
