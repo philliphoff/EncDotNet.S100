@@ -14,8 +14,10 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <see cref="DatasetLoaderService"/> keeps one dataset model and calls this
 /// set instead of a single session. Each call goes to every session. Calls
 /// that return a value return the <see cref="Primary"/> session's, which is
-/// also the session the loader reads dataset state back from: in step 1 every
-/// session gets the same inputs, so they agree.
+/// also the session the loader reads dataset state back from. Sessions differ
+/// only in which datasets they draw (split map step 2 §2.2):
+/// <see cref="SetDataset"/> takes a projection that gives each map its own
+/// visibility, and the state the loader reads back doesn't depend on it.
 /// </para>
 /// <para>
 /// The set remembers the last state it applied (datasets, order, mariner
@@ -24,8 +26,8 @@ namespace EncDotNet.S100.Viewer.Services;
 /// retiring their processors, which the loader owns.
 /// </para>
 /// <para>
-/// The per-session calls keep the seam steps 2 and 3 need (design note §1.3),
-/// where views will get their own datasets and times. Call from the UI thread.
+/// The per-session calls keep the seam step 3 needs (design note §1.3),
+/// where views will get their own times. Call from the UI thread.
 /// </para>
 /// </remarks>
 internal sealed class MapSessionSet
@@ -105,7 +107,7 @@ internal sealed class MapSessionSet
 
     /// <summary>
     /// Adds a view's session and catches it up: the mariner settings, every
-    /// dataset with its state, the order, a render of each drawn dataset, and
+    /// dataset with its state for that view, the order, a render of each drawn dataset, and
     /// the time.
     /// </summary>
     /// <param name="id">The view.</param>
@@ -174,27 +176,66 @@ internal sealed class MapSessionSet
         return member.Session;
     }
 
-    /// <summary>Adds or updates a dataset's state on every session.</summary>
-    /// <param name="dataset">The dataset state.</param>
+    /// <summary>
+    /// Adds or updates a dataset's state on every session, each map's from
+    /// <paramref name="datasetFor"/> (split map step 2 §2.2).
+    /// </summary>
+    /// <remarks>
+    /// The set keeps the projection, not its values: a session added later,
+    /// and <see cref="ReapplyDataset"/>, ask it again, so they get the map's
+    /// visibility at that time.
+    /// </remarks>
+    /// <param name="datasetId">The dataset.</param>
+    /// <param name="datasetFor">The dataset's state for a map; every value has <paramref name="datasetId"/>.</param>
     /// <param name="minimumDisplayScale">The catalogue's coarsest display scale.</param>
     /// <param name="maximumDisplayScale">The catalogue's compilation scale.</param>
-    public void SetDataset(MapDataset dataset, int? minimumDisplayScale, int? maximumDisplayScale)
+    public void SetDataset(
+        MapDatasetId datasetId,
+        Func<MapViewId, MapDataset> datasetFor,
+        int? minimumDisplayScale,
+        int? maximumDisplayScale)
     {
-        ArgumentNullException.ThrowIfNull(dataset);
-        if (_datasets.TryGetValue(dataset.Id, out var state))
+        ArgumentNullException.ThrowIfNull(datasetFor);
+        if (_datasets.TryGetValue(datasetId, out var state))
         {
-            state.Dataset = dataset;
+            state.DatasetFor = datasetFor;
             state.MinimumDisplayScale = minimumDisplayScale;
             state.MaximumDisplayScale = maximumDisplayScale;
         }
         else
         {
-            _datasets[dataset.Id] = new DatasetState(dataset, minimumDisplayScale, maximumDisplayScale);
-            _datasetOrder.Add(dataset.Id);
+            state = new DatasetState(datasetFor, minimumDisplayScale, maximumDisplayScale);
+            _datasets[datasetId] = state;
+            _datasetOrder.Add(datasetId);
         }
 
         foreach (var member in Snapshot())
-            member.Session.SetDataset(dataset, minimumDisplayScale, maximumDisplayScale);
+            Apply(member, datasetId, state);
+    }
+
+    /// <summary>
+    /// Sets a dataset's state again on one map's session, from the projection
+    /// the last <see cref="SetDataset"/> gave: after its visibility changed in
+    /// that map alone. Does nothing when the map has no session in the set or
+    /// the set doesn't hold the dataset.
+    /// </summary>
+    /// <param name="datasetId">The dataset.</param>
+    /// <param name="map">The map.</param>
+    public void ReapplyDataset(MapDatasetId datasetId, MapViewId map)
+    {
+        if (_datasets.TryGetValue(datasetId, out var state)
+            && _members.FirstOrDefault(m => m.Id == map) is { } member)
+        {
+            Apply(member, datasetId, state);
+        }
+    }
+
+    private static void Apply(Member member, MapDatasetId datasetId, DatasetState state)
+    {
+        var dataset = state.DatasetFor(member.Id);
+        if (dataset.Id != datasetId)
+            throw new InvalidOperationException($"The projection for '{datasetId}' gave '{dataset.Id}'.");
+        member.Session.SetDataset(dataset, state.MinimumDisplayScale, state.MaximumDisplayScale);
     }
 
     /// <summary>
@@ -402,7 +443,7 @@ internal sealed class MapSessionSet
         foreach (var datasetId in _datasetOrder)
         {
             var state = _datasets[datasetId];
-            session.SetDataset(state.Dataset, state.MinimumDisplayScale, state.MaximumDisplayScale);
+            Apply(member, datasetId, state);
             if (state.IsDrawn)
                 drawn.Add(datasetId);
         }
@@ -460,9 +501,12 @@ internal sealed class MapSessionSet
 
     private bool IsReader(Member member) => ReferenceEquals(ReaderMember(), member);
 
-    private sealed class DatasetState(MapDataset dataset, int? minimumDisplayScale, int? maximumDisplayScale)
+    private sealed class DatasetState(
+        Func<MapViewId, MapDataset> datasetFor,
+        int? minimumDisplayScale,
+        int? maximumDisplayScale)
     {
-        public MapDataset Dataset { get; set; } = dataset;
+        public Func<MapViewId, MapDataset> DatasetFor { get; set; } = datasetFor;
 
         public int? MinimumDisplayScale { get; set; } = minimumDisplayScale;
 

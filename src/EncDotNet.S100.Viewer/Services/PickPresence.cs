@@ -8,29 +8,69 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <summary>
 /// Which maps of a split draw a picked feature (split map design note D10,
 /// D11, architecture §2.4): a map draws it when its own dataset session holds
-/// the feature's dataset. A map that doesn't, while another map does, shows
-/// the pick as a ghost with the reason.
+/// the feature's dataset and the dataset is active and visible there (split
+/// map step 2 §2.6). A map that doesn't, while another map does, shows the
+/// pick as a ghost with the reason.
 /// </summary>
 /// <remarks>
-/// In step 1 every map holds the same datasets, so no map shows a ghost.
-/// Step 2 (a dataset subset per pane) and step 3 (a time per pane) make the
-/// sessions differ; step 3 adds "not at this map's time" as a reason.
+/// Step 2 (a dataset subset per pane) makes the sessions differ; step 3 (a
+/// time per pane) adds "not at this map's time" as a reason.
 /// </remarks>
-internal sealed class PickPresence
+internal sealed class PickPresence : IDisposable
 {
     private readonly MapViews _views;
+    private readonly HashSet<IMapViewCapabilities> _watched = [];
 
     /// <param name="views">Every map.</param>
     public PickPresence(MapViews views)
     {
         ArgumentNullException.ThrowIfNull(views);
         _views = views;
+        _views.ViewAdded += OnViewAdded;
+        _views.ViewRemoved += OnViewRemoved;
+        foreach (var view in _views.All)
+            Watch(view);
     }
 
     /// <summary>
-    /// Whether <paramref name="view"/> draws <paramref name="hit"/>'s feature.
-    /// A hit with no dataset (an overlay source such as own ship) is drawn
-    /// by every map.
+    /// Raised when a map's session changes what it draws, so
+    /// <see cref="Draws"/> and <see cref="GhostReason"/> may answer
+    /// differently. It can be raised off the UI thread.
+    /// </summary>
+    public event EventHandler? Changed;
+
+    /// <summary>Stops watching the maps' sessions.</summary>
+    public void Dispose()
+    {
+        _views.ViewAdded -= OnViewAdded;
+        _views.ViewRemoved -= OnViewRemoved;
+        foreach (var view in _watched)
+            view.DatasetSession.LayersChanged -= OnLayersChanged;
+        _watched.Clear();
+    }
+
+    private void OnViewAdded(object? sender, IMapViewCapabilities view) => Watch(view);
+
+    private void OnViewRemoved(object? sender, IMapViewCapabilities view)
+    {
+        if (_watched.Remove(view))
+            view.DatasetSession.LayersChanged -= OnLayersChanged;
+        // The ghost compares against the other maps, so it can change too.
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void Watch(IMapViewCapabilities view)
+    {
+        if (_watched.Add(view))
+            view.DatasetSession.LayersChanged += OnLayersChanged;
+    }
+
+    private void OnLayersChanged(object? sender, EventArgs e) => Changed?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Whether <paramref name="view"/> draws <paramref name="hit"/>'s feature:
+    /// its session holds the dataset, active and visible. A hit with no
+    /// dataset (an overlay source such as own ship) is drawn by every map.
     /// </summary>
     /// <param name="view">A map.</param>
     /// <param name="hit">The picked feature.</param>
@@ -40,7 +80,7 @@ internal sealed class PickPresence
         ArgumentNullException.ThrowIfNull(view);
         ArgumentNullException.ThrowIfNull(hit);
         return hit.DatasetId is not { Length: > 0 } id
-            || view.DatasetSession.GetDataset(new MapDatasetId(id)) is not null;
+            || view.DatasetSession.GetDataset(new MapDatasetId(id)) is { Dataset: { IsActive: true, IsVisible: true } };
     }
 
     /// <summary>

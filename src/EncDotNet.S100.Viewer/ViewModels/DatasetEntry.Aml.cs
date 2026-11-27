@@ -2,6 +2,7 @@ using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -132,9 +133,24 @@ internal sealed partial class DatasetEntry
     /// sub-layers is hidden. The row's eye turns it off, and so does the
     /// display panel hiding the cell (<see cref="IsHiddenByDisplay"/>).
     /// </summary>
-    public bool ShowsAmlCoverageOutline =>
+    /// <remarks>
+    /// This is whether some map outlines it; each map's outline reads
+    /// <see cref="ShowsAmlCoverageOutlineIn"/>. A change in either raises a
+    /// property change for this one.
+    /// </remarks>
+    public bool ShowsAmlCoverageOutline => IsVisibleAnywhere && OutlinesAmlCoverage;
+
+    /// <summary>
+    /// Whether map <paramref name="map"/> outlines the cell's coverage: as
+    /// <see cref="ShowsAmlCoverageOutline"/>, with that map's own visibility
+    /// (split map step 2 §2.6).
+    /// </summary>
+    /// <param name="map">The map.</param>
+    /// <returns><see langword="true"/> when that map outlines the cell.</returns>
+    public bool ShowsAmlCoverageOutlineIn(MapViewId map) => IsVisibleIn(map) && OutlinesAmlCoverage;
+
+    private bool OutlinesAmlCoverage =>
         _aml is { } aml
-        && IsVisibleAnywhere
         && !IsHiddenByDisplay
         && (!aml.Drawn || (SubLayers.Count > 0 && SubLayers.All(s => !s.IsVisible)));
 

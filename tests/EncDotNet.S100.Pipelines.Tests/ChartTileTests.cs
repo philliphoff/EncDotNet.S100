@@ -187,6 +187,61 @@ public sealed class ChartTileTests
     }
 
     [Fact]
+    public void StacksThatDifferByOneCell_ShareTheKeysOfEverySlotTheCellDoesntTouch()
+    {
+        // Split map step 2 §1.3: a pane that hides a cell draws a stack that
+        // differs from the other pane's by that cell. Only the slots it draws
+        // in change key; every other slot keeps one key in both panes, so
+        // their tiles stay shared. A hidden cell is keyed as an absent one.
+        var view = new ViewState(MakeView().CenterX, MakeView().CenterY, MakeView().Resolution, 0, 4 * ViewportDip, 4 * ViewportDip);
+        var wide = new object();
+        S100VectorTileRenderer.BindScene(
+            wide,
+            new VectorScene([SquareAt(view.CenterX, view.CenterY, view.Resolution * ViewportDip * 4, Blue, "wide")]),
+            "split-map-tile-tests",
+            "style");
+        var smallHalf = view.Resolution * 10;
+        var small = new object();
+        S100VectorTileRenderer.BindScene(
+            small,
+            new VectorScene([SquareAt(view.CenterX, view.CenterY, smallHalf, Red, "small")]),
+            "split-map-tile-tests",
+            "style");
+
+        var shows = new object();
+        var hides = new object();
+        var lacks = new object();
+        var options = new ChartSessionOptions { TileDiskCacheEnabled = false };
+        new ChartSession(options).Publish(shows, new ChartStack(1, [new ChartStackEntry(wide), new ChartStackEntry(small)]));
+        new ChartSession(options).Publish(hides, new ChartStack(1, [new ChartStackEntry(wide), new ChartStackEntry(small) { Visible = false }]));
+        new ChartSession(options).Publish(lacks, new ChartStack(1, [new ChartStackEntry(wide)]));
+        foreach (var owner in new[] { shows, hides, lacks })
+        {
+            using var surface = SKSurface.Create(new SKImageInfo((int)view.Width, (int)view.Height));
+            S100VectorTileRenderer.Render(surface.Canvas, view, new LayerFrame(owner, "chart", 1.0, null));
+        }
+
+        var shown = S100VectorTileRenderer.CurrentVisibleForTest(shows).ToDictionary(key => key.Slot);
+        var hidden = S100VectorTileRenderer.CurrentVisibleForTest(hides).ToDictionary(key => key.Slot);
+        Assert.Equal(shown.Keys.ToHashSet(), hidden.Keys.ToHashSet());
+        Assert.Equal(hidden.Values.ToHashSet(), S100VectorTileRenderer.CurrentVisibleForTest(lacks).ToHashSet());
+
+        bool Touches((int Band, int X, int Y) slot)
+        {
+            var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(new TileKey(slot.Band, slot.X, slot.Y));
+            return minX < view.CenterX + smallHalf && maxX > view.CenterX - smallHalf
+                && minY < view.CenterY + smallHalf && maxY > view.CenterY - smallHalf;
+        }
+
+        var touched = shown.Keys.Where(Touches).ToArray();
+        var untouched = shown.Keys.Where(slot => !Touches(slot)).ToArray();
+        Assert.NotEmpty(touched);
+        Assert.True(untouched.Length >= 8, $"Only {untouched.Length} slots the cell doesn't touch.");
+        Assert.All(untouched, slot => Assert.Equal(shown[slot], hidden[slot]));
+        Assert.All(touched, slot => Assert.NotEqual(shown[slot].Slice, hidden[slot].Slice));
+    }
+
+    [Fact]
     public void AnotherMapShowingTheSameStack_AdoptsItsTiles()
     {
         var view = MakeView();

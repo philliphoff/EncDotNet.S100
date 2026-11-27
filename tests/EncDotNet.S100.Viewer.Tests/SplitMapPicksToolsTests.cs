@@ -96,14 +96,23 @@ public sealed class SplitMapPicksToolsTests
         return new Split(views, split, one, two);
     }
 
-    private static MapDataset Dataset() => new(
+    private static MapDataset Dataset(bool visible = true) => new(
         new MapDatasetId(DatasetId),
         DatasetId,
         new DatasetMetadata
         {
             Spec = new SpecRef("S-57", new SpecVersion(3, 1, 0)),
             Extent = new BoundingBox(47.6, -122.5, 47.8, -122.3),
-        });
+        },
+        isVisible: visible);
+
+    // What the loader does when the dataset is hidden or shown in one pane
+    // (split map step 2 §2.2): the pane's session still holds it, hidden.
+    private static void Show(MapViewsTests.FakeMapView view, bool visible)
+    {
+        view.Session.SetDataset(Dataset(visible), minimumDisplayScale: null, maximumDisplayScale: null);
+        view.Session.RaiseLayersChanged();
+    }
 
     private static PickHit Light() => new()
     {
@@ -128,7 +137,8 @@ public sealed class SplitMapPicksToolsTests
             new ViewerSettingsService(new ViewerSettings()),
             a => a(),
             warningDrawing: null,
-            ghostReason: hit => split.Services.Picks.GhostReason(view, hit));
+            presence: split.Services.Picks,
+            view: view);
 
     private static IEnumerable<Pen> Pens(MemoryLayer layer) =>
         layer.Features.SelectMany(f => f.Styles)
@@ -176,10 +186,10 @@ public sealed class SplitMapPicksToolsTests
     [AvaloniaFact]
     public void A_pane_that_doesnt_draw_the_picked_feature_shows_a_ghost_with_the_reason()
     {
-        // D10, steps 2 and 3: the location is in view but the feature isn't
-        // drawn there. Step 1 never gets here; this drives the path by hand.
+        // D10, step 2: the location is in view but the pane hides the
+        // dataset, which its session still holds.
         var split = TwoPanes();
-        split.Two.Session.RemoveDatasets([new MapDatasetId(DatasetId)], preserveState: false, removeProcessor: false);
+        Show(split.Two, visible: false);
         var report = TestPickReport.Create();
         var oneLayers = new FakeLayers();
         var twoLayers = new FakeLayers();
@@ -197,11 +207,60 @@ public sealed class SplitMapPicksToolsTests
     }
 
     [AvaloniaFact]
+    public void Hiding_and_showing_the_dataset_in_a_pane_updates_its_pick_at_once()
+    {
+        // Step 2 §2.6: each pane's highlight re-runs when a session's layers
+        // change, so a toggle shows or drops the ghost without a new pick.
+        var split = TwoPanes();
+        var report = TestPickReport.Create();
+        var oneLayers = new FakeLayers();
+        var twoLayers = new FakeLayers();
+        using var one = Highlight(oneLayers, report, split, split.One);
+        using var two = Highlight(twoLayers, report, split, split.Two);
+        PickLight(report);
+        Assert.Empty(Labels(twoLayers.Overlay(PickHighlightOverlayLayer.LayerName)));
+
+        Show(split.Two, visible: false);
+
+        Assert.Equal(["S-57 hidden in this map"], Labels(twoLayers.Overlay(PickHighlightOverlayLayer.LayerName)));
+        Assert.Empty(Labels(oneLayers.Overlay(PickHighlightOverlayLayer.LayerName)));
+
+        // Hidden in Map 1 too: no map draws it, so neither pane has a ghost.
+        Show(split.One, visible: false);
+
+        Assert.Empty(Labels(twoLayers.Overlay(PickHighlightOverlayLayer.LayerName)));
+        Assert.Empty(Labels(oneLayers.Overlay(PickHighlightOverlayLayer.LayerName)));
+
+        Show(split.One, visible: true);
+        Show(split.Two, visible: true);
+
+        Assert.Empty(Labels(twoLayers.Overlay(PickHighlightOverlayLayer.LayerName)));
+        Assert.All(Pens(twoLayers.Overlay(PickHighlightOverlayLayer.LayerName)), pen => Assert.Equal(PenStyle.Solid, pen.PenStyle));
+    }
+
+    [AvaloniaFact]
+    public void An_inactive_dataset_isnt_drawn_by_the_pane()
+    {
+        var split = TwoPanes();
+        split.Two.Session.SetDataset(
+            new MapDataset(
+                new MapDatasetId(DatasetId),
+                DatasetId,
+                new DatasetMetadata { Spec = new SpecRef("S-57", new SpecVersion(3, 1, 0)) },
+                isActive: false),
+            minimumDisplayScale: null,
+            maximumDisplayScale: null);
+
+        Assert.False(PickPresence.Draws(split.Two, Light()));
+        Assert.True(PickPresence.Draws(split.One, Light()));
+    }
+
+    [AvaloniaFact]
     public void No_pane_shows_a_ghost_when_no_map_draws_the_feature()
     {
         var split = TwoPanes();
         foreach (var view in new[] { split.One, split.Two })
-            view.Session.RemoveDatasets([new MapDatasetId(DatasetId)], preserveState: false, removeProcessor: false);
+            Show(view, visible: false);
 
         Assert.Null(split.Services.Picks.GhostReason(split.Two, Light()));
     }
@@ -221,7 +280,7 @@ public sealed class SplitMapPicksToolsTests
         Assert.Equal(["Shown in Map 1", "Shown in Map 2"], report.ShownIn.Select(c => c.Text));
         Assert.False(report.HasOtherMaps);
 
-        split.Two.Session.RemoveDatasets([new MapDatasetId(DatasetId)], preserveState: false, removeProcessor: false);
+        Show(split.Two, visible: false);
         PickLight(report);
 
         var hidden = report.ShownIn[1];
@@ -264,7 +323,7 @@ public sealed class SplitMapPicksToolsTests
         // and is at another time.
         var split = TwoPanes();
         split.Views.Activate(split.One);
-        split.One.Session.RemoveDatasets([new MapDatasetId(DatasetId)], preserveState: false, removeProcessor: false);
+        Show(split.One, visible: false);
         split.One.Session.TimeSnapshot = new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSnapshot
         {
             Current = new DateTime(2026, 11, 26, 14, 18, 0, DateTimeKind.Utc),

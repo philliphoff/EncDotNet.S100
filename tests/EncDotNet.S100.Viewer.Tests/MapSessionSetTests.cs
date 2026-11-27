@@ -23,6 +23,10 @@ public sealed class MapSessionSetTests
         id,
         new DatasetMetadata { Spec = new SpecRef("S-101", new SpecVersion(1, 0, 0)) });
 
+    // The same state in every map.
+    private static void SetEverywhere(MapSessionSet set, MapDataset dataset, int? minimum, int? maximum) =>
+        set.SetDataset(dataset.Id, _ => dataset, minimum, maximum);
+
     private static MapViewportSnapshot Viewport(double south, double west) => new()
     {
         MinLatitude = south,
@@ -45,11 +49,58 @@ public sealed class MapSessionSetTests
     }
 
     [Fact]
+    public async Task Each_map_gets_its_own_projection_and_a_later_map_asks_it_again()
+    {
+        // Split map step 2 §2.2: the set records the projection, so a replay
+        // and a re-set of one map get that map's value at that time.
+        var (set, first, second) = await TwoAsync();
+        var hidden = new HashSet<MapViewId> { new("map-2") };
+        MapDataset For(MapViewId map) => new(
+            new MapDatasetId("a"),
+            "a",
+            new DatasetMetadata { Spec = new SpecRef("S-101", new SpecVersion(1, 0, 0)) },
+            isVisible: !hidden.Contains(map));
+
+        set.SetDataset(new MapDatasetId("a"), For, null, null);
+
+        Assert.True(first.GetDataset(new MapDatasetId("a"))?.Dataset.IsVisible);
+        Assert.False(second.GetDataset(new MapDatasetId("a"))?.Dataset.IsVisible);
+
+        hidden.Add(new MapViewId("map-3"));
+        var third = new FakeMapDatasetSession();
+        await set.AddAsync(new MapViewId("map-3"), third, null, Presentation, Ct);
+
+        Assert.All(third.SetDatasets, dataset => Assert.False(dataset.IsVisible));
+        Assert.NotEmpty(third.SetDatasets);
+
+        hidden.Clear();
+        var firstSets = first.SetDatasets.Count;
+        set.ReapplyDataset(new MapDatasetId("a"), new MapViewId("map-2"));
+
+        Assert.True(second.GetDataset(new MapDatasetId("a"))?.Dataset.IsVisible);
+        Assert.False(third.GetDataset(new MapDatasetId("a"))?.Dataset.IsVisible);
+        Assert.Equal(firstSets, first.SetDatasets.Count);
+
+        // A map without a session, or a dataset the set doesn't hold, is ignored.
+        set.ReapplyDataset(new MapDatasetId("a"), new MapViewId("map-9"));
+        set.ReapplyDataset(new MapDatasetId("b"), new MapViewId("map-2"));
+    }
+
+    [Fact]
+    public async Task A_projection_that_gives_another_dataset_is_refused()
+    {
+        var (set, _, _) = await TwoAsync();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            set.SetDataset(new MapDatasetId("a"), _ => Dataset("b"), null, null));
+    }
+
+    [Fact]
     public async Task A_load_reaches_both_sessions_and_returns_the_primary_result()
     {
         var (set, first, second) = await TwoAsync();
 
-        set.SetDataset(Dataset("a"), 1_000_000, 22_000);
+        SetEverywhere(set, Dataset("a"), 1_000_000, 22_000);
         var result = await set.RenderAsync(new MapDatasetId("a"), Presentation, Ct);
 
         Assert.NotNull(result);
@@ -63,7 +114,7 @@ public sealed class MapSessionSetTests
     {
         var (set, first, second) = await TwoAsync();
         var id = new MapDatasetId("a");
-        set.SetDataset(Dataset("a"), null, null);
+        SetEverywhere(set, Dataset("a"), null, null);
         var copies = 0;
 
         var published = await set.PublishStoredAsync(
@@ -111,8 +162,8 @@ public sealed class MapSessionSetTests
     public async Task Time_mariner_settings_and_order_reach_both_sessions()
     {
         var (set, first, second) = await TwoAsync();
-        set.SetDataset(Dataset("a"), null, null);
-        set.SetDataset(Dataset("b"), null, null);
+        SetEverywhere(set, Dataset("a"), null, null);
+        SetEverywhere(set, Dataset("b"), null, null);
         var time = new DateTime(2026, 11, 24, 12, 0, 0, DateTimeKind.Utc);
         var mariner = MarinerSettings.Default with { SafetyContour = Depth.FromMetres(12) };
 
@@ -132,8 +183,8 @@ public sealed class MapSessionSetTests
     public async Task Removal_reaches_both_sessions_and_never_retires_the_processor()
     {
         var (set, first, second) = await TwoAsync();
-        set.SetDataset(Dataset("a"), null, null);
-        set.SetDataset(Dataset("b"), null, null);
+        SetEverywhere(set, Dataset("a"), null, null);
+        SetEverywhere(set, Dataset("b"), null, null);
         await set.RenderAsync(new MapDatasetId("a"), Presentation, Ct);
 
         set.RemoveDatasets([new MapDatasetId("a")], preserveState: true);
@@ -160,7 +211,7 @@ public sealed class MapSessionSetTests
         var time = new DateTime(2026, 11, 24, 12, 0, 0, DateTimeKind.Utc);
         set.SetMarinerSettings(mariner);
         foreach (var id in new[] { "a", "b", "c", "gone" })
-            set.SetDataset(Dataset(id), null, null);
+            SetEverywhere(set, Dataset(id), null, null);
         await set.RenderAsync(new MapDatasetId("a"), Presentation, Ct);
         await set.RenderAsync(new MapDatasetId("b"), Presentation, Ct);
         // c is present but not drawn (outside the time window); gone is removed.
@@ -180,7 +231,7 @@ public sealed class MapSessionSetTests
         Assert.DoesNotContain("Render(c)", late.Calls);
         Assert.DoesNotContain("SetDataset(gone)", late.Calls);
         // Then it takes part like any other session.
-        set.SetDataset(Dataset("d"), null, null);
+        SetEverywhere(set, Dataset("d"), null, null);
         await set.RenderAsync(new MapDatasetId("d"), Presentation, Ct);
         Assert.Contains(new MapDatasetId("d"), late.Drawn);
     }
@@ -189,7 +240,7 @@ public sealed class MapSessionSetTests
     public async Task A_removed_session_is_released()
     {
         var (set, first, second) = await TwoAsync();
-        set.SetDataset(Dataset("a"), null, null);
+        SetEverywhere(set, Dataset("a"), null, null);
         await set.RenderAsync(new MapDatasetId("a"), Presentation, Ct);
 
         Assert.Same(second, set.Remove(new MapViewId("map-2")));
@@ -198,7 +249,7 @@ public sealed class MapSessionSetTests
         Assert.Empty(second.Order);
         Assert.Contains("RemoveDatasets(a, preserve=False, processor=False)", second.Calls);
         var calls = second.Calls.Count;
-        set.SetDataset(Dataset("b"), null, null);
+        SetEverywhere(set, Dataset("b"), null, null);
         set.SetCurrentTime(DateTime.UnixEpoch);
         Assert.Equal(calls, second.Calls.Count);
         Assert.Equal([new MapViewId("map-1")], set.Views);
@@ -232,7 +283,7 @@ public sealed class MapSessionSetTests
     public async Task A_failing_session_that_is_not_the_primary_does_not_fail_the_call()
     {
         var (set, first, second) = await TwoAsync();
-        set.SetDataset(Dataset("a"), null, null);
+        SetEverywhere(set, Dataset("a"), null, null);
         second.RenderFailure = new InvalidOperationException("boom");
 
         var result = await set.RenderAsync(new MapDatasetId("a"), Presentation, Ct);

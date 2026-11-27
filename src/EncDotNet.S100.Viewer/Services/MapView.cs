@@ -441,7 +441,8 @@ internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IMapView
             UiThread.RunOrPost,
             warningDrawing: services.GetService<NavigationalWarningDrawingService>(),
             // D10: a map that doesn't draw the picked feature shows a ghost.
-            ghostReason: hit => split.Picks.GhostReason(this, hit));
+            presence: split.Picks,
+            view: this);
 
         // Hover to find (#1412, legends D19): ring a hovered Legend row's features.
         _legendFindController = new LegendFindOverlayController(
@@ -467,6 +468,7 @@ internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IMapView
         // (or are hidden) lie, as an ink frame with inward ticks.
         _amlOutlineController = new AmlCoverageOutlineController(
             Host,
+            Id,
             viewModel.Datasets,
             appearance,
             UiThread.RunOrPost,
@@ -509,13 +511,14 @@ internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IMapView
 
         // On-chart overscale curtain: paint a subtle vertical-line pattern over
         // the region of each cell displayed beyond its compilation scale (#441).
+        // Each pane's from its own session: the cells it draws (step 2 §2.6).
         _overscaleCurtainController = new OverscaleCurtainController(
             Host,
-            viewModel.Datasets,
-            loader,
+            DatasetSession,
             _viewport,
             viewerSettingsService,
-            UiThread.RunOrPost);
+            UiThread.RunOrPost,
+            UiThread.Post);
     }
 
     /// <summary>

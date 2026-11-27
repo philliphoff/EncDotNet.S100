@@ -28,8 +28,26 @@ internal sealed partial class DatasetEntry : ViewModelBase
     /// Renderer-neutral loaded state projected by this view-model, or
     /// <c>null</c> until the entry first loads. Lazy eviction retains the last
     /// snapshot so user-controlled display state survives a later reload.
+    /// Its <see cref="MapDataset.IsVisible"/> is whether some map draws the
+    /// dataset; a map's session gets <see cref="MapDatasetFor"/> instead.
     /// </summary>
     public MapDataset? MapDataset => _mapDataset;
+
+    /// <summary>
+    /// The loaded state map <paramref name="map"/>'s session draws: as
+    /// <see cref="MapDataset"/>, visible when <see cref="IsVisibleIn"/> that
+    /// map and not <see cref="IsHiddenByDisplay"/> (split map step 2 §2.2).
+    /// </summary>
+    /// <param name="map">The map.</param>
+    /// <returns>The state for that map.</returns>
+    /// <exception cref="InvalidOperationException">The entry hasn't loaded.</exception>
+    public MapDataset MapDatasetFor(MapViewId map)
+    {
+        var dataset = _mapDataset
+            ?? throw new InvalidOperationException("The dataset hasn't loaded.");
+        var visible = IsVisibleIn(map) && !_isHiddenByDisplay;
+        return visible == dataset.IsVisible ? dataset : CreateMapDataset(dataset.Metadata, visible);
+    }
 
     public string FilePath { get; }
     public string DisplayName { get; }
@@ -1033,13 +1051,14 @@ internal sealed partial class DatasetEntry : ViewModelBase
         OnPropertyChanged(nameof(MapDataset));
     }
 
-    private MapDataset CreateMapDataset(DatasetMetadata metadata) => new(
+    private MapDataset CreateMapDataset(DatasetMetadata metadata) =>
+        CreateMapDataset(metadata, IsVisibleAnywhere && !_isHiddenByDisplay);
+
+    private MapDataset CreateMapDataset(DatasetMetadata metadata, bool isVisible) => new(
         _id,
         DisplayName,
         metadata,
-        // One projection for every map until slice 2 projects per map
-        // (split map step 2 §2.2): a dataset shown in any map is drawn.
-        IsVisibleAnywhere && !_isHiddenByDisplay,
+        isVisible,
         _isActive,
         _opacity,
         _availableTimes,
