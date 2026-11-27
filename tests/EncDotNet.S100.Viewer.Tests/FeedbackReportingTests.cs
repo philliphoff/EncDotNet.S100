@@ -317,4 +317,31 @@ public class FeedbackReportingTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void The_report_says_whether_the_active_map_shows_each_dataset()
+    {
+        // Split map step 2 §2.6: the report is of the map the user works in.
+        var second = new MapViewId("map-2");
+        var datasets = new EncDotNet.S100.Viewer.ViewModels.DatasetsViewModel(new FakeDatasetLoaderService());
+        var entry = datasets.Add("/data/US5MA1BO.000", "S-57");
+        entry.SetVisibleIn(second, false);
+        var activeMap = new FakeActiveMap();
+        var service = new FeedbackService(
+            datasets,
+            new LegendServiceTests.FakeNotifier(),
+            activeMap,
+            new LastErrorTracker(Microsoft.Extensions.Logging.Abstractions.NullLogger<LastErrorTracker>.Instance),
+            new CrashHistory(),
+            new ThemeService(),
+            new ViewerSettingsService(new ViewerSettings()),
+            new FakeAppScreenshotProvider(),
+            new MapCapabilityAccessor<IImageRenderer>(),
+            logs: null);
+
+        Assert.True(Assert.Single(service.BuildReport().Datasets).IsVisible);
+
+        activeMap.Activate(second);
+        Assert.False(Assert.Single(service.BuildReport().Datasets).IsVisible);
+    }
 }

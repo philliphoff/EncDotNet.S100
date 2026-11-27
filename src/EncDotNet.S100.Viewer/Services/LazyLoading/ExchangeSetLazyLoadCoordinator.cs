@@ -456,6 +456,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             {
                 var (view, viewport) = snapshot[i];
                 frames[i] = ViewFrame.From(
+                    view,
                     viewport, _lastSnapshots.GetValueOrDefault(view), _options.AheadMarginFraction);
                 lastSnapshots[view] = viewport;
             }
@@ -581,8 +582,10 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             var resolution = frames[0].Resolution;
             foreach (var (destination, cells) in atDestination)
             {
+                // A predicted window belongs to no one map, so a finer cell
+                // shown in any map covers there.
                 foreach (var (entry, tier) in RankCoverage(
-                             cells, destination.ToLoadWindow(), destination.Resolution, LoadTier.Destination))
+                             cells, destination.ToLoadWindow(), destination.Resolution, LoadTier.Destination, map: null))
                 {
                     _queued[entry] = new QueuedLoad(
                         tier, LoadPrioritizer.RankPredicted(entry.GeographicBounds, destination), resolution);
@@ -599,7 +602,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         foreach (var (frame, cells) in inView)
         {
             inViewCount += cells.Count;
-            foreach (var (entry, tier) in RankCoverage(cells, frame.Window, frame.Resolution, LoadTier.Visible))
+            foreach (var (entry, tier) in RankCoverage(cells, frame.Window, frame.Resolution, LoadTier.Visible, frame.View))
             {
                 var load = new QueuedLoad(tier, LoadPrioritizer.Rank(entry.GeographicBounds, tier, frame.Window), frame.Resolution);
                 if (_queued.TryGetValue(entry, out var other)
@@ -633,14 +636,26 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// and inside their display window) or will draw soon (loading or queued as
     /// visible) fills its part of the view. Called under <see cref="_lock"/>.
     /// </summary>
+    /// <param name="inView">The deferred cells in the view, hidden ones included.</param>
+    /// <param name="window">The view's load window.</param>
+    /// <param name="resolution">The view's resolution, in metres per pixel.</param>
+    /// <param name="inViewTier">The tier of an in-view cell that isn't covered.</param>
+    /// <param name="map">
+    /// The map whose view this is: only cells shown in it cover (split map
+    /// step 2 §2.5), so a pane showing only S-57 cells doesn't defer its
+    /// coarse cells because another pane's S-101 cells cover them. A cell
+    /// hidden in this map still loads when it's in view, as a hidden cell
+    /// does with one map. <see langword="null"/> for a window that belongs
+    /// to no one map (a predicted destination): a cell shown in any map covers.
+    /// </param>
     private IEnumerable<(DatasetEntry Entry, LoadTier Tier)> RankCoverage(
-        List<DatasetEntry> inView, LoadWindow window, double resolution, LoadTier inViewTier)
+        List<DatasetEntry> inView, LoadWindow window, double resolution, LoadTier inViewTier, MapViewId? map)
     {
         // Covering cells: finer coverage that is, or soon will be, on the map.
         var coverers = new List<(DataModel.CellRank? Rank, NetTopologySuite.Geometries.Geometry Coverage)>();
         foreach (var loaded in _loadedEntries)
         {
-            if (loaded.CatalogueCoverage is { } coverage && DrawsNow(loaded, resolution)
+            if (loaded.CatalogueCoverage is { } coverage && DrawsNow(loaded, resolution, map)
                 && LazyCellGate.IntersectsViewport(loaded.GeographicBounds, window.South, window.West, window.North, window.East))
             {
                 coverers.Add((Rank(loaded), coverage));
@@ -651,7 +666,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             // A cell loading for a destination the view has reached covers
             // just as one loading as visible does.
             if (load.Tier is LoadTier.Visible or LoadTier.Destination
-                && running.CatalogueCoverage is { } coverage && IsShown(running)
+                && running.CatalogueCoverage is { } coverage && IsShown(running, map)
                 && LazyCellGate.IntersectsViewport(running.GeographicBounds, window.South, window.West, window.North, window.East))
             {
                 coverers.Add((Rank(running), coverage));
@@ -678,7 +693,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 continue;
             }
 
-            if (entry.CatalogueCoverage is { } own && IsShown(entry))
+            if (entry.CatalogueCoverage is { } own && IsShown(entry, map))
                 coverers.Add((rank, own));
             yield return (entry, inViewTier);
         }
@@ -688,19 +703,21 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         DataModel.CellScaleRanking.Rank(entry.CompilationScale, entry.MinimumDisplayScale, entry.MaximumDisplayScale);
 
     /// <summary>
-    /// Whether a loaded cell draws, fully opaque, at <paramref name="resolution"/>:
-    /// loaded, shown (<see cref="IsShown"/>), and not zoomed out past its display window.
+    /// Whether a loaded cell draws, fully opaque, at <paramref name="resolution"/>
+    /// in <paramref name="map"/>: loaded, shown there (<see cref="IsShown"/>),
+    /// and not zoomed out past its display window.
     /// </summary>
-    private static bool DrawsNow(DatasetEntry entry, double resolution) =>
+    private static bool DrawsNow(DatasetEntry entry, double resolution, MapViewId? map) =>
         entry.IsLoaded
-        && IsShown(entry)
+        && IsShown(entry, map)
         && (entry.ContentMaxVisibleResolution is not { } max || double.IsNaN(resolution) || resolution <= max);
 
     /// <summary>
-    /// Whether the user has the cell switched on, in some map, at full
-    /// opacity. Lazy loading serves every pane (split map step 2 §2.5).
+    /// Whether the user has the cell switched on in <paramref name="map"/>
+    /// (in some map when <see langword="null"/>), at full opacity.
     /// </summary>
-    private static bool IsShown(DatasetEntry entry) => entry.IsVisibleAnywhere && entry.Opacity >= 1.0;
+    private static bool IsShown(DatasetEntry entry, MapViewId? map) =>
+        (map is { } view ? entry.IsVisibleIn(view) : entry.IsVisibleAnywhere) && entry.Opacity >= 1.0;
 
     private static LoadTier? Classify(DatasetEntry entry, ViewFrame frame) =>
         LoadPrioritizer.Classify(
@@ -1214,17 +1231,19 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     private readonly record struct QueuedLoad(LoadTier Tier, double Rank, double Resolution);
 
     /// <summary>
-    /// One map's view for an evaluation: its viewport, the load window around
-    /// it (ahead in the direction it moved) and its scale.
+    /// One map's view for an evaluation: the map, its viewport, the load
+    /// window around it (ahead in the direction it moved) and its scale.
     /// </summary>
-    private sealed record ViewFrame(MapViewportSnapshot Snapshot, LoadWindow Window, double ScaleDenominator)
+    private sealed record ViewFrame(MapViewId View, MapViewportSnapshot Snapshot, LoadWindow Window, double ScaleDenominator)
     {
         public double Resolution => Snapshot.MercatorResolution;
 
-        public static ViewFrame From(MapViewportSnapshot snapshot, MapViewportSnapshot? previous, double aheadMarginFraction)
+        public static ViewFrame From(
+            MapViewId view, MapViewportSnapshot snapshot, MapViewportSnapshot? previous, double aheadMarginFraction)
         {
             var centreLat = (snapshot.MinLatitude + snapshot.MaxLatitude) / 2.0;
             return new ViewFrame(
+                view,
                 snapshot,
                 LoadWindow.From(snapshot, previous, aheadMarginFraction),
                 LazyCellGate.ScaleDenominator(snapshot.MercatorResolution, centreLat));

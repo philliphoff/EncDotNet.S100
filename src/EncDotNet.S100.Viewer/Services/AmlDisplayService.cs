@@ -54,6 +54,7 @@ internal sealed class AmlDisplayService : IAmlClbPresence, IDisposable
 
     private readonly EcdisDisplayState _state;
     private readonly IMapViewportNotifier _viewport;
+    private readonly IActiveMap _activeMap;
     private readonly Action<Action> _marshal;
     private readonly HashSet<DatasetEntry> _subscribed = [];
     private readonly Dictionary<DatasetEntry, Cell> _seen = [];
@@ -66,22 +67,31 @@ internal sealed class AmlDisplayService : IAmlClbPresence, IDisposable
     /// <summary>Creates the service; it follows the datasets once <see cref="Attach"/>ed.</summary>
     /// <param name="state">The display state holding the AML switches.</param>
     /// <param name="viewport">The map viewport, for the scale.</param>
+    /// <param name="activeMap">
+    /// The map the user is working in: the product counts and the CLB presence
+    /// count the cells it shows (split map step 2 §2.6), again when another
+    /// map becomes active.
+    /// </param>
     /// <param name="marshal">Runs an action on the UI thread.</param>
     public AmlDisplayService(
         EcdisDisplayState state,
         IMapViewportNotifier viewport,
+        IActiveMap activeMap,
         Action<Action> marshal)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(viewport);
+        ArgumentNullException.ThrowIfNull(activeMap);
         ArgumentNullException.ThrowIfNull(marshal);
         _state = state;
         _viewport = viewport;
+        _activeMap = activeMap;
         _marshal = marshal;
 
         _scale = ScaleOf(viewport.Current);
         _state.AmlDisplayChanged += OnSwitchesChanged;
         _viewport.ViewportChanged += OnViewportChanged;
+        _activeMap.ActiveChanged += OnActiveMapChanged;
         Apply();
     }
 
@@ -322,8 +332,10 @@ internal sealed class AmlDisplayService : IAmlClbPresence, IDisposable
             ClbDrawnChanged?.Invoke();
     }
 
-    // The product counts follow the user's view: the active map's once split map step 2 slice 3 (#1768) wires it; with one map they agree.
-    private static bool IsShown(Cell cell) => cell.Entry.IsVisibleAnywhere && !cell.Entry.IsHiddenByDisplay;
+    // The product counts follow the active map (split map step 2 §2.6).
+    private bool IsShown(Cell cell) => _activeMap.Shows(cell.Entry) && !cell.Entry.IsHiddenByDisplay;
+
+    private void OnActiveMapChanged(object? sender, EventArgs e) => _marshal(Apply);
 
     /// <inheritdoc />
     public void Dispose()
@@ -341,6 +353,7 @@ internal sealed class AmlDisplayService : IAmlClbPresence, IDisposable
 
         _state.AmlDisplayChanged -= OnSwitchesChanged;
         _viewport.ViewportChanged -= OnViewportChanged;
+        _activeMap.ActiveChanged -= OnActiveMapChanged;
         foreach (var entry in _subscribed.ToArray())
             Unsubscribe(entry);
     }

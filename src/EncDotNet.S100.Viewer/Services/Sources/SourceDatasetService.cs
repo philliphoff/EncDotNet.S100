@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using EncDotNet.S100.Collections.Net;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -107,20 +106,21 @@ internal sealed class SourceDatasetService : IDisposable
         }
 
         HostedSourceActivator? activator = null;
-        PropertyChangedEventHandler? onChanged = null;
+        EventHandler<MapViewId?>? onChanged = null;
         if (processor is IHostedDatasetProcessor hosted)
         {
             var registration = Find(sourceId);
             var activation = registration?.ActivationFor(entry.SourceOptions) ?? SourceActivation.Always;
             var running = activator = new HostedSourceActivator(
-                hosted, activation, _viewports, entry.IsVisibleAnywhere, logger: _logger);
-            onChanged = (_, e) =>
-            {
-                // A source runs while some pane shows it (split map step 2 §2.5).
-                if (e.PropertyName == nameof(DatasetEntry.IsVisibleAnywhere))
-                    running.SetVisible(entry.IsVisibleAnywhere);
-            };
-            entry.PropertyChanged += onChanged;
+                hosted,
+                activation,
+                _viewports,
+                // A source runs while some pane both shows it and is in range
+                // (split map step 2 §2.5).
+                map => map is { } view ? entry.IsVisibleIn(view) : entry.IsVisibleAnywhere,
+                logger: _logger);
+            onChanged = (_, _) => running.Refresh();
+            entry.VisibilityChanged += onChanged;
 
             // D8: the row says what the source is doing. Read again when it
             // pauses or resumes, when it delivers data, and every 30 s so its
@@ -168,7 +168,7 @@ internal sealed class SourceDatasetService : IDisposable
                 return;
         }
         if (running.OnChanged is not null)
-            running.Entry.PropertyChanged -= running.OnChanged;
+            running.Entry.VisibilityChanged -= running.OnChanged;
         running.Activator?.Dispose();
         foreach (var attachment in running.Attached)
             attachment.Dispose();
@@ -225,6 +225,6 @@ internal sealed class SourceDatasetService : IDisposable
     private sealed record Running(
         DatasetEntry Entry,
         HostedSourceActivator? Activator,
-        PropertyChangedEventHandler? OnChanged,
+        EventHandler<MapViewId?>? OnChanged,
         IReadOnlyList<IDisposable> Attached);
 }

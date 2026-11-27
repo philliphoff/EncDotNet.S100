@@ -23,7 +23,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// before it active (or the next one when it was first).
 /// </para>
 /// </remarks>
-internal sealed class MapViews : IMapViewportSet
+internal sealed class MapViews : IMapViewportSet, IActiveMap
 {
     private readonly MapCapabilityAccessor<IMapViewportController> _viewport;
     private readonly MapCapabilityAccessor<IMapCoordinateConverter> _converter;
@@ -97,6 +97,9 @@ internal sealed class MapViews : IMapViewportSet
                 return _active;
         }
     }
+
+    /// <inheritdoc />
+    public MapViewId? ActiveId => Active?.Id;
 
     /// <summary>Raised after <see cref="Active"/> changes, once the accessors are rebound.</summary>
     public event EventHandler? ActiveChanged;

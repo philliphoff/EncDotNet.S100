@@ -78,7 +78,7 @@ public sealed class SourceDatasetTests
         var notifier = new FakeViewportSet { View = Harbour };
         var processor = new FakeHostedProcessor();
 
-        using var activator = new HostedSourceActivator(processor, SourceActivation.Always, notifier, visible: true);
+        using var activator = new HostedSourceActivator(processor, SourceActivation.Always, notifier, isShownIn: _ => true);
 
         Assert.Equal(1, processor.Starts);
         Assert.True(processor.IsActive);
@@ -90,16 +90,20 @@ public sealed class SourceDatasetTests
     public void A_hidden_source_isnt_started_until_its_shown_and_pauses_when_hidden_again()
     {
         var processor = new FakeHostedProcessor();
-        using var activator = new HostedSourceActivator(processor, SourceActivation.Always, new FakeViewportSet { View = Harbour }, visible: false);
+        var shown = false;
+        using var activator = new HostedSourceActivator(
+            processor, SourceActivation.Always, new FakeViewportSet { View = Harbour }, isShownIn: _ => shown);
 
         Assert.Equal(0, processor.Starts);
         Assert.False(processor.IsActive);
 
-        activator.SetVisible(true);
+        shown = true;
+        activator.Refresh();
         Assert.Equal(1, processor.Starts);
         Assert.True(processor.IsActive);
 
-        activator.SetVisible(false);
+        shown = false;
+        activator.Refresh();
         Assert.False(processor.IsActive);
         Assert.False(activator.IsRunning);
     }
@@ -110,7 +114,7 @@ public sealed class SourceDatasetTests
         var notifier = new FakeViewportSet { View = Ocean };
         var processor = new FakeHostedProcessor();
         using var activator = new HostedSourceActivator(
-            processor, SourceActivation.BelowViewportSpan(5), notifier, visible: true, debounce: TimeSpan.Zero);
+            processor, SourceActivation.BelowViewportSpan(5), notifier, isShownIn: _ => true, debounce: TimeSpan.Zero);
 
         Assert.Equal(0, processor.Starts);
         Assert.False(processor.IsActive);
@@ -135,7 +139,7 @@ public sealed class SourceDatasetTests
         var views = new FakeViewportSet { View = Ocean };
         var processor = new FakeHostedProcessor();
         using var activator = new HostedSourceActivator(
-            processor, SourceActivation.BelowViewportSpan(5), views, visible: true, debounce: TimeSpan.Zero);
+            processor, SourceActivation.BelowViewportSpan(5), views, isShownIn: _ => true, debounce: TimeSpan.Zero);
         Assert.False(processor.IsActive);
 
         // The second map zooms in: the source runs for it alone, even though
@@ -157,6 +161,80 @@ public sealed class SourceDatasetTests
     }
 
     [Fact]
+    public async Task With_two_maps_a_source_runs_only_while_a_map_that_shows_it_is_in_range()
+    {
+        // Split map step 2 §2.5: map 2 hides the source, so its view never
+        // starts it or widens its area.
+        var second = new MapViewId("map-2");
+        var bay = new MapViewportSnapshot { MinLatitude = 41.0, MinLongitude = -72.0, MaxLatitude = 41.5, MaxLongitude = -71.5 };
+        var entry = DatasetEntry.ForSource(S100Sources.NdbcObservations);
+        entry.SetVisibleIn(second, false);
+        var views = new FakeViewportSet { View = Ocean };
+        var processor = new FakeHostedProcessor();
+        using var activator = new HostedSourceActivator(
+            processor,
+            SourceActivation.BelowViewportSpan(5),
+            views,
+            isShownIn: map => map is { } view ? entry.IsVisibleIn(view) : entry.IsVisibleAnywhere,
+            debounce: TimeSpan.Zero);
+
+        // Map 2 zooms in, but it hides the source: it waits for map 1.
+        views.Publish(second, Harbour);
+        await WaitUntilAsync(() => activator.State == SourceRunState.WaitingForZoom);
+        await Task.Delay(20, TestContext.Current.CancellationToken);
+        Assert.False(processor.IsActive);
+        Assert.Equal(0, processor.Starts);
+
+        // Map 1, which shows it, zooms in: it runs for map 1's view alone.
+        views.Publish(bay);
+        await WaitUntilAsync(() => processor.IsActive && processor.Starts == 1);
+        Assert.Equal(ToBounds(bay), processor.Area);
+
+        // Map 2 shows it too: the area grows to both views.
+        entry.SetVisibleIn(second, true);
+        activator.Refresh();
+        Assert.Equal(new GeographicBounds(-72.0, 41.0, -70.5, 42.5), processor.Area);
+
+        // Map 1 hides it; map 2 still shows it in range.
+        entry.SetVisibleIn(FakeViewportSet.First, false);
+        activator.Refresh();
+        Assert.True(processor.IsActive);
+        Assert.Equal(ToBounds(Harbour), processor.Area);
+
+        // Hidden in both maps: paused.
+        entry.SetVisibleIn(second, false);
+        activator.Refresh();
+        Assert.False(processor.IsActive);
+        Assert.Equal(SourceRunState.Hidden, activator.State);
+    }
+
+    [Fact]
+    public void The_service_runs_a_source_while_a_map_that_shows_it_is_in_range()
+    {
+        var second = new MapViewId("map-2");
+        var registry = new SourceRegistry();
+        registry.Register(Registration(SourceActivation.BelowViewportSpan(5)));
+        var views = new FakeViewportSet { View = Harbour };
+        views.Publish(second, Ocean);
+        using var service = new SourceDatasetService(registry, views);
+        var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
+        var processor = (FakeHostedProcessor)service.CreateProcessor("test.feed", options: null);
+
+        service.Attach(entry, processor);
+        Assert.True(service.IsRunning(entry.Id));
+
+        // Hiding it in the zoomed-in map pauses it, though map 2 still shows it.
+        entry.SetVisibleIn(FakeViewportSet.First, false);
+        Assert.False(service.IsRunning(entry.Id));
+        Assert.Equal(SourceStatusKind.WaitingForZoom, entry.SourceStatus!.Kind);
+
+        entry.SetVisibleIn(FakeViewportSet.First, true);
+        Assert.True(service.IsRunning(entry.Id));
+    }
+
+    private static GeographicBounds ToBounds(MapViewportSnapshot view) => HostedSourceActivator.ToBounds(view);
+
+    [Fact]
     public async Task Quick_view_changes_apply_in_order_so_the_last_one_wins()
     {
         // With no debounce, each change's continuation is already due when
@@ -165,7 +243,7 @@ public sealed class SourceDatasetTests
         var views = new FakeViewportSet { View = Ocean };
         var processor = new FakeHostedProcessor();
         using var activator = new HostedSourceActivator(
-            processor, SourceActivation.BelowViewportSpan(5), views, visible: true, debounce: TimeSpan.Zero);
+            processor, SourceActivation.BelowViewportSpan(5), views, isShownIn: _ => true, debounce: TimeSpan.Zero);
 
         for (int round = 0; round < 50; round++)
         {

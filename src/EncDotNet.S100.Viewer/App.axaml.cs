@@ -1559,6 +1559,10 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlannerSet>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.IMapViewportSet>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViews>());
+        // The active map's id, for the services that follow the active pane's
+        // visibility: Legend, DEPTHS, AML counts, feedback (split map step 2 §2.6).
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.IActiveMap>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViews>());
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.ActiveMapViewportNotifier(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViews>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(sp =>
@@ -1936,6 +1940,7 @@ public partial class App : Application
         services.AddSingleton(sp => new AmlDisplayService(
             sp.GetRequiredService<EcdisDisplayState>(),
             sp.GetRequiredService<IMapViewportNotifier>(),
+            sp.GetRequiredService<IActiveMap>(),
             UiThread.RunOrPost));
         services.AddSingleton<IAmlClbPresence>(sp => sp.GetRequiredService<AmlDisplayService>());
         services.AddSingleton<ViewerPresentationCoordinator>();
@@ -2113,6 +2118,7 @@ public partial class App : Application
                 sp.GetRequiredService<IDatasetLoaderService>(),
                 sp.GetRequiredService<DatasetsViewModel>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
+                sp.GetRequiredService<IActiveMap>(),
                 settings.SelectedPalette,
                 sp.GetRequiredService<TimeProvider>(),
                 UiThread.PostBackground);
@@ -2163,6 +2169,7 @@ public partial class App : Application
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<DatasetsViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
+            sp.GetRequiredService<IActiveMap>(),
             sp.GetRequiredService<IMarinerSettingsProvider>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),

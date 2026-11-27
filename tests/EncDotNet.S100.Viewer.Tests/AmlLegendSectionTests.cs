@@ -136,7 +136,7 @@ public sealed class AmlLegendSectionTests
         tab.CollapseAllCommand.Execute(null);
         tab.Filter = "no such row";
 
-        using var aml = new AmlDisplayService(new EcdisDisplayState(), new LegendServiceTests.FakeNotifier(), action => action());
+        using var aml = new AmlDisplayService(new EcdisDisplayState(), new LegendServiceTests.FakeNotifier(), new FakeActiveMap(), action => action());
         using var display = new AmlDisplaySectionViewModel(aml, id => service.Show(id));
         display.ShowLegendCommand.Execute(null);
 
