@@ -25,6 +25,7 @@ internal interface IPickService
     /// publishes them to the pick report, with a coverage sample when no
     /// feature is hit. Must be called on the UI thread.
     /// </summary>
+    /// <param name="map">The map clicked, which the result names (<see cref="PickResult.Map"/>).</param>
     /// <param name="worldPosition">The clicked point in EPSG:3857 metres, or null.</param>
     /// <param name="resolution">The map resolution, metres per DIP, which sizes the click tolerance.</param>
     /// <param name="overlayHits">
@@ -33,7 +34,7 @@ internal interface IPickService
     /// of the datasets' hits; an empty list is equivalent to none.
     /// </param>
     /// <returns>A task that completes once the pick report is updated.</returns>
-    Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? overlayHits = null);
+    Task HandlePickAsync(MapViewId map, MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? overlayHits = null);
 
     /// <summary>
     /// The drawn features at <paramref name="worldPosition"/>, as a pick
@@ -54,33 +55,25 @@ internal interface IPickService
     /// the pick report exactly as a user click would so the Object
     /// Information panel and the pick highlight reflect it. Each entry is
     /// re-queried against its owning dataset's processor so the panel shows
-    /// full FC-decoded attributes. Entries that no longer resolve are
-    /// skipped; when none resolve the pick is cleared. Must be called on the
-    /// UI thread.
-    /// </summary>
-    /// <param name="latitude">Pick latitude in WGS-84 decimal degrees.</param>
-    /// <param name="longitude">Pick longitude in WGS-84 decimal degrees.</param>
-    /// <param name="features">Resolved features under the pick, most-specific first.</param>
-    void PresentGeographicPick(
-        double latitude,
-        double longitude,
-        IReadOnlyList<GeographicPickFeature> features);
-
-    /// <summary>
-    /// As <see cref="PresentGeographicPick(double, double, IReadOnlyList{GeographicPickFeature})"/>,
-    /// with the overlay sources' features at the point too (own-ship), as a
-    /// click shows them. Must be called on the UI thread.
+    /// full FC-decoded attributes, and the overlay sources' features at the
+    /// point (own-ship) are shown ahead of them, as a click shows them.
+    /// Entries that no longer resolve are skipped; when none resolve the
+    /// pick is cleared. Must be called on the UI thread.
     /// </summary>
     /// <param name="latitude">Pick latitude in WGS-84 decimal degrees.</param>
     /// <param name="longitude">Pick longitude in WGS-84 decimal degrees.</param>
     /// <param name="features">Resolved features under the pick, most-specific first.</param>
     /// <param name="overlayHits">The overlay sources' features at the point.</param>
+    /// <param name="map">
+    /// The map picked in (<see cref="PickResult.Map"/>), or <see langword="null"/>
+    /// for the active map.
+    /// </param>
     void PresentGeographicPick(
         double latitude,
         double longitude,
         IReadOnlyList<GeographicPickFeature> features,
-        IReadOnlyList<PickHit> overlayHits) =>
-        PresentGeographicPick(latitude, longitude, features);
+        IReadOnlyList<PickHit> overlayHits,
+        MapViewId? map);
 
     /// <summary>
     /// Resolves an xlink-style reference from the currently selected hit

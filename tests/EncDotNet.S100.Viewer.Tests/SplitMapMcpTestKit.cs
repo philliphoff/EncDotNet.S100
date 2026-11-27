@@ -229,7 +229,7 @@ internal sealed class SplitMapMcpFixture : IAsyncDisposable
             ConverterAccessor,
             Catalog,
             drawStates,
-            new NoPresenter(),
+            Presenter,
             Settle,
             ControllerAccessor);
         var diagnostics = new TestToolGroup(
@@ -252,6 +252,9 @@ internal sealed class SplitMapMcpFixture : IAsyncDisposable
     }
 
     public MapCapabilityAccessor<IMapViewportController> ViewportAccessor { get; }
+
+    /// <summary>What pick_features with select asked the viewer to show.</summary>
+    public RecordingPresenter Presenter { get; } = new();
 
     public MapCapabilityAccessor<IMapCoordinateConverter> ConverterAccessor { get; }
 
@@ -305,8 +308,15 @@ internal sealed class SplitMapMcpFixture : IAsyncDisposable
         public event EventHandler<EncDotNet.S100.Datasets.Pipelines.Catalog.DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
     }
 
-    private sealed class NoPresenter : IGeographicPickPresenter
+    /// <summary>Records the picks pick_features shows in the viewer.</summary>
+    internal sealed class RecordingPresenter : IGeographicPickPresenter
     {
-        public IReadOnlyList<PickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) => [];
+        public List<(IReadOnlyList<GeographicPickFeature> Features, MapViewId? Map)> Presented { get; } = [];
+
+        public IReadOnlyList<PickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features, MapViewId? map)
+        {
+            Presented.Add((features, map));
+            return [];
+        }
     }
 }

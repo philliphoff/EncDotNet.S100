@@ -602,7 +602,10 @@ public sealed class PickWhyThisSymbolTests
         var tokens = new List<CancellationToken>();
         scene.TraceOverride = (_, token) =>
         {
-            tokens.Add(token);
+            // The trace starts off the UI thread, just after the match is
+            // posted, so the test waits for both.
+            lock (tokens)
+                tokens.Add(token);
             token.Register(() => held.TrySetCanceled(token));
             return held.Task;
         };
@@ -610,9 +613,15 @@ public sealed class PickWhyThisSymbolTests
 
         scene.Report.SetPicks([beacon]);
         // The match shows while the trace runs.
-        await WaitUntilAsync(() => scene.DrawnAs.Parts.Any(p => p is { IsMain: true, Reason: not null }));
+        await WaitUntilAsync(() =>
+        {
+            lock (tokens)
+                return tokens.Count > 0 && scene.DrawnAs.Parts.Any(p => p is { IsMain: true, Reason: not null });
+        });
         Assert.Equal(PickReasonKind.Matched, scene.Main.Reason!.Kind);
-        var first = Assert.Single(tokens);
+        CancellationToken first;
+        lock (tokens)
+            first = Assert.Single(tokens);
         Assert.False(first.IsCancellationRequested);
 
         // Another pick: the trace in flight is cancelled, and nothing it gives is shown.

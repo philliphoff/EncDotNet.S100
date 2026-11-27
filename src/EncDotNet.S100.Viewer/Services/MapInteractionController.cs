@@ -98,6 +98,12 @@ internal sealed class MapInteractionController
     /// </summary>
     public Action<bool>? PointerOverMap { get; init; }
 
+    /// <summary>
+    /// The map this controller handles, which its picks name (split map
+    /// design note D11, #1763), so Object Information reports at it.
+    /// </summary>
+    public required MapViewId Map { get; init; }
+
 
     private bool IsStatus => IsStatusMap?.Invoke() ?? true;
 
@@ -866,7 +872,7 @@ internal sealed class MapInteractionController
     private void PickAt(MPoint? world)
     {
         var resolution = _mapControl?.Map?.Navigator?.Viewport.Resolution ?? double.NaN;
-        _ = _pickService.HandlePickAsync(world, resolution, CollectDynamicHits(world, resolution));
+        _ = _pickService.HandlePickAsync(Map, world, resolution, CollectDynamicHits(world, resolution));
     }
 
     /// <summary>

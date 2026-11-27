@@ -256,6 +256,58 @@ public sealed class SplitMapPicksToolsTests
     }
 
     [AvaloniaFact]
+    public void A_pick_in_a_map_that_isnt_active_is_reported_at_that_map()
+    {
+        // #1763, D11: a pick selected in a map without activating it (MCP
+        // pick_features with select and map) is reported at that map, not at
+        // the active one. The panes differ: the active map hides the dataset
+        // and is at another time.
+        var split = TwoPanes();
+        split.Views.Activate(split.One);
+        split.One.Session.RemoveDatasets([new MapDatasetId(DatasetId)], preserveState: false, removeProcessor: false);
+        split.One.Session.TimeSnapshot = new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSnapshot
+        {
+            Current = new DateTime(2026, 11, 26, 14, 18, 0, DateTimeKind.Utc),
+        };
+        split.Two.Session.TimeSnapshot = new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSnapshot
+        {
+            Current = new DateTime(2026, 11, 26, 9, 30, 0, DateTimeKind.Utc),
+        };
+        var report = TestPickReport.Create();
+        var oneLayers = new FakeLayers();
+        var twoLayers = new FakeLayers();
+        using var one = Highlight(oneLayers, report, split, split.One);
+        using var two = Highlight(twoLayers, report, split, split.Two);
+        using var presenter = new PickMapPresencePresenter(
+            report, split.Services, new TestStationCharts.FixedTimeFormat(TimeFormat.Utc), _ => { });
+
+        report.SetPicks(new PickResult([Light()], new PickLocation(47.68, -122.41), Map: split.Two.Id));
+
+        Assert.Same(split.One, split.Views.Active);
+        Assert.Equal(split.Two.Id, report.PickedMap);
+        Assert.Equal(["Hidden in Map 1", "Shown in Map 2"], report.ShownIn.Select(c => c.Text));
+        // Reported at Map 2's time, so the active Map 1 is the other map.
+        var row = Assert.Single(report.OtherMaps);
+        Assert.Equal("Map 1 · 14:18 UTC", row.Text);
+        // The active map, which hides the dataset, shows the ghost; the
+        // picked map outlines the feature.
+        var ghost = oneLayers.Overlay(PickHighlightOverlayLayer.LayerName);
+        Assert.Contains(Pens(ghost), pen => pen.PenStyle == PenStyle.Dash);
+        Assert.Equal(["S-57 hidden in this map"], Labels(ghost));
+        var drawn = twoLayers.Overlay(PickHighlightOverlayLayer.LayerName);
+        Assert.NotEmpty(drawn.Features);
+        Assert.All(Pens(drawn), pen => Assert.Equal(PenStyle.Solid, pen.PenStyle));
+        Assert.Empty(Labels(drawn));
+
+        // A later pick that names no map (feature search) is reported at the
+        // active map.
+        report.SetPicks(new PickResult([Light()], new PickLocation(47.69, -122.42)));
+
+        Assert.Null(report.PickedMap);
+        Assert.Equal("Map 2 · 09:30 UTC", Assert.Single(report.OtherMaps).Text);
+    }
+
+    [AvaloniaFact]
     public void A_measurement_started_in_one_pane_is_finished_in_the_other_and_drawn_in_both()
     {
         // D12, O2: the tools take clicks from any pane; the path is geographic.
