@@ -42,7 +42,8 @@ step 3 steps with a fixed offset.
 | Later | Per-pane display settings (palette, viewing groups), linked viewports | Presentation |
 
 This note designs step 1 in full. For steps 2 and 3 it says only enough
-to make sure that step 1 doesn't block them.
+to make sure that step 1 doesn't block them. Step 2 is designed in
+[dual-map-step2.md](dual-map-step2.md).
 
 ## 1. Findings
 
