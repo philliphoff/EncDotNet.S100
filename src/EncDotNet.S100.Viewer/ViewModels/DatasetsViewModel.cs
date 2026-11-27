@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -415,9 +416,11 @@ internal sealed partial class DatasetEntry : ViewModelBase
     // the exceptions are the maps that hide the dataset, and an empty set
     // means it's shown in every map (step 1's behaviour). SetVisible(false)
     // flips the default, so a map opened later is hidden too until
-    // MapDatasetVisibility seeds it from the active map.
-    private bool _shownByDefault = true;
-    private readonly HashSet<MapViewId> _exceptions = [];
+    // MapDatasetVisibility seeds it from the active map. Writes happen on the
+    // UI thread; the set is swapped, never mutated, so a hosted source's
+    // activator can read IsVisibleIn from its debounce thread (#1768).
+    private volatile bool _shownByDefault = true;
+    private volatile ImmutableHashSet<MapViewId> _exceptions = [];
 
     /// <summary>
     /// Whether map <paramref name="map"/> draws this dataset's layers, before
@@ -436,10 +439,7 @@ internal sealed partial class DatasetEntry : ViewModelBase
     public void SetVisibleIn(MapViewId map, bool visible)
     {
         if (IsVisibleIn(map) == visible) return;
-        if (visible == _shownByDefault)
-            _exceptions.Remove(map);
-        else
-            _exceptions.Add(map);
+        _exceptions = visible == _shownByDefault ? _exceptions.Remove(map) : _exceptions.Add(map);
         OnVisibilityChanged(map);
     }
 
@@ -454,7 +454,7 @@ internal sealed partial class DatasetEntry : ViewModelBase
     {
         if (_shownByDefault == visible && _exceptions.Count == 0) return;
         _shownByDefault = visible;
-        _exceptions.Clear();
+        _exceptions = [];
         OnVisibilityChanged(null);
     }
 
@@ -489,11 +489,11 @@ internal sealed partial class DatasetEntry : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(openMaps);
         var anywhere = IsVisibleAnywhere;
-        _exceptions.RemoveWhere(map => !openMaps.Contains(map));
+        _exceptions = _exceptions.Where(openMaps.Contains).ToImmutableHashSet();
         if (openMaps.Count > 0 && _exceptions.Count == openMaps.Count)
         {
             _shownByDefault = !_shownByDefault;
-            _exceptions.Clear();
+            _exceptions = [];
         }
 
         if (anywhere != IsVisibleAnywhere)

@@ -60,14 +60,15 @@ public sealed class LegendServiceTests
         public LayerStackViewModelTests.ControllableLoader Loader { get; } = new();
         public DatasetsViewModel Datasets { get; } = new(new FakeDatasetLoaderService());
         public FakeNotifier Viewport { get; } = new();
+        public FakeActiveMap ActiveMap { get; } = new();
         public FakeTimeProvider Clock { get; } = new();
 
         public LegendService Create(PaletteType palette = PaletteType.Day) =>
-            new(Loader, Datasets, Viewport, palette, Clock, action => action());
+            new(Loader, Datasets, Viewport, ActiveMap, palette, Clock, action => action());
 
         /// <summary>The position legend over the legend (#1407), with the default Mariner settings.</summary>
         public PositionLegendService Position(LegendService legend) =>
-            new(Loader, Datasets, Viewport, new FixedMariner(), depthBasis: null, legend, action => action(), read => Task.FromResult(read()));
+            new(Loader, Datasets, Viewport, ActiveMap, new FixedMariner(), depthBasis: null, legend, action => action(), read => Task.FromResult(read()));
 
         private sealed class FixedMariner : IMarinerSettingsProvider
         {
@@ -165,6 +166,46 @@ public sealed class LegendServiceTests
 
         hidden.SetVisible(true);
         Assert.Equal("S-111", Assert.Single(service.Sections).Id);
+    }
+
+    [Fact]
+    public void Sections_follow_the_active_map()
+    {
+        // Split map step 2 §2.6: map 2 hides the currents map 1 draws.
+        var f = new Fixture();
+        var second = new MapViewId("map-2");
+        var currents = f.Add("111US00_a.h5", "S-111", 40, -75, 41, -74);
+        currents.SetVisibleIn(second, false);
+        f.Loader.SetEntries(
+            VectorEntry("111US00_a.h5", "S-111", "s111.arrows", "Surface currents: 111US00_a.h5", S98DisplayPlane.DynamicArrows, CurrentLegend));
+        using var service = f.Create();
+        var changes = 0;
+        service.Changed += (_, _) => changes++;
+        Assert.Equal("S-111", Assert.Single(service.Sections).Id);
+
+        f.ActiveMap.Activate(second);
+        Assert.Empty(service.Sections);
+        Assert.True(changes > 0);
+
+        f.ActiveMap.Activate(FakeViewportSet.First);
+        Assert.Equal("S-111", Assert.Single(service.Sections).Id);
+    }
+
+    [Fact]
+    public void A_switch_to_a_map_elsewhere_takes_its_view_at_once()
+    {
+        var f = new Fixture();
+        f.Add("111US00_a.h5", "S-111", 40, -75, 41, -74);
+        f.Loader.SetEntries(
+            VectorEntry("111US00_a.h5", "S-111", "s111.arrows", "Surface currents: 111US00_a.h5", S98DisplayPlane.DynamicArrows, CurrentLegend));
+        f.Viewport.Publish(40.2, -74.8, 40.8, -74.2);
+        using var service = f.Create();
+        Assert.Single(service.InViewSections);
+
+        // The active notifier follows map 2, which looks elsewhere; no pan-end wait.
+        f.Viewport.Publish(10, 10, 11, 11);
+        f.ActiveMap.Activate(new MapViewId("map-2"));
+        Assert.Empty(service.InViewSections);
     }
 
     [Fact]

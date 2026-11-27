@@ -936,6 +936,77 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     }
 
     [Fact]
+    public async Task CoarseCell_DeferredInAMapShowingFinerCells_LoadsForAMapThatHidesThem()
+    {
+        // Split map step 2 §2.5: map 1 shows the finer cells, map 2 hides them.
+        var notifier = new FakeViewportSet();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        var (west, east, coarse) = CoveredView();
+        using var coordinator = CreateLoading(notifier, order, () => true);
+        var second = new MapViewId("map-2");
+        west.SetVisibleIn(second, false);
+        east.SetVisibleIn(second, false);
+
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        // Map 1 alone: the finer cells cover the coarse one there, so it waits.
+        Assert.True(await WaitUntilAsync(() => order.Count == 2));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.True(coarse.IsDeferred);
+
+        // Map 2 looks at the same place but draws no finer chart there.
+        notifier.Publish(second, Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => order.Contains(coarse)));
+    }
+
+    [Fact]
+    public async Task CoarseCell_StaysDeferredWhenEveryMapInViewShowsTheFinerCells()
+    {
+        var notifier = new FakeViewportSet();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        var (west, east, coarse) = CoveredView();
+        using var coordinator = CreateLoading(notifier, order, () => true);
+        var second = new MapViewId("map-2");
+
+        // Map 2 hides the finer cells but looks somewhere else.
+        west.SetVisibleIn(second, false);
+        east.SetVisibleIn(second, false);
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(second, Viewport(30, -60, 31, -59));
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => order.Count == 2));
+        await Task.Delay(150, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(coarse, order);
+        Assert.True(coarse.IsDeferred);
+    }
+
+    [Fact]
+    public async Task FinerCellsHiddenInEveryMap_StillLoadWhenInView()
+    {
+        var notifier = new FakeViewportSet();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        var (west, east, coarse) = CoveredView();
+        using var coordinator = CreateLoading(notifier, order, () => true);
+        var second = new MapViewId("map-2");
+        foreach (var cell in new[] { west, east })
+        {
+            cell.SetVisibleIn(FakeViewportSet.First, false);
+            cell.SetVisibleIn(second, false);
+        }
+
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        notifier.Publish(second, Viewport(40, -75, 41, -74));
+
+        // Nothing covers the coarse cell in either map, and the hidden cells
+        // in view load as they do with one map.
+        Assert.True(await WaitUntilAsync(() => order.Count == 3));
+    }
+
+    [Fact]
     public async Task DeferCoveredCellsOff_LoadsCoarseCellAsVisible()
     {
         var notifier = new FakeViewportSet();

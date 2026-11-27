@@ -55,7 +55,7 @@ public sealed class PositionLegendTests : IDisposable
     private static string N(string text) => text.Replace('\u202F', ' ').Replace('\u00A0', ' ');
 
     private PositionLegendService Position(LegendService legend) =>
-        new(_f.Loader, _f.Datasets, _f.Viewport, _mariner, depthBasis: null, legend, action => action(), read => Task.FromResult(read()));
+        new(_f.Loader, _f.Datasets, _f.Viewport, _f.ActiveMap, _mariner, depthBasis: null, legend, action => action(), read => Task.FromResult(read()));
 
     /// <summary>
     /// A loaded S-101 cell over <paramref name="box"/>, drawn for
@@ -120,6 +120,26 @@ public sealed class PositionLegendTests : IDisposable
         Assert.Equal("Depths in metres · Mean Lower Low Water · Safety contour 30 m", N(PositionLegendText.SettingsLine(current)));
         Assert.Equal(entry.DisplayName + " ed. 4 · compiled 1:12 000 · shown 1:35 700", N(PositionLegendText.CellLine(current)));
         Assert.Null(current.OverscaleFactor);
+    }
+
+    [Fact]
+    public void The_cell_at_the_centre_follows_the_active_map()
+    {
+        // Split map step 2 §2.6: map 2 hides the harbour cell map 1 draws.
+        var second = new MapViewId("map-2");
+        var coast = Cell("101US00COAST", (0, 0, 1, 1), 350_000, 90_000, edition: "2");
+        var harbour = Cell("101US00HARB", (0, 0, 0.1, 0.1), 45_000, 22_000);
+        harbour.SetVisibleIn(second, false);
+        _f.Viewport.Publish(0.04, 0.04, 0.06, 0.06);
+        using var legend = _f.Create();
+        using var position = Position(legend);
+        Assert.Equal(harbour.Id.Value, position.Current.Cell!.DatasetId);
+
+        _f.ActiveMap.Activate(second);
+        Assert.Equal(coast.Id.Value, position.Current.Cell!.DatasetId);
+
+        _f.ActiveMap.Activate(FakeViewportSet.First);
+        Assert.Equal(harbour.Id.Value, position.Current.Cell!.DatasetId);
     }
 
     [Fact]

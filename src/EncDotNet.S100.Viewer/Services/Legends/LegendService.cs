@@ -40,6 +40,7 @@ internal sealed class LegendService : IDisposable
     private readonly IDatasetLoaderService _loader;
     private readonly DatasetsViewModel _datasets;
     private readonly IMapViewportNotifier? _viewport;
+    private readonly IActiveMap _activeMap;
     private readonly Action<Action> _post;
     private readonly ITimer _panSettle;
     private readonly HashSet<DatasetEntry> _subscribed = [];
@@ -55,6 +56,10 @@ internal sealed class LegendService : IDisposable
     /// <param name="loader">The drawn layer stack.</param>
     /// <param name="datasets">The loaded datasets: names, footprints and layer times.</param>
     /// <param name="viewport">The map view; null in hosts without a map, where every section is in view.</param>
+    /// <param name="activeMap">
+    /// The map the user is working in: the sections list what it shows (split
+    /// map step 2 §2.6), and are rebuilt when another map becomes active.
+    /// </param>
     /// <param name="palette">The palette the map is drawn in now.</param>
     /// <param name="clock">Times the pan-end wait.</param>
     /// <param name="post">Schedules a coalesced rebuild on the UI thread (the app passes <see cref="UiThread.PostBackground"/>).</param>
@@ -62,17 +67,20 @@ internal sealed class LegendService : IDisposable
         IDatasetLoaderService loader,
         DatasetsViewModel datasets,
         IMapViewportNotifier? viewport,
+        IActiveMap activeMap,
         PaletteType palette,
         TimeProvider clock,
         Action<Action> post)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(activeMap);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(post);
         _loader = loader;
         _datasets = datasets;
         _viewport = viewport;
+        _activeMap = activeMap;
         _post = post;
         Palette = palette;
         _view = TimelineMapScope.ViewOf(_viewport?.Current);
@@ -84,6 +92,7 @@ internal sealed class LegendService : IDisposable
             Subscribe(entry);
         if (_viewport is not null)
             _viewport.ViewportChanged += OnViewportChanged;
+        _activeMap.ActiveChanged += OnActiveMapChanged;
 
         Refresh(takeView: false);
     }
@@ -267,11 +276,9 @@ internal sealed class LegendService : IDisposable
         {
             var item = stack[i];
             byId.TryGetValue(item.SourceDatasetId, out var dataset);
-            // The Legend follows the user's view: the active map's
-            // visibility once split map step 2 slice 3 (#1768) wires it; with
-            // one map they agree.
-            if (dataset is { IsVisibleAnywhere: false })
-                continue; // hidden by the user, so not drawn
+            // The Legend follows the active map (split map step 2 §2.6).
+            if (dataset is not null && !_activeMap.Shows(dataset))
+                continue; // hidden there by the user, so not drawn
             if (LegendOf(item) is not { } sub)
             {
                 if (catalogueKeys && item.Item.Payload is VectorStackPayload vector && IsCatalogueProduct(vector))
@@ -538,7 +545,7 @@ internal sealed class LegendService : IDisposable
         if (hit.DatasetId is not { } datasetId || string.IsNullOrEmpty(hit.FeatureRef))
             return null;
         var dataset = _datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, datasetId, StringComparison.Ordinal));
-        if (dataset is { IsVisibleAnywhere: false })
+        if (dataset is not null && !_activeMap.Shows(dataset))
             return null;
 
         var scale = ViewScale();
@@ -602,7 +609,7 @@ internal sealed class LegendService : IDisposable
             rowLabel,
             groupKey,
             _loader.CurrentStackEntries,
-            id => !entries.TryGetValue(id, out var e) || e.IsVisibleAnywhere,
+            id => !entries.TryGetValue(id, out var e) || _activeMap.Shows(e),
             id => processors.GetValueOrDefault(id),
             TimelineMapScope.ViewOf(_viewport?.Current),
             ViewScale(),
@@ -673,7 +680,7 @@ internal sealed class LegendService : IDisposable
             if (item.Item.Payload is not VectorStackPayload vector || !IsCatalogueProduct(vector))
                 continue;
             entries.TryGetValue(item.SourceDatasetId, out var dataset);
-            if (dataset is { IsVisibleAnywhere: false })
+            if (dataset is not null && !_activeMap.Shows(dataset))
                 continue;
             var portrayedWith = dataset?.PortrayalSpec ?? vector.Result.Spec.Name;
             if (!string.Equals(portrayedWith, spec, StringComparison.OrdinalIgnoreCase))
@@ -774,6 +781,21 @@ internal sealed class LegendService : IDisposable
             _panSettle.Change(PanSettleDelay, Timeout.InfiniteTimeSpan);
     }
 
+    // Another map became active: list what it shows, in its view. The view
+    // isn't a pan, so it's taken at once rather than after the pan-end wait.
+    private void OnActiveMapChanged(object? sender, EventArgs e)
+    {
+        if (_disposed)
+            return;
+        _post(() =>
+        {
+            if (_disposed)
+                return;
+            _view = TimelineMapScope.ViewOf(_viewport?.Current);
+            Invalidate();
+        });
+    }
+
     private void OnPanEnded()
     {
         if (_disposed)
@@ -841,6 +863,7 @@ internal sealed class LegendService : IDisposable
         _subscribed.Clear();
         if (_viewport is not null)
             _viewport.ViewportChanged -= OnViewportChanged;
+        _activeMap.ActiveChanged -= OnActiveMapChanged;
     }
 
     private sealed record SectionDataset(string Id, DatasetEntry? Entry);
