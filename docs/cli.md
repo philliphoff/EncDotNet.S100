@@ -139,7 +139,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`health`](#health) | Checks that a `tiles serve`, `feed serve` or `mcp serve --transport http` on this computer answers, for container health checks. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
 | [`s101 convert`](#s101-convert) | Converts an S-101 dataset to an S-57 cell or exchange set, for testing and S-57-only tools. |
-| [`nis convert`](#nis-convert) | Converts one cell of an Esri ArcGIS Maritime S-57 NIS (a file geodatabase) to an S-57 cell or exchange set. |
+| [`nis convert`](#nis-convert) | Converts one cell of an Esri ArcGIS Maritime S-57 NIS (a file geodatabase) to an S-57 cell or exchange set, or to S-101. |
 | [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools for a set of datasets, over standard input and output or HTTP. |
 | [`feed serve`](#feed-serve) | Serves a folder, exchange set or dataset as an S-100 feed over HTTP. |
 | [`feed export`](#feed-export) | Writes a folder, exchange set or dataset as a static S-100 feed. |
@@ -197,7 +197,10 @@ SoundCharts' own gauges and isolines; see
 [S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal).
 It has three forms:
 
-- **Single dataset.** Pass a dataset file and an output path.
+- **Single dataset.** Pass a dataset file and an output path. A cell of an
+  Esri ArcGIS Maritime S-57 NIS counts as one: name it
+  `<path>.gdb/<DSNM>`, such as `production.gdb/US5CA98M.005` or
+  `production.gdb/US5CA98M`. See [Open an NIS directly](nis-to-s57.md#open-an-nis-directly).
 - **Composite.** Pass `--layer` once per dataset. The datasets are drawn into
   one image in the order the S-98 interoperability rules give them. Give the
   output path last, or with `-o`.
@@ -562,7 +565,9 @@ without styling it. It takes the same three input forms as
   exchange set inside it is read through its `CATALOG.XML`. An S-57 exchange
   set (an `ENC_ROOT` folder holding a `CATALOG.031`) is read as a folder of
   cells, whether you pass it, its `CATALOG.031`, or a folder above it, or name
-  it with `--from`. Loose S-101 cells get their update files, as a single cell
+  it with `--from`. An Esri ArcGIS Maritime S-57 NIS file geodatabase (a
+  `.gdb` folder) is read as one S-57 dataset per cell; see
+  [Open an NIS directly](nis-to-s57.md#open-an-nis-directly). Loose S-101 cells get their update files, as a single cell
   does, but cells in an S-100 exchange set don't. The GRIB2 files in one
   folder are one model run, and one storm's NHC advisory zips are one
   advisory; a folder holding both is tiled as both. Any other `.zip` in a
@@ -2261,7 +2266,7 @@ what Annex C drops, the options and what a producer still has to do.
 ## nis convert
 
 ```text
-s100 nis convert --to s57 [--cell <name>] -o <output> <source.gdb> [options]
+s100 nis convert --to s57|s101 [--cell <name>] -o <output> <source.gdb> [options]
 s100 nis convert --list <source.gdb>
 ```
 
@@ -2270,6 +2275,8 @@ s100 nis convert --list <source.gdb>
 Edition 3.1 base cell. It reads the geodatabase itself, so it needs no Esri
 software. `--list` prints the cells the NIS holds (their `DSNM`) with their
 feature counts. The command then prints a summary of what it read and wrote.
+With `--to s101` it translates the S-57 cell on to S-101, as
+[`s57 convert`](#s57-convert) does, and prints that translation's summary too.
 
 The output is for testing, previewing and tools that read S-57. It isn't a
 production ENC.
@@ -2277,10 +2284,10 @@ production ENC.
 | Option | Default | Description |
 |---|---|---|
 | `-o`, `--output <path>` | required | The S-57 cell to write, or with `--exchange-set` the directory to write the exchange set into. |
-| `--to <format>` | `s57` | The format to write. Only `s57` is supported. |
+| `--to <format>` | `s57` | `s57` writes an S-57 cell; `s101` writes an S-101 dataset, translated through S-57. |
 | `--cell <name>` | the only cell | The cell to convert, as `--list` prints it (`US5CA98M.005`) or without the extension (`US5CA98M`). Needed when the NIS holds more than one. |
 | `--list` | off | Lists the cells and their feature counts, and exits. |
-| `--exchange-set` | off | Writes `ENC_ROOT/CATALOG.031` and `ENC_ROOT/<cell>/<cell>.000` under the output directory. |
+| `--exchange-set` | off | With `--to s57`, writes `ENC_ROOT/CATALOG.031` and `ENC_ROOT/<cell>/<cell>.000` under the output directory. |
 | `--cell-name <name>` | `--cell` without extension | The name of the cell to write, without extension. |
 | `--bbox <W,S,E,N>` | none | Converts only features whose extent overlaps the box. |
 | `--edition <n>` | `1` | The edition number written in DSID. |
@@ -2295,7 +2302,12 @@ production ENC.
 s100 nis convert --list TUTORIAL_NIS.gdb
 s100 nis convert --to s57 --cell US5CA98M -o US5CA98M.000 TUTORIAL_NIS.gdb
 s100 nis convert --to s57 --cell US5NY1DM --exchange-set -o s57set TUTORIAL_NIS.gdb
+s100 nis convert --to s101 --cell US5CA98M -o 101US00US5CA98M.000 TUTORIAL_NIS.gdb
 ```
+
+To draw, tile or identify an NIS without converting it first, pass the `.gdb`
+or a cell path to those commands; see
+[Open an NIS directly](nis-to-s57.md#open-an-nis-directly).
 
 Check the cell with `validate`, look at it with `render`, and convert it on to
 S-101 with `s57 convert`. [Converting an NIS to S-57](nis-to-s57.md) covers

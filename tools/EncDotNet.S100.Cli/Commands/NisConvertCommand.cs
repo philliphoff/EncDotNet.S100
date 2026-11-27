@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Nis;
 using EncDotNet.S100.Datasets.Nis.FileGdb;
+using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S57;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -44,8 +46,27 @@ internal sealed class NisConvertCommand : Command<NisConvertCommandSettings>
             var options = settings.ToOptions(datasetName);
             var diagnostics = new NisToS57Diagnostics();
             var document = new NisToS57Translator(options).Translate(source, diagnostics);
-            var bytes = S57DocumentWriter.Write(document);
             var cellName = Path.GetFileNameWithoutExtension(document.DataSetIdentification!.DataSetName);
+
+            if (NisConvertCommandSettings.IsS101(settings.To))
+            {
+                // S-101 goes through the S-57 cell: the same translation s57 convert does (#1777).
+                var s101Diagnostics = new S57TranslationDiagnostics();
+                var s101 = S57ToS101Translator.ForTarget(S57TranslationTarget.S101).Translate(document, s101Diagnostics);
+                S101DocumentWriter.WriteToFile(settings.OutputPath, s101);
+                AnsiConsole.MarkupLineInterpolated(
+                    $"[green]Converted[/] {datasetName ?? "the NIS"} in {settings.SourcePath} [green]→[/] {settings.OutputPath} as S-101, through S-57 ({document.FeatureRecords.Count} S-57 feature records).");
+                PrintDiagnosticsSummary(diagnostics);
+                S57ConvertCommand.PrintDiagnosticsSummary(s101Diagnostics);
+                if (!string.IsNullOrWhiteSpace(settings.ReportPath))
+                {
+                    WriteReport(settings.ReportPath, settings.SourcePath, datasetName, settings.OutputPath, null, document, diagnostics, "S-101", s101Diagnostics.FeaturesEmitted);
+                    AnsiConsole.MarkupLineInterpolated($"[grey]Diagnostics report written to[/] {settings.ReportPath}.");
+                }
+                return 0;
+            }
+
+            var bytes = S57DocumentWriter.Write(document);
 
             string cellPath;
             string? catalogPath = null;
@@ -69,7 +90,7 @@ internal sealed class NisConvertCommand : Command<NisConvertCommandSettings>
 
             if (!string.IsNullOrWhiteSpace(settings.ReportPath))
             {
-                WriteReport(settings.ReportPath, settings.SourcePath, datasetName, cellPath, catalogPath, document, diagnostics);
+                WriteReport(settings.ReportPath, settings.SourcePath, datasetName, cellPath, catalogPath, document, diagnostics, "S-57", null);
                 AnsiConsole.MarkupLineInterpolated($"[grey]Diagnostics report written to[/] {settings.ReportPath}.");
             }
             return 0;
@@ -168,7 +189,9 @@ internal sealed class NisConvertCommand : Command<NisConvertCommandSettings>
         string outputPath,
         string? catalogPath,
         S57Document document,
-        NisToS57Diagnostics diagnostics)
+        NisToS57Diagnostics diagnostics,
+        string product,
+        int? s101FeaturesWritten)
     {
         var report = new JsonObject
         {
@@ -177,8 +200,9 @@ internal sealed class NisConvertCommand : Command<NisConvertCommandSettings>
             ["output"] = outputPath,
             ["catalog"] = catalogPath,
             ["cellName"] = document.DataSetIdentification?.DataSetName,
-            ["product"] = "S-57",
-            ["productEdition"] = "3.1",
+            ["product"] = product,
+            ["productEdition"] = product == "S-57" ? "3.1" : null,
+            ["s101FeaturesWritten"] = s101FeaturesWritten,
             ["featuresRead"] = diagnostics.FeaturesRead,
             ["featuresWritten"] = diagnostics.FeaturesWritten,
             ["soundingsWritten"] = diagnostics.SoundingsWritten,

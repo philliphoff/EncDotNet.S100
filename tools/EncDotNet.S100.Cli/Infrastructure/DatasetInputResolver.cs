@@ -103,7 +103,17 @@ internal static class DatasetInputResolver
         {
             if (!File.Exists(path))
             {
-                skipped.Add(SkippedDataset.Missing(path, path));
+                // A cell of an NIS file geodatabase (<path>.gdb/<DSNM>) opens as its translated S-57 cell (#1777).
+                if (NisCells.ResolveCellPath(path, out var cellError) is { } cell)
+                {
+                    inputs.Add(new FileDatasetInput(
+                        new DatasetId(UniqueId(cell.Id, usedIds)), NisCells.Spec, cell.File,
+                        BuildExternalTextResolver(NisCells.Spec, cell.File)));
+                    continue;
+                }
+                skipped.Add(cellError is null
+                    ? SkippedDataset.Missing(path, path)
+                    : new SkippedDataset(path, SkippedDatasetKind.Unsupported, cellError, cellError));
                 continue;
             }
 
@@ -175,6 +185,22 @@ internal static class DatasetInputResolver
             if (directory != root && ExchangeSetInput.LooksLikeExchangeSet(directory))
             {
                 AddExchangeSet(directory, onlySpecs, inputs, usedIds, skipped, resolutions, relative);
+                continue;
+            }
+
+            // An NIS file geodatabase is one S-57 dataset per source cell, translated into the cache (#1777).
+            if (NisCells.IsGeodatabase(directory))
+            {
+                if (IsIncluded(NisCells.Spec, onlySpecs) && NisCells.Materialize(directory, skipped) is { } cells)
+                {
+                    var gdbId = directory == root ? Path.GetFileName(root) : relative;
+                    foreach (var cell in cells)
+                    {
+                        inputs.Add(new FileDatasetInput(
+                            new DatasetId(UniqueId($"{gdbId}/{cell.DatasetName}", usedIds)), NisCells.Spec, cell.Path,
+                            BuildExternalTextResolver(NisCells.Spec, cell.Path)));
+                    }
+                }
                 continue;
             }
 

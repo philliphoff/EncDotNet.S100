@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Open an ArcGIS Maritime NIS directly.** `tiles serve`, `tiles export`,
+  `render`, `identify`, `info` and `mcp serve` take an S-57 NIS file
+  geodatabase: a `.gdb` is one S-57 dataset per cell, and
+  `<path>.gdb/<DSNM>` names one cell. The cells are translated once and
+  cached until the geodatabase changes. `nis convert --to s101` writes a cell
+  as S-101. See [Open an NIS directly](nis-to-s57.md#open-an-nis-directly)
+  ([#1777](https://github.com/philliphoff/EncDotNet.S100/issues/1777)).
+
 - **Rename a split map.** Double-click a map's name in its header, or choose
   **Rename map…** in the **Split map** menu, to name it, such as **S-57** or
   **Low water**. Enter saves it, Esc cancels, and an empty name goes

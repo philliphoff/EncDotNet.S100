@@ -36,6 +36,25 @@ written cell name, a bounding box, the issue date, the producing agency and
 agency codes, the compilation scale and datums, the sounding group size, and
 whether to add M_COVR objects.
 
+## Cache an NIS as S-57 files
+
+`NisCellCache.Materialize` translates every cell of a file geodatabase and
+writes them as S-57 base cells, so anything that reads S-57 files can open an
+NIS:
+
+```csharp
+IReadOnlyList<NisCellFile> cells = NisCellCache.Materialize("production.gdb", cacheRoot);
+// cells[0].DatasetName == "US5CA98M.005", cells[0].Path == ".../US5CA98M.000"
+```
+
+The geodatabase is read once for all its cells. The cells go in a folder under
+`cacheRoot` named after `NisCellCache.Fingerprint`, a hash of the
+geodatabase's files (names, sizes, write times, without lock files), and are
+reused until it changes. `NisCellPath.TryParse` reads a cell path,
+`<path>.gdb/<DSNM>`, and `Find` picks its cell by full name or by name without
+extension. `FileGdbNisSource.IsNisGeodatabase` tells an NIS from any other
+folder. The `s100` CLI uses these to open an NIS directly.
+
 ## Implement a source
 
 A source decodes storage only; the translator interprets the NIS conventions.

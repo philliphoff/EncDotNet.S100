@@ -54,7 +54,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
     {
         [CommandArgument(0, "[input]")]
         [Description("Single-dataset form: the dataset to render. Composite form (with --layer and no -o): the output image path.")]
-        public string? Input { get; init; }
+        public string? Input { get => _input; init => _input = value; }
+
+        private string? _input;
 
         [CommandArgument(1, "[output]")]
         [Description("Single-dataset form: the output image path. The format is inferred from the file extension unless --format is given.")]
@@ -235,6 +237,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 if (!lists.Successful)
                     return lists;
                 _layerListsRead = true;
+
+                // A cell of an NIS file geodatabase (<path>.gdb/<DSNM>) renders as its translated S-57 cell (#1777).
+                _layers = Infrastructure.NisCells.ResolveArguments(_layers);
+                _input = Infrastructure.NisCells.ResolveArgument(_input);
             }
 
             if (Quality is < 1 or > 100)
@@ -335,7 +341,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                     if (string.IsNullOrWhiteSpace(layer))
                         return ValidationResult.Error("A --layer value cannot be empty.");
                     if (!File.Exists(layer))
-                        return ValidationResult.Error($"Layer file not found: {layer}");
+                        return ValidationResult.Error(Infrastructure.NisCells.ErrorFor(layer) ?? $"Layer file not found: {layer}");
                 }
 
                 if (OutputOption is not null)
@@ -362,7 +368,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 if (string.IsNullOrWhiteSpace(Input))
                     return ValidationResult.Error("A dataset path is required (or use --layer to composite).");
                 if (!File.Exists(Input))
-                    return ValidationResult.Error($"Dataset file not found: {Input}");
+                    return ValidationResult.Error(Infrastructure.NisCells.ErrorFor(Input) ?? $"Dataset file not found: {Input}");
 
                 output = OutputOption ?? OutputArgument;
                 if (string.IsNullOrWhiteSpace(output))

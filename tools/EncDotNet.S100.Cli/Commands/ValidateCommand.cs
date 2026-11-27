@@ -69,8 +69,9 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
 
             // Accept a single dataset file, or an exchange set expressed as a
             // directory / CATALOG.XML / .zip (resolved later in Execute).
+            var original = ResolveNisCellPath();
             if (!File.Exists(DatasetPath) && !Directory.Exists(DatasetPath))
-                return ValidationResult.Error($"Path not found: {DatasetPath}");
+                return ValidationResult.Error(Infrastructure.NisCells.ErrorFor(original) ?? $"Path not found: {DatasetPath}");
 
             if (!TryParseFormat(Format, out _))
                 return ValidationResult.Error($"Unknown format '{Format}'. Use text or json.");
