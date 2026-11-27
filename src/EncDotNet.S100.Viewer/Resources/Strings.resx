@@ -4836,6 +4836,10 @@
   <data name="TimelinePanel_PresetInView" xml:space="preserve">
     <value>In view</value>
   </data>
+  <data name="Timeline_LaneDrawnInFormat" xml:space="preserve">
+    <value>Drawn in {0}</value>
+    <comment>Tooltip of a pane's number chip on a Timeline lane (split map D20), e.g. Drawn in Map 2</comment>
+  </data>
   <data name="TimelinePanel_InMapView" xml:space="preserve">
     <value>In map view</value>
   </data>

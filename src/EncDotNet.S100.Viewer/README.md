@@ -1280,6 +1280,10 @@ The **Timeline** shows the data each layer has over time:
 
 - Each layer has its own lane. **Collapse to strip** shows one combined strip,
   and **Show lanes** goes back.
+- While the map is split, each lane label carries the number chips of the
+  maps that draw that layer. A lane the active map doesn't draw is faded but
+  keeps its place, so switching maps doesn't move the lanes. **In map view**
+  follows the active map.
 - Highlighted ranges have data. Long stretches with no data are compressed to
   a short gap marked with its length, so clusters of data far apart in time
   stay easy to reach.

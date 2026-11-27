@@ -209,6 +209,12 @@ internal sealed record TimelineLaneState(string Id, string Label, string Group, 
 
     /// <summary>How many step ticks the lane draws (a storm's forecast points, V14).</summary>
     public int StepTicks { get; init; }
+
+    /// <summary>While the map is split, the ids of the maps that draw the lane, in reading order (split map D20); else null.</summary>
+    public IReadOnlyList<string>? ShownIn { get; init; }
+
+    /// <summary>True when the active map doesn't draw the lane, so it's dimmed (split map D20).</summary>
+    public bool Dimmed { get; init; }
 }
 
 /// <summary>A window of data the Library knows for a lane (#711).</summary>
