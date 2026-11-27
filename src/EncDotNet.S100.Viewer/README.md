@@ -587,6 +587,11 @@ position, scale, overscale and DEPTHS describe the map under the pointer, or
 the active map when the pointer isn't over a map; a badge such as **Map 2**
 says which.
 
+To name a map, such as **S-57** or **Low water**, double-click its name in
+the header, or choose **Rename map…** in the **Split map** button's menu to
+rename the active map. Type the name and press Enter; Esc keeps the old name,
+and an empty name goes back to the number. Names are saved with the split.
+
 Each map is at least 320 pixels wide. When the window is too narrow for
 both, the map you aren't using folds to a strip with its number; click the
 strip to switch. To fold a map yourself, drag the splitter on past where

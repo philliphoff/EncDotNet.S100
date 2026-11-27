@@ -96,6 +96,7 @@ internal sealed class MapSplitViewModel : ViewModelBase
         CloseOtherMapsCommand = new RelayCommand(CloseSplit, () => IsSplit);
         SwapMapsCommand = new RelayCommand(Swap, () => IsSplit);
         ToggleLinkCommand = new RelayCommand(ToggleLink, () => IsSplit);
+        RenameActiveCommand = new RelayCommand(() => ActivePane?.BeginRename(), () => IsSplit);
 
         Link = new MapViewportLink(views);
         Link.IsLinkedChanged += (_, _) =>
@@ -142,6 +143,12 @@ internal sealed class MapSplitViewModel : ViewModelBase
     /// menu's Link views, View › Link Map Views ⌘⇧\; D13). Only while split.
     /// </summary>
     public IRelayCommand ToggleLinkCommand { get; }
+
+    /// <summary>
+    /// Starts renaming the active pane in its header, as double-clicking the
+    /// header's name does (the split menu's Rename, D19). Only while split.
+    /// </summary>
+    public IRelayCommand RenameActiveCommand { get; }
 
     /// <summary>The viewport link (D13, D14): one for the window in step 1.</summary>
     public MapViewportLink Link { get; }
@@ -410,6 +417,7 @@ internal sealed class MapSplitViewModel : ViewModelBase
         CloseOtherMapsCommand.NotifyCanExecuteChanged();
         SwapMapsCommand.NotifyCanExecuteChanged();
         ToggleLinkCommand.NotifyCanExecuteChanged();
+        RenameActiveCommand.NotifyCanExecuteChanged();
         UpdateFolding(force: true);
         _requestSave();
     }
@@ -463,6 +471,8 @@ internal sealed class MapPaneViewModel : ViewModelBase
     private bool _isFolded;
     private bool _isSplit;
     private bool _isLinked;
+    private bool _isRenaming;
+    private string _editedName = string.Empty;
 
     /// <summary>Creates a pane over <paramref name="view"/>.</summary>
     /// <param name="split">The split the pane belongs to.</param>
@@ -500,6 +510,7 @@ internal sealed class MapPaneViewModel : ViewModelBase
                 OnPropertyChanged(nameof(CloseText));
                 OnPropertyChanged(nameof(FoldedText));
                 OnPropertyChanged(nameof(UnfoldText));
+                OnPropertyChanged(nameof(RenameText));
             }
         }
     }
@@ -533,6 +544,9 @@ internal sealed class MapPaneViewModel : ViewModelBase
     /// <summary>The folded strip's tooltip and name: "Show Map 1".</summary>
     public string UnfoldText => string.Format(CultureInfo.CurrentCulture, Strings.SplitMap_UnfoldFormat, Label);
 
+    /// <summary>The name editor's accessible name and the title's tooltip: "Rename Map 2".</summary>
+    public string RenameText => string.Format(CultureInfo.CurrentCulture, Strings.SplitMap_RenameFormat, Label);
+
     /// <summary>Whether this is the active pane (D4, D5).</summary>
     public bool IsActive
     {
@@ -547,7 +561,11 @@ internal sealed class MapPaneViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _isFolded, value))
+            {
                 OnPropertyChanged(nameof(IsHeaderVisible));
+                if (value)
+                    CancelRename();
+            }
         }
     }
 
@@ -565,7 +583,11 @@ internal sealed class MapPaneViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _isSplit, value))
+            {
                 OnPropertyChanged(nameof(IsHeaderVisible));
+                if (!value)
+                    CancelRename();
+            }
         }
     }
 
@@ -585,6 +607,60 @@ internal sealed class MapPaneViewModel : ViewModelBase
 
     /// <summary>The chain's tooltip and name: "Link views" or "Unlink views".</summary>
     public string LinkText => _isLinked ? Strings.SplitMap_Unlink : Strings.SplitMap_Link;
+
+    /// <summary>
+    /// Whether the header's name is being edited in place (D19): the title
+    /// gives way to a text box until <see cref="CommitRename"/> or
+    /// <see cref="CancelRename"/>.
+    /// </summary>
+    public bool IsRenaming
+    {
+        get => _isRenaming;
+        private set => SetProperty(ref _isRenaming, value);
+    }
+
+    /// <summary>The text in the header's name editor while <see cref="IsRenaming"/>.</summary>
+    public string EditedName
+    {
+        get => _editedName;
+        set => SetProperty(ref _editedName, value ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Opens the header's name editor with the current title (double-clicking
+    /// the name, or the split menu's Rename; D19). Only while the header shows.
+    /// </summary>
+    public void BeginRename()
+    {
+        if (!IsHeaderVisible)
+            return;
+        EditedName = Title;
+        IsRenaming = true;
+    }
+
+    /// <summary>
+    /// Closes the editor and names the pane with its text (Enter, or focus
+    /// leaving the editor). A blank name goes back to the number ("Map 2").
+    /// </summary>
+    public void CommitRename()
+    {
+        if (!_isRenaming)
+            return;
+        IsRenaming = false;
+        // Typing the number back ("Map 2") is the same as no name: it
+        // follows the pane's number again after a close or swap.
+        var name = EditedName.Trim();
+        _split.SetName(Id, string.Equals(name, Label, StringComparison.CurrentCulture) ? null : name);
+    }
+
+    /// <summary>Closes the editor and keeps the name (Esc).</summary>
+    public void CancelRename()
+    {
+        if (!_isRenaming)
+            return;
+        IsRenaming = false;
+        EditedName = Title;
+    }
 
     /// <summary>Links or unlinks every pane's view, from this pane's header (D13).</summary>
     public IRelayCommand ToggleLinkCommand { get; }

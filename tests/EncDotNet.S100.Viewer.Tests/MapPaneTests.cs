@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.VisualTree;
 using EncDotNet.S100.Rendering.Engine.Prediction;
 using EncDotNet.S100.Viewer.Services;
@@ -30,14 +31,16 @@ public sealed class MapPaneTests
         public MapPaneViewport? GetViewport(IMapViewCapabilities view) => null;
     }
 
-    private static MapSplitViewModel TwoPanes()
+    private static MapSplitViewModel TwoPanes() => TwoPanes(() => { });
+
+    private static MapSplitViewModel TwoPanes(Action requestSave)
     {
         var views = new MapViews(
             new MapCapabilityAccessor<IMapViewportController>(),
             new MapCapabilityAccessor<IMapCoordinateConverter>(),
             new MapCapabilityAccessor<IImageRenderer>(),
             new DemandPlannerSet());
-        var split = new MapSplitViewModel(views, new Host(views), () => { });
+        var split = new MapSplitViewModel(views, new Host(views), requestSave);
         split.Restore(saved: null, restoreViews: true);
         split.OpenSplit();
         return split;
@@ -168,5 +171,136 @@ public sealed class MapPaneTests
 
         Assert.False(split.IsLinked);
         Assert.False(host.Find<ToggleButton>("MapPane.map-1.Link").IsChecked);
+    }
+
+    private static TextBox StartRenaming(ViewHost host, string id)
+    {
+        host.DoubleClick(host.Find<TextBlock>($"MapPane.{id}.Title"));
+        var editor = host.Find<TextBox>($"MapPane.{id}.NameEditor");
+        Assert.True(editor.IsEffectivelyVisible);
+        Assert.False(host.IsShown($"MapPane.{id}.Title"));
+        Assert.True(editor.IsFocused);
+        return editor;
+    }
+
+    private static void ReplaceText(ViewHost host, TextBox editor, string text)
+    {
+        // The editor opens with the title selected, so typing replaces it.
+        Assert.Equal(editor.Text?.Length ?? 0, editor.SelectionEnd - editor.SelectionStart);
+        if (text.Length == 0)
+            host.Press(PhysicalKey.Backspace);
+        else
+            host.Type(text);
+    }
+
+    [AvaloniaFact]
+    public void Double_clicking_the_header_name_renames_the_pane_and_Enter_commits()
+    {
+        // D19: double-click the name, type, Enter.
+        var saves = 0;
+        var split = TwoPanes(() => saves++);
+        var (host, _, _) = Show(split);
+        using var _h = host;
+        var before = saves;
+
+        var editor = StartRenaming(host, "map-1");
+        Assert.Equal("Map 1", editor.Text);
+        Assert.Equal("Rename Map 1", Avalonia.Automation.AutomationProperties.GetName(editor));
+        ReplaceText(host, editor, "S-57");
+        host.Press(PhysicalKey.Enter);
+
+        Assert.False(editor.IsEffectivelyVisible);
+        Assert.True(host.IsShown("MapPane.map-1.Title"));
+        Assert.Equal("S-57", host.Find<TextBlock>("MapPane.map-1.Title").Text);
+        Assert.Equal("S-57", split.Panes[0].Name);
+        Assert.True(saves > before);
+
+        // Saved with the layout.
+        var saved = new MapLayoutSettings();
+        split.WriteTo(saved);
+        Assert.Equal(["S-57", null], saved.Panes.Select(p => p.Name));
+    }
+
+    [AvaloniaFact]
+    public void Esc_cancels_a_rename_and_keeps_the_name()
+    {
+        var split = TwoPanes();
+        split.SetName(split.Panes[1].Id, "Low water");
+        var (host, _, _) = Show(split);
+        using var _h = host;
+        // The main window binds Escape (leave pick mode); the editor still gets it.
+        var windowEscapes = 0;
+        host.Window.KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.Escape),
+            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => windowEscapes++),
+        });
+
+        var editor = StartRenaming(host, "map-2");
+        Assert.Equal("Low water", editor.Text);
+        ReplaceText(host, editor, "Something else");
+        host.Press(PhysicalKey.Escape);
+
+        Assert.False(editor.IsEffectivelyVisible);
+        Assert.Equal("Low water", host.Find<TextBlock>("MapPane.map-2.Title").Text);
+        Assert.Equal("Low water", split.Panes[1].Name);
+    }
+
+    [AvaloniaFact]
+    public void An_empty_name_restores_the_default()
+    {
+        var split = TwoPanes();
+        split.SetName(split.Panes[1].Id, "Low water");
+        var (host, _, _) = Show(split);
+        using var _h = host;
+
+        var editor = StartRenaming(host, "map-2");
+        ReplaceText(host, editor, string.Empty);
+        Assert.Equal(string.Empty, editor.Text);
+        host.Press(PhysicalKey.Enter);
+
+        Assert.Null(split.Panes[1].Name);
+        Assert.Equal("Map 2", host.Find<TextBlock>("MapPane.map-2.Title").Text);
+        var saved = new MapLayoutSettings();
+        split.WriteTo(saved);
+        Assert.All(saved.Panes, p => Assert.Null(p.Name));
+    }
+
+    [AvaloniaFact]
+    public void The_split_menu_Rename_edits_the_active_pane()
+    {
+        // The split menu is a flyout, as in MainWindow: closing it hands
+        // focus back to its button, which mustn't commit the editor at once.
+        var split = TwoPanes();
+        var left = new MapPane();
+        var right = new MapPane();
+        left.Bind(split.Panes[0]);
+        right.Bind(split.Panes[1]);
+        var rename = new MenuItem { Header = "Rename map…", Command = split.RenameActiveCommand };
+        var menuButton = new Button { Content = "▾", Flyout = new MenuFlyout { Items = { rename } } };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,*") };
+        Grid.SetRow(left, 1);
+        Grid.SetRow(right, 1);
+        Grid.SetColumn(right, 1);
+        grid.Children.Add(menuButton);
+        grid.Children.Add(left);
+        grid.Children.Add(right);
+        using var host = ViewHost.Show(grid, width: 900, height: 500);
+        Assert.True(split.RenameActiveCommand.CanExecute(null));
+
+        host.Click(menuButton);
+        host.Click(rename);
+        host.Settle();
+
+        // map-2 is active after the split opens.
+        Assert.True(host.IsShown("MapPane.map-2.NameEditor"));
+        Assert.False(host.IsShown("MapPane.map-1.NameEditor"));
+        Assert.True(host.Find<TextBox>("MapPane.map-2.NameEditor").IsFocused);
+        host.Type("Tide");
+        host.Press(PhysicalKey.Enter);
+        Assert.Equal("Tide", split.Panes[1].Name);
+
+        split.CloseSplit();
+        Assert.False(split.RenameActiveCommand.CanExecute(null));
     }
 }

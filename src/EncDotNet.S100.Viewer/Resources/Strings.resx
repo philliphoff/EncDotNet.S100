@@ -10590,6 +10590,14 @@
     <value>Swap maps</value>
     <comment>Split menu: swaps the panes' places</comment>
   </data>
+  <data name="SplitMap_Rename" xml:space="preserve">
+    <value>Rename map…</value>
+    <comment>Split menu: edits the active pane's name in its header (D19)</comment>
+  </data>
+  <data name="SplitMap_RenameFormat" xml:space="preserve">
+    <value>Rename {0}</value>
+    <comment>Pane header: the name editor's accessible name and the title's tooltip; {0} is "Map 2" (D19)</comment>
+  </data>
   <data name="Menu_SplitMap" xml:space="preserve">
     <value>Split Map</value>
     <comment>View › Split Map (⌘\) (D1)</comment>
