@@ -75,6 +75,19 @@
         <Style Selector="Button.warning /template/ ContentPresenter">
             <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
         </Style>
+        <!-- A lane's pane chips (split map D20): grey, the active pane's filled in the accent colour, as the pane header's chip (D5). -->
+        <Style Selector="Border.laneChip">
+            <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Border.laneChip TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Border.laneChip.active">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Border.laneChip.active TextBlock">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
         <!-- Lanes (#710, handoff E1–E2). -->
         <Style Selector="Button.LaneGroup">
             <Setter Property="Background" Value="Transparent" />
@@ -167,9 +180,11 @@
         <!-- One lane: label column (swatch, code, sub, tag; layer time below)
              and its data on the shared axis (handoff E1, E2). -->
         <DataTemplate x:Key="LaneTemplate" x:DataType="vm:TimelineLaneViewModel">
+            <!-- A lane the active pane doesn't draw is dimmed in place (split map D20). -->
             <Grid ColumnDefinitions="248,*"
                   Height="34"
                   Background="Transparent"
+                  Opacity="{Binding LaneOpacity}"
                   ToolTip.Tip="{Binding Tooltip}">
                 <DockPanel Grid.Column="0" Margin="14,0,8,0">
                     <Border DockPanel.Dock="Left"
@@ -187,6 +202,40 @@
                                        FontSize="12"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center" />
+                            <!-- While split, the number chips of the panes that
+                                 draw the lane (split map D20); the active pane's
+                                 is filled, as in the pane header (D5). -->
+                            <ItemsControl DockPanel.Dock="Left"
+                                          ItemsSource="{Binding Chips}"
+                                          IsVisible="{Binding HasChips}"
+                                          Margin="6,0,0,0"
+                                          VerticalAlignment="Center">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:TimelineLaneChip">
+                                        <Border Classes="laneChip"
+                                                Classes.active="{Binding IsActive}"
+                                                CornerRadius="3"
+                                                MinWidth="14"
+                                                Height="14"
+                                                Padding="3,0"
+                                                AutomationProperties.AutomationId="Timeline.Lane.Chip"
+                                                AutomationProperties.Name="{Binding Name}"
+                                                AutomationProperties.HelpText="{Binding Tooltip}"
+                                                ToolTip.Tip="{Binding Tooltip}">
+                                            <TextBlock Text="{Binding Number}"
+                                                       FontSize="9.5"
+                                                       FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <!-- The Library's tags (#711 G3): New run before Expired. -->
                             <Border DockPanel.Dock="Right"
                                     Classes="ExpiredTag"
