@@ -455,6 +455,7 @@ internal sealed class MapView : IMapViewCapabilities, ILinkableMapView, IMapView
         // wide-spread exchange set still shows where its members are (#446).
         _extentIndicatorController = new DatasetExtentIndicatorController(
             Host,
+            Id,
             viewModel.Datasets,
             appearance,
             viewerSettingsService,

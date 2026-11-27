@@ -120,8 +120,8 @@ public sealed class DatasetsViewTests
         Assert.Equal([cell, other], datasets.Entries);
 
         host.Click(host.Find<Button>("Datasets.Row.ToggleVisibility", Row(host, cell)));
-        Assert.False(cell.IsVisible);
-        Assert.True(other.IsVisible);
+        Assert.False(cell.IsVisibleAnywhere);
+        Assert.True(other.IsVisibleAnywhere);
 
         host.Click(host.Find<Button>("Datasets.Row.MoveDown", Row(host, cell)));
         Assert.Equal([other, cell], datasets.Entries);

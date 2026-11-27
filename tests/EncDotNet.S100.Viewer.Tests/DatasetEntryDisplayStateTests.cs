@@ -20,7 +20,7 @@ public class DatasetEntryDisplayStateTests
     {
         var entry = new DatasetEntry("/tmp/x.000", "S-101");
 
-        Assert.True(entry.IsVisible);
+        Assert.True(entry.IsVisibleAnywhere);
         Assert.Equal(1.0, entry.Opacity);
         Assert.Equal(1.0, entry.RowOpacity);
     }
@@ -32,11 +32,11 @@ public class DatasetEntryDisplayStateTests
         var observed = new List<string?>();
         entry.PropertyChanged += (_, e) => observed.Add(e.PropertyName);
 
-        entry.IsVisible = false;
+        entry.SetVisible(false);
 
-        Assert.False(entry.IsVisible);
+        Assert.False(entry.IsVisibleAnywhere);
         Assert.Equal(0.5, entry.RowOpacity);
-        Assert.Contains(nameof(DatasetEntry.IsVisible), observed);
+        Assert.Contains(nameof(DatasetEntry.IsVisibleAnywhere), observed);
         Assert.Contains(nameof(DatasetEntry.RowOpacity), observed);
     }
 
@@ -73,7 +73,6 @@ public class DatasetEntryDisplayStateTests
     {
         var entry = new DatasetEntry("/tmp/x.h5", "S-111")
         {
-            IsVisible = false,
             IsActive = true,
             Opacity = 0.6,
             AvailableTimes =
@@ -81,6 +80,7 @@ public class DatasetEntryDisplayStateTests
                 new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc),
             ],
         };
+        entry.SetVisible(false);
         entry.SubLayers.Add(new DatasetSubLayer("s111.arrows", "Arrows"));
         entry.SetLoadedState(new DatasetMetadata
         {
@@ -88,7 +88,7 @@ public class DatasetEntryDisplayStateTests
         });
 
         entry.IsActive = false;
-        entry.IsVisible = true;
+        entry.SetVisible(true);
         entry.Opacity = 0.4;
         entry.CurrentTime = entry.AvailableTimes[0];
         entry.SubLayers[0].IsVisible = false;

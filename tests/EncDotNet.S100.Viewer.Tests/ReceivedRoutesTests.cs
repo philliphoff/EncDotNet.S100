@@ -125,7 +125,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         Assert.Equal(waypoints, route.Waypoints.Count);
         Assert.Same(route, h.Routes.Routes.ActiveRoute);
         Assert.Same(entry, h.Service.DatasetOf(route));
-        Assert.True(entry.IsVisible);
+        Assert.True(entry.IsVisibleAnywhere);
         Assert.Throws<RouteReadOnlyException>(() => route.History.Execute("edit", () => route.AppendWaypoint(new GeoPosition(0, 0))));
     }
 
@@ -342,12 +342,12 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         Assert.False(ReceivedRoutesService.DrawsWithRouteRenderer(h.Routes, route));
 
         route.SetDisplayMode(RouteDisplayMode.Planning);
-        Assert.False(entry.IsVisible);
+        Assert.False(entry.IsVisibleAnywhere);
         Assert.True(ReceivedRoutesService.DrawsWithRouteRenderer(h.Routes, route));
 
-        entry.IsVisible = true;
+        entry.SetVisible(true);
         Assert.Equal(RouteDisplayMode.Native, route.DisplayMode);
-        entry.IsVisible = false;
+        entry.SetVisible(false);
         Assert.Equal(RouteDisplayMode.Planning, route.DisplayMode);
 
         // Check route draws a Native route in Planning mode and keeps the
@@ -355,12 +355,12 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         route.SetDisplayMode(RouteDisplayMode.Native);
         h.Routes.IsCheckModeActive = true;
         Assert.True(ReceivedRoutesService.DrawsWithRouteRenderer(h.Routes, route));
-        Assert.True(entry.IsVisible);
+        Assert.True(entry.IsVisibleAnywhere);
         Assert.Equal(ReceivedRoutesService.CheckedViewingGroups, entry.ViewingGroups);
         Assert.Equal(RouteDisplayMode.Native, route.DisplayMode);
         h.Routes.IsCheckModeActive = false;
         Assert.False(ReceivedRoutesService.DrawsWithRouteRenderer(h.Routes, route));
-        Assert.True(entry.IsVisible);
+        Assert.True(entry.IsVisibleAnywhere);
         Assert.Null(entry.ViewingGroups);
     }
 
@@ -373,26 +373,26 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         var full = h.Open(Fixture("RTE-TEST-GFULL.s421.gml"));
         var fullRoute = h.Routes.Routes.ActiveRoute!;
         basicRoute.SetDisplayMode(RouteDisplayMode.Planning);
-        Assert.False(basic.IsVisible);
+        Assert.False(basic.IsVisibleAnywhere);
 
         // A Planning route's hidden dataset comes back with its action points
         // only; the other route's dataset is left alone.
         h.Routes.Routes.SetActiveRoute(basicRoute);
         h.Routes.IsCheckModeActive = true;
-        Assert.True(basic.IsVisible);
+        Assert.True(basic.IsVisibleAnywhere);
         Assert.Equal(ViewingGroupFilter.ShowOnly([52270]), basic.ViewingGroups);
-        Assert.True(full.IsVisible);
+        Assert.True(full.IsVisibleAnywhere);
         Assert.Null(full.ViewingGroups);
 
         // Checking another route moves the filter with it.
         h.Routes.Routes.SetActiveRoute(fullRoute);
-        Assert.False(basic.IsVisible);
+        Assert.False(basic.IsVisibleAnywhere);
         Assert.Null(basic.ViewingGroups);
         Assert.Equal(ReceivedRoutesService.CheckedViewingGroups, full.ViewingGroups);
 
         // Ending the check restores the whole dataset.
         h.Routes.IsCheckModeActive = false;
-        Assert.True(full.IsVisible);
+        Assert.True(full.IsVisibleAnywhere);
         Assert.Null(full.ViewingGroups);
         Assert.Equal(RouteDisplayMode.Native, fullRoute.DisplayMode);
     }
@@ -413,7 +413,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         Assert.False(h.Routes.IsCheckModeActive);
         Assert.Null(older.ViewingGroups);
         Assert.Null(newer.ViewingGroups);
-        Assert.True(newer.IsVisible);
+        Assert.True(newer.IsVisibleAnywhere);
     }
 
     [Fact]
@@ -575,7 +575,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         Assert.True(native.IsChecked);
         host.Click(planning);
         Assert.Equal(RouteDisplayMode.Planning, h.Routes.Routes.ActiveRoute!.DisplayMode);
-        Assert.False(entry.IsVisible);
+        Assert.False(entry.IsVisibleAnywhere);
         Assert.True(planning.IsChecked);
         Assert.False(native.IsChecked);
 

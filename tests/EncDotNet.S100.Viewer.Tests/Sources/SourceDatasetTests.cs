@@ -207,12 +207,12 @@ public sealed class SourceDatasetTests
         service.Attach(entry, processor);
         Assert.True(service.IsRunning(entry.Id));
 
-        entry.IsVisible = false;
+        entry.SetVisible(false);
         Assert.False(service.IsRunning(entry.Id));
         Assert.False(processor.IsActive);
 
         service.Detach(entry.Id);
-        entry.IsVisible = true;
+        entry.SetVisible(true);
         Assert.False(processor.IsActive);
     }
 
@@ -251,10 +251,10 @@ public sealed class SourceDatasetTests
         extension.Set(new SourceStatus(SourceStatusKind.WaitingForZoom, "Zoom in"));
         Assert.Equal("Zoom in", entry.SourceStatus.Text);
 
-        entry.IsVisible = false;
+        entry.SetVisible(false);
         Assert.Equal(SourceStatusKind.Paused, entry.SourceStatus.Kind);
 
-        entry.IsVisible = true;
+        entry.SetVisible(true);
         extension.Set(null);
         Assert.Equal(SourceStatusKind.Starting, entry.SourceStatus.Kind);
 
@@ -316,11 +316,11 @@ public sealed class SourceDatasetTests
         Assert.Equal(SourceStatusKind.Stale, entry.SourceStatus.Kind);
         Assert.True(entry.NeedsAttention);
 
-        entry.IsVisible = false;
+        entry.SetVisible(false);
         Assert.Equal(SourceStatusKind.Paused, entry.SourceStatus.Kind);
 
         service.Detach(entry.Id);
-        entry.IsVisible = true;
+        entry.SetVisible(true);
         time.Advance(TimeSpan.FromMinutes(1));
         Assert.Equal(SourceStatusKind.Paused, entry.SourceStatus.Kind);
     }

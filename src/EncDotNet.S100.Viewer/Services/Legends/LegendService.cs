@@ -267,7 +267,10 @@ internal sealed class LegendService : IDisposable
         {
             var item = stack[i];
             byId.TryGetValue(item.SourceDatasetId, out var dataset);
-            if (dataset is { IsVisible: false })
+            // The Legend follows the user's view: the active map's
+            // visibility once split map step 2 slice 3 (#1768) wires it; with
+            // one map they agree.
+            if (dataset is { IsVisibleAnywhere: false })
                 continue; // hidden by the user, so not drawn
             if (LegendOf(item) is not { } sub)
             {
@@ -535,7 +538,7 @@ internal sealed class LegendService : IDisposable
         if (hit.DatasetId is not { } datasetId || string.IsNullOrEmpty(hit.FeatureRef))
             return null;
         var dataset = _datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, datasetId, StringComparison.Ordinal));
-        if (dataset is { IsVisible: false })
+        if (dataset is { IsVisibleAnywhere: false })
             return null;
 
         var scale = ViewScale();
@@ -599,7 +602,7 @@ internal sealed class LegendService : IDisposable
             rowLabel,
             groupKey,
             _loader.CurrentStackEntries,
-            id => !entries.TryGetValue(id, out var e) || e.IsVisible,
+            id => !entries.TryGetValue(id, out var e) || e.IsVisibleAnywhere,
             id => processors.GetValueOrDefault(id),
             TimelineMapScope.ViewOf(_viewport?.Current),
             ViewScale(),
@@ -670,7 +673,7 @@ internal sealed class LegendService : IDisposable
             if (item.Item.Payload is not VectorStackPayload vector || !IsCatalogueProduct(vector))
                 continue;
             entries.TryGetValue(item.SourceDatasetId, out var dataset);
-            if (dataset is { IsVisible: false })
+            if (dataset is { IsVisibleAnywhere: false })
                 continue;
             var portrayedWith = dataset?.PortrayalSpec ?? vector.Result.Spec.Name;
             if (!string.Equals(portrayedWith, spec, StringComparison.OrdinalIgnoreCase))
@@ -815,7 +818,7 @@ internal sealed class LegendService : IDisposable
     {
         if (e.PropertyName is nameof(DatasetEntry.LayerTime)
             or nameof(DatasetEntry.MercatorExtent)
-            or nameof(DatasetEntry.IsVisible))
+            or nameof(DatasetEntry.IsVisibleAnywhere))
         {
             Invalidate();
         }

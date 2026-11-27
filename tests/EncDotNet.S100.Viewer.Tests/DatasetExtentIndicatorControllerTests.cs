@@ -21,6 +21,8 @@ public class DatasetExtentIndicatorControllerTests
     // historical name (kept stable across the reusable-module extraction).
     private const string LayerName = "Dataset Extent Indicators";
 
+    private static readonly MapViewId Map = new("map-1");
+
     private sealed class NoopLoader : IDatasetLoaderService
     {
         public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
@@ -59,7 +61,7 @@ public class DatasetExtentIndicatorControllerTests
     {
         var entry = vm.Add("/a.000", "S-101");
         entry.IsLoaded = true;
-        entry.IsVisible = true;
+        entry.SetVisible(true);
         entry.MercatorExtent = new MRect(0, 0, 100, 100);
         entry.ContentMaxVisibleResolution = 50.0;
         return entry;
@@ -79,7 +81,7 @@ public class DatasetExtentIndicatorControllerTests
         var vm = new DatasetsViewModel(new NoopLoader());
 
         using var controller = new DatasetExtentIndicatorController(
-            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
             marshal: a => a(),
             coalesce: a => a());
 
@@ -94,7 +96,7 @@ public class DatasetExtentIndicatorControllerTests
         var posted = new Queue<Action>();
         var entries = Enumerable.Range(0, 20).Select(i => LoadedOutOfScaleEntry(vm)).ToArray();
         using var controller = new DatasetExtentIndicatorController(
-            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
             marshal: posted.Enqueue,
             coalesce: posted.Enqueue);
         while (posted.TryDequeue(out var action))
@@ -118,7 +120,7 @@ public class DatasetExtentIndicatorControllerTests
         var host = new FakeMapHost();
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
-            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
             marshal: a => a(),
             coalesce: a => a());
 
@@ -133,7 +135,7 @@ public class DatasetExtentIndicatorControllerTests
         var host = new FakeMapHost();
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
-            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
             marshal: a => a(),
             coalesce: a => a());
 
@@ -151,13 +153,32 @@ public class DatasetExtentIndicatorControllerTests
         var host = new FakeMapHost();
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
-            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
             marshal: a => a(),
             coalesce: a => a());
 
         var entry = LoadedOutOfScaleEntry(vm);
-        entry.IsVisible = false;
+        entry.SetVisible(false);
 
+        Assert.Equal(0, FeatureCount(host));
+    }
+
+    [Fact]
+    public void EntryHiddenInAnotherMap_StillOutlinedInThisOne()
+    {
+        // Split map step 2 §1.1: a pane outlines what its own map shows.
+        var host = new FakeMapHost();
+        var vm = new DatasetsViewModel(new NoopLoader());
+        using var controller = new DatasetExtentIndicatorController(
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            marshal: a => a(),
+            coalesce: a => a());
+
+        var entry = LoadedOutOfScaleEntry(vm);
+        entry.SetVisibleIn(new MapViewId("map-2"), false);
+        Assert.Equal(1, FeatureCount(host));
+
+        entry.SetVisibleIn(Map, false);
         Assert.Equal(0, FeatureCount(host));
     }
 
@@ -168,7 +189,7 @@ public class DatasetExtentIndicatorControllerTests
         var vm = new DatasetsViewModel(new NoopLoader());
         var settings = NewSettings(indicatorsOn: true);
         using var controller = new DatasetExtentIndicatorController(
-            host, vm, new StubMeasureOverlayAppearanceProvider(), settings,
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), settings,
             marshal: a => a(),
             coalesce: a => a());
 
@@ -185,7 +206,7 @@ public class DatasetExtentIndicatorControllerTests
         var host = new FakeMapHost();
         var vm = new DatasetsViewModel(new NoopLoader());
         var controller = new DatasetExtentIndicatorController(
-            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
             marshal: a => a(),
             coalesce: a => a());
 
@@ -221,14 +242,14 @@ public class DatasetExtentIndicatorControllerTests
         var host = new FakeMapHost();
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
-            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
             marshal: a => a(),
             coalesce: a => a());
 
         var entry = DeferredEntry(vm);
 
         Assert.True(entry.IsDeferred);
-        Assert.True(entry.IsVisible);
+        Assert.True(entry.IsVisibleAnywhere);
         Assert.Equal(1, FeatureCount(host));
     }
 
@@ -238,7 +259,7 @@ public class DatasetExtentIndicatorControllerTests
         var host = new FakeMapHost();
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
-            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            host, Map, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
             marshal: a => a(),
             coalesce: a => a());
 
@@ -247,7 +268,7 @@ public class DatasetExtentIndicatorControllerTests
 
         // Hiding a deferred cell must remove its outline too, consistent with
         // hiding a loaded dataset (issue #458).
-        entry.IsVisible = false;
+        entry.SetVisible(false);
         Assert.Equal(0, FeatureCount(host));
     }
 }

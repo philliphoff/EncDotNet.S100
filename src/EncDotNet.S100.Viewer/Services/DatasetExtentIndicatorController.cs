@@ -24,7 +24,8 @@ namespace EncDotNet.S100.Viewer.Services;
 /// subscription required).
 /// </para>
 /// <para>
-/// An entry qualifies only when it is loaded, visible, carries a captured
+/// An entry qualifies only when it is loaded, visible in this controller's
+/// own map (split map step 2 §1.1), carries a captured
 /// <see cref="DatasetEntry.MercatorExtent"/>, and has a non-null content cutoff
 /// (i.e. a display-scale minimum that actually suppresses it). Datasets that
 /// never disappear on zoom-out contribute nothing. The whole overlay is
@@ -42,6 +43,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     private const string OverlayLayerName = "Dataset Extent Indicators";
 
     private readonly IMapLayerCollection _layers;
+    private readonly MapViewId _map;
     private readonly DatasetsViewModel _datasets;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
     private readonly ViewerSettingsService _settings;
@@ -61,6 +63,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     /// initialised (basemap added) so the overlay lands above the basemap.
     /// </summary>
     /// <param name="layers">Target map layer collection.</param>
+    /// <param name="map">The map that owns <paramref name="layers"/>; only datasets shown in it are outlined.</param>
     /// <param name="datasets">The datasets view-model to observe.</param>
     /// <param name="appearance">Accent/theme provider for the border colour.</param>
     /// <param name="settings">Settings service supplying the on/off toggle.</param>
@@ -68,6 +71,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     /// <param name="coalesce">Queues a rebuild for later on the UI thread, even from it (the app passes <see cref="UiThread.Post"/>).</param>
     public DatasetExtentIndicatorController(
         IMapLayerCollection layers,
+        MapViewId map,
         DatasetsViewModel datasets,
         IMeasureOverlayAppearanceProvider appearance,
         ViewerSettingsService settings,
@@ -82,6 +86,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         ArgumentNullException.ThrowIfNull(coalesce);
 
         _layers = layers;
+        _map = map;
         _datasets = datasets;
         _appearance = appearance;
         _settings = settings;
@@ -145,7 +150,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
             or nameof(DatasetEntry.ContentMaxVisibleResolution)
             or nameof(DatasetEntry.IsLoaded)
             or nameof(DatasetEntry.IsDeferred)
-            or nameof(DatasetEntry.IsVisible)
+            or nameof(DatasetEntry.IsVisibleAnywhere)
             or nameof(DatasetEntry.IsHiddenByDisplay))
         {
             ScheduleRebuild();
@@ -186,7 +191,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                 // outline, consistent with a hidden loaded dataset.
                 if (entry.IsDeferred)
                 {
-                    if (entry.IsVisible && !entry.IsHiddenByDisplay && entry.GeographicBounds is { } bounds)
+                    if (entry.IsVisibleIn(_map) && !entry.IsHiddenByDisplay && entry.GeographicBounds is { } bounds)
                     {
                         foreach (var deferredExtent in ToMercatorExtents(bounds))
                             indicators.Add(new S100DatasetExtentIndicator(deferredExtent, 0.0));
@@ -194,7 +199,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                     continue;
                 }
 
-                if (!entry.IsLoaded || !entry.IsVisible || entry.IsHiddenByDisplay)
+                if (!entry.IsLoaded || !entry.IsVisibleIn(_map) || entry.IsHiddenByDisplay)
                     continue;
                 if (entry.MercatorExtent is not { } extent)
                     continue;

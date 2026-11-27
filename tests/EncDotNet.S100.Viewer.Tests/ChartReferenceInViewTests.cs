@@ -229,7 +229,7 @@ public sealed class ChartReferenceInViewTests : IDisposable
     public void A_hidden_dataset_draws_nothing_in_view()
     {
         using var scene = new Scene();
-        scene.Dataset.IsVisible = false;
+        scene.Dataset.SetVisible(false);
 
         var drawn = scene.Service.DrawnInView("S-101");
 

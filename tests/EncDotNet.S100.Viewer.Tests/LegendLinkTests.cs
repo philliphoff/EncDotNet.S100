@@ -288,7 +288,7 @@ public sealed class LegendLinkTests : IDisposable
         Assert.False(report.HasLegendKey);
 
         // Hidden by the user, the wave grid has no section, so no row either.
-        scene.Wave.IsVisible = false;
+        scene.Wave.SetVisible(false);
         report.SetPicks([scene.WaveHit("1.2")]);
         Assert.False(report.HasLegendKey);
 
@@ -427,7 +427,7 @@ public sealed class LegendLinkTests : IDisposable
         // A dataset that stops drawing loses the item.
         var changed = 0;
         datasets.ShowLegendCommand.CanExecuteChanged += (_, _) => changed++;
-        scene.Wave.IsVisible = false;
+        scene.Wave.SetVisible(false);
         Assert.True(changed > 0);
         Assert.False(datasets.ShowLegendCommand.CanExecute(scene.Wave));
     }

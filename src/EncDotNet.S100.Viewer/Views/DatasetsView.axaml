@@ -378,9 +378,9 @@
                                                 VerticalAlignment="Center">
                                             <Panel>
                                                 <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="14"
-                                                               IsVisible="{Binding IsVisible}" />
+                                                               IsVisible="{Binding IsVisibleAnywhere}" />
                                                 <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" FontSize="14"
-                                                               IsVisible="{Binding !IsVisible}" />
+                                                               IsVisible="{Binding !IsVisibleAnywhere}" />
                                             </Panel>
                                         </Button>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -603,11 +603,11 @@
                                         <ic:FluentIcon Icon="Eye"
                                                        IconVariant="Regular"
                                                        FontSize="16"
-                                                       IsVisible="{Binding IsVisible}" />
+                                                       IsVisible="{Binding IsVisibleAnywhere}" />
                                         <ic:FluentIcon Icon="EyeOff"
                                                        IconVariant="Regular"
                                                        FontSize="16"
-                                                       IsVisible="{Binding !IsVisible}" />
+                                                       IsVisible="{Binding !IsVisibleAnywhere}" />
                                     </Panel>
                                 </Button>
                                 <StackPanel Grid.Column="1"
