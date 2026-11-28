@@ -219,7 +219,11 @@ internal sealed class ReceivedRoutesService
         var (route, warning) = Admit(received, entry);
         entry.RouteWarning = warning;
         if (route is not null && ReferenceEquals(route, received))
+        {
             entry.PropertyChanged += OnEntryPropertyChanged;
+            // Its eye is the route's display mode, for every pane (split map step 2 Q4).
+            entry.HasOneEye = true;
+        }
         return (route, warning);
     }
 
@@ -268,6 +272,7 @@ internal sealed class ReceivedRoutesService
             {
                 olderEntry.PropertyChanged -= OnEntryPropertyChanged;
                 olderEntry.ViewingGroups = null;
+                olderEntry.HasOneEye = false;
             }
             _datasets.Remove(existing);
             _fileRoutes.Remove(existing);
@@ -291,6 +296,7 @@ internal sealed class ReceivedRoutesService
         if (RouteOf(entry) is not { } route)
             return;
         entry.PropertyChanged -= OnEntryPropertyChanged;
+        entry.HasOneEye = false;
         _datasets.Remove(route);
         EndCheckIfChecked(route, announce: true);
         _routes.Routes.Remove(route);
@@ -321,6 +327,7 @@ internal sealed class ReceivedRoutesService
         foreach (var (route, entry) in _datasets.Where(p => !_routes.Routes.Routes.Contains(p.Key)).ToList())
         {
             entry.PropertyChanged -= OnEntryPropertyChanged;
+            entry.HasOneEye = false;
             _datasets.Remove(route);
             _closeDataset?.Invoke(entry);
         }

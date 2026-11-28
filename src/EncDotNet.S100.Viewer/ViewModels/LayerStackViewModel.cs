@@ -89,6 +89,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
     private readonly Func<string, string?>? _inactiveReason;
     private readonly Action<string>? _showLegend;
     private readonly Func<string, string?>? _dynamicLegend;
+    private readonly DatasetsViewModel? _datasets;
 
     public LayerStackViewModel(
         IDatasetLoaderService loader,
@@ -100,6 +101,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
+        _datasets = datasets;
         if (displayCombinations is not null && datasets is not null)
         {
             // "Not in Pilotage" on the Active toggle of a dataset the active
@@ -183,11 +185,15 @@ internal sealed class LayerStackViewModel : ViewModelBase
                 continue;
 
             // Dataset rows: highest WithinPlanePriority first so the
-            // tree reads like the paint stack — top wins.
+            // tree reads like the paint stack — top wins. Each carries its
+            // dataset's pane chips while split (split map step 2 §2.4, D18).
             var datasetChildren = planeEntriesList
                 .OrderByDescending(e => e.WithinPlanePriority)
                 .ThenBy(e => e.SourceDatasetId, StringComparer.Ordinal)
-                .Select(e => (ViewModelBase)new LayerStackEntryViewModel(_loader, e, _inactiveReason, _showLegend));
+                .Select(e => (ViewModelBase)new LayerStackEntryViewModel(_loader, e, _inactiveReason, _showLegend)
+                {
+                    Dataset = _datasets?.Entries.FirstOrDefault(d => d.Id.Value == e.SourceDatasetId),
+                });
 
             // Dynamic rows: placed below the dataset rows in the panel.
             var dynamicChildren = dynamicForPlane
@@ -373,6 +379,13 @@ internal sealed class LayerStackEntryViewModel : ViewModelBase
     public string? SourceFeatureType => Entry.SourceFeatureType;
 
     public bool HasSourceFeatureType => !string.IsNullOrEmpty(Entry.SourceFeatureType);
+
+    /// <summary>
+    /// The row's dataset in Datasets, whose pane chips the row shows while the
+    /// map is split (split map step 2 §2.4, D18); null when Datasets doesn't
+    /// list it.
+    /// </summary>
+    public DatasetEntry? Dataset { get; init; }
 
     public int WithinPlanePriority => Entry.WithinPlanePriority;
 

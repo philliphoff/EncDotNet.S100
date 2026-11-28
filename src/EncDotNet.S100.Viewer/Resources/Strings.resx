@@ -10646,4 +10646,36 @@
     <value>Link Map Views</value>
     <comment>View › Link Map Views (⌘⇧\) (D1, D13)</comment>
   </data>
+  <data name="SplitMap_ChipShownTooltipFormat" xml:space="preserve">
+    <value>Shown in {0}. Click to hide it there. {1} to show it only there.</value>
+    <comment>Tooltip of a pane's number chip on a Datasets row (split map D18). {0} is the pane's name, {1} is SplitMap_AltClick or SplitMap_OptionClick</comment>
+  </data>
+  <data name="SplitMap_ChipHiddenTooltipFormat" xml:space="preserve">
+    <value>Hidden in {0}. Click to show it there. {1} to show it only there.</value>
+    <comment>Tooltip of a pane's number chip on a Datasets row (split map D18). {0} is the pane's name, {1} is SplitMap_AltClick or SplitMap_OptionClick</comment>
+  </data>
+  <data name="SplitMap_ChipSomeTooltipFormat" xml:space="preserve">
+    <value>Some cells shown in {0}. Click to show them all there. {1} to show them only there.</value>
+    <comment>Tooltip of a half-filled pane chip on an exchange-set row (split map step 2 Q2). {0} is the pane's name, {1} is SplitMap_AltClick or SplitMap_OptionClick</comment>
+  </data>
+  <data name="SplitMap_AltClick" xml:space="preserve">
+    <value>Alt-click</value>
+    <comment>The Alt-click gesture in a pane chip's tooltip (Windows and Linux)</comment>
+  </data>
+  <data name="SplitMap_OptionClick" xml:space="preserve">
+    <value>Option-click</value>
+    <comment>The Option-click gesture in a pane chip's tooltip (macOS)</comment>
+  </data>
+  <data name="Menu_ShowIn" xml:space="preserve">
+    <value>Show in</value>
+    <comment>Datasets row menu: submenu choosing which map panes show the dataset (split map D18)</comment>
+  </data>
+  <data name="Menu_ShowOnlyInFormat" xml:space="preserve">
+    <value>Only {0}</value>
+    <comment>Datasets row menu, Show in: show the dataset in that pane only, e.g. Only Map 2</comment>
+  </data>
+  <data name="Menu_ShowInEveryMap" xml:space="preserve">
+    <value>Every map</value>
+    <comment>Datasets row menu, Show in: show the dataset in every map pane</comment>
+  </data>
 </root>

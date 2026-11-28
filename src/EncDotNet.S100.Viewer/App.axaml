@@ -221,6 +221,7 @@
 
         <!-- The AML tag and protective-marking chips (#1236). -->
         <StyleInclude Source="avares://SoundCharts/Views/AmlChips.axaml" />
+        <StyleInclude Source="avares://SoundCharts/Views/PaneChip.axaml" />
 
         <!-- Segmented controls, kind tags and toolbar icon buttons, shared across the viewer. -->
         <StyleInclude Source="avares://SoundCharts/Views/PanelStyles.axaml" />
