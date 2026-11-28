@@ -112,6 +112,13 @@
                                                 <StackPanel Grid.Column="1"
                                                             VerticalAlignment="Center"
                                                             Spacing="0">
+                                                    <!-- While split, the dataset's pane chips (D18); the
+                                                         Active toggle stays one global switch (D26). -->
+                                                    <views:PaneChipStrip Chips="{Binding Dataset.PaneChips, FallbackValue={x:Null}}"
+                                                                         ChipAutomationId="LayerStack.Entry.Chip"
+                                                                         HorizontalAlignment="Left"
+                                                                         Margin="0,0,0,2"
+                                                                         IsVisible="{Binding Dataset.HasPaneChips, FallbackValue=False}" />
                                                     <TextBlock Text="{Binding DatasetLabel}"
                                                                FontSize="12"
                                                                ToolTip.Tip="{Binding DatasetId}"

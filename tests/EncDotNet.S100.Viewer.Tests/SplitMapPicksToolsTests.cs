@@ -106,6 +106,8 @@ public sealed class SplitMapPicksToolsTests
         },
         isVisible: visible);
 
+    private static void Inline(Action action) => action();
+
     // What the loader does when the dataset is hidden or shown in one pane
     // (split map step 2 §2.2): the pane's session still holds it, hidden.
     private static void Show(MapViewsTests.FakeMapView view, bool visible)
@@ -273,7 +275,7 @@ public sealed class SplitMapPicksToolsTests
         var report = TestPickReport.Create();
         var selected = new List<string>();
         using var presenter = new PickMapPresencePresenter(
-            report, split.Services, new TestStationCharts.FixedTimeFormat(TimeFormat.Utc), selected.Add);
+            report, split.Services, new TestStationCharts.FixedTimeFormat(TimeFormat.Utc), selected.Add, Inline);
 
         PickLight(report);
 
@@ -294,6 +296,35 @@ public sealed class SplitMapPicksToolsTests
     }
 
     [AvaloniaFact]
+    public void Object_information_chips_follow_a_toggle_without_a_new_pick()
+    {
+        // Step 2 §2.6: hiding the dataset in a pane updates the chips at once,
+        // through the dispatch (a session's change can come off the UI thread).
+        var split = TwoPanes();
+        var report = TestPickReport.Create();
+        var posted = new List<Action>();
+        using var presenter = new PickMapPresencePresenter(
+            report, split.Services, new TestStationCharts.FixedTimeFormat(TimeFormat.Utc), _ => { }, posted.Add);
+        PickLight(report);
+        Assert.Equal(["Shown in Map 1", "Shown in Map 2"], report.ShownIn.Select(c => c.Text));
+
+        Show(split.Two, visible: false);
+
+        // Nothing changes until the dispatch runs the update.
+        Assert.Equal(["Shown in Map 1", "Shown in Map 2"], report.ShownIn.Select(c => c.Text));
+        Assert.NotEmpty(posted);
+        foreach (var action in posted.ToArray())
+            action();
+        Assert.Equal(["Shown in Map 1", "Hidden in Map 2"], report.ShownIn.Select(c => c.Text));
+
+        posted.Clear();
+        Show(split.Two, visible: true);
+        foreach (var action in posted.ToArray())
+            action();
+        Assert.Equal(["Shown in Map 1", "Shown in Map 2"], report.ShownIn.Select(c => c.Text));
+    }
+
+    [AvaloniaFact]
     public void Object_information_lists_the_other_maps_at_another_time()
     {
         // D11, step 3: a map at another time gets an Other maps row.
@@ -305,7 +336,7 @@ public sealed class SplitMapPicksToolsTests
         };
         var report = TestPickReport.Create();
         using var presenter = new PickMapPresencePresenter(
-            report, split.Services, new TestStationCharts.FixedTimeFormat(TimeFormat.Utc), _ => { });
+            report, split.Services, new TestStationCharts.FixedTimeFormat(TimeFormat.Utc), _ => { }, Inline);
 
         PickLight(report);
 
@@ -338,7 +369,7 @@ public sealed class SplitMapPicksToolsTests
         using var one = Highlight(oneLayers, report, split, split.One);
         using var two = Highlight(twoLayers, report, split, split.Two);
         using var presenter = new PickMapPresencePresenter(
-            report, split.Services, new TestStationCharts.FixedTimeFormat(TimeFormat.Utc), _ => { });
+            report, split.Services, new TestStationCharts.FixedTimeFormat(TimeFormat.Utc), _ => { }, Inline);
 
         report.SetPicks(new PickResult([Light()], new PickLocation(47.68, -122.41), Map: split.Two.Id));
 

@@ -227,6 +227,9 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
         // when the active pane doesn't (split map step 2 §2.6, D20, #1771).
         _timelinePanes = new TimelinePanes(_split, _viewModel.Datasets);
         _viewModel.Timeline.AttachPanes(_timelinePanes);
+        // While split, Datasets and Layer stack rows carry a number chip per
+        // pane in place of the eye (split map step 2 §2.6, D18, #1769).
+        _viewModel.Datasets.AttachPanes(_timelinePanes, UiThread.Post);
         _statusFocus = new MapStatusFocus(_mapViews);
         _statusFocus.Changed += (_, _) => OnStatusMapChanged();
         _splitServices = new MapSplitServices(
@@ -236,7 +239,8 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
             App.Services.GetRequiredService<PickReportViewModel>(),
             _splitServices,
             App.Services.GetRequiredService<ITimeFormatProvider>(),
-            SelectDatasetRow);
+            SelectDatasetRow,
+            UiThread.RunOrPost);
         SplitMapControls.DataContext = _split;
         // The MCP map tools (list_maps, set_split_map and the rest; D28, #1735).
         App.Services.GetRequiredService<MapSplitControllerAccessor>().Current =

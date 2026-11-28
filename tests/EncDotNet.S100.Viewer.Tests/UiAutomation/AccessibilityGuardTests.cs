@@ -18,11 +18,13 @@ public sealed class AccessibilityGuardTests
         "Button", "ToggleButton", "RepeatButton", "SplitButton", "DropDownButton", "HyperlinkButton",
         "RadioButton", "CheckBox", "ToggleSwitch", "TextBox", "AutoCompleteBox", "ComboBox", "Slider",
         "NumericUpDown", "ListBox", "TreeView", "TabItem", "MenuItem",
+        // The viewer's own: a map pane's number chip (split map D18).
+        "PaneChip",
     ];
 
     /// <summary>Controls whose automation name comes from their content.</summary>
     private static readonly HashSet<string> ButtonLike =
-        ["Button", "ToggleButton", "RepeatButton", "SplitButton", "DropDownButton", "HyperlinkButton"];
+        ["Button", "ToggleButton", "RepeatButton", "SplitButton", "DropDownButton", "HyperlinkButton", "PaneChip"];
 
     /// <summary>Controls a user enters or chooses a value with.</summary>
     private static readonly HashSet<string> Inputs =

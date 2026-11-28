@@ -275,7 +275,13 @@
                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
                                           RowDefinitions="Auto,Auto"
                                           ColumnSpacing="6">
+                                        <!-- While split, a chip per pane over all the set's cells (Q2, D18). -->
+                                        <views:PaneChipStrip Grid.Column="0"
+                                                             Chips="{Binding PaneChips}"
+                                                             ChipAutomationId="Datasets.Source.Chip"
+                                                             IsVisible="{Binding HasPaneChips}" />
                                         <Button Grid.Column="0"
+                                                IsVisible="{Binding ShowsEye}"
                                                 AutomationProperties.AutomationId="Datasets.Source.ToggleVisibility"
                                                 AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleExchangeSetVisibility}"
                                                 AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ToggleExchangeSetVisibility}"
@@ -368,7 +374,12 @@
                                 <DataTemplate DataType="vm:DatasetEntry">
                                     <Grid ColumnDefinitions="Auto,*,Auto"
                                           ColumnSpacing="6">
+                                        <views:PaneChipStrip Grid.Column="0"
+                                                             Chips="{Binding PaneChips}"
+                                                             ChipAutomationId="Datasets.Source.Dataset.Chip"
+                                                             IsVisible="{Binding HasPaneChips}" />
                                         <Button Grid.Column="0"
+                                                IsVisible="{Binding ShowsEye}"
                                                 AutomationProperties.AutomationId="Datasets.Source.Dataset.ToggleVisibility"
                                                 AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleDatasetVisibility}"
                                                 AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
@@ -538,7 +549,7 @@
                 </ListBox.Styles>
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:DatasetEntry">
-                        <Border Background="Transparent" Focusable="True">
+                        <Border Background="Transparent" Focusable="True" ContextRequested="OnRowContextRequested">
                             <Border.KeyBindings>
                                 <KeyBinding Gesture="Alt+Up"
                                             Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
@@ -570,6 +581,14 @@
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).SendToBackCommand}"
                                               CommandParameter="{Binding}" />
                                     <Separator IsVisible="{Binding IsFile}" />
+                                    <!-- The chips' keyboard and automation path (D18): Map 1, Map 2,
+                                         Only Map n, Every map. Filled when the menu opens. -->
+                                    <MenuItem Header="{x:Static loc:Strings.Menu_ShowIn}"
+                                              AutomationProperties.AutomationId="Datasets.RowMenu.ShowIn"
+                                              IsVisible="{Binding HasPaneChips}">
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_ShowInEveryMap}"
+                                                  AutomationProperties.AutomationId="Datasets.RowMenu.ShowIn.Every" />
+                                    </MenuItem>
                                     <MenuItem Header="{x:Static loc:Strings.Menu_IsolateDataset}"
                                               AutomationProperties.AutomationId="Datasets.RowMenu.Isolate"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).IsolateCommand}"
@@ -590,7 +609,16 @@
                                 </ContextMenu>
                             </Border.ContextMenu>
                             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+                                <!-- While split, the eye becomes a number chip per pane
+                                     (split map step 2 §2.6, D18); a received route keeps
+                                     its one eye (Q4). -->
+                                <views:PaneChipStrip Grid.Column="0"
+                                                     Margin="0,0,10,0"
+                                                     Chips="{Binding PaneChips}"
+                                                     ChipAutomationId="Datasets.Row.Chip"
+                                                     IsVisible="{Binding HasPaneChips}" />
                                 <Button Grid.Column="0"
+                                        IsVisible="{Binding ShowsEye}"
                                         AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleDatasetVisibility}"
                                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
                                         Classes="Icon"

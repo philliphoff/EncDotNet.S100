@@ -1,0 +1,68 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:EncDotNet.S100.Viewer.Views">
+
+    <!--
+      A map pane's number chip on a Datasets or Layer stack row (split map
+      step 2 §2.6, D18): filled in the accent colour where the pane shows the
+      row, outlined where it hides it, half-filled where it shows some of an
+      exchange set's cells (Q2). The pane header's chip (MapPane.axaml) and
+      the Timeline lane chips (TimelineView.axaml) use the same colours.
+    -->
+    <Style Selector="views|PaneChip">
+        <Setter Property="Focusable" Value="True" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="MinWidth" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Padding" Value="4,0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Chip"
+                        CornerRadius="3"
+                        BorderThickness="1"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        Background="{TemplateBinding Background}"
+                        ClipToBounds="True">
+                    <Grid ColumnDefinitions="*,*">
+                        <Border Name="PART_Half"
+                                Background="{DynamicResource AccentBrush}"
+                                Opacity="0.45"
+                                IsVisible="False" />
+                        <ContentPresenter Name="PART_Text"
+                                          Grid.ColumnSpan="2"
+                                          Content="{TemplateBinding Content}"
+                                          Padding="{TemplateBinding Padding}"
+                                          FontSize="10.5"
+                                          FontWeight="SemiBold"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="views|PaneChip:pointerover /template/ Border#PART_Chip">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="views|PaneChip:focus-visible /template/ Border#PART_Chip">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="views|PaneChip:checked">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="views|PaneChip:indeterminate">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+    </Style>
+    <Style Selector="views|PaneChip:indeterminate /template/ Border#PART_Half">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+</Styles>

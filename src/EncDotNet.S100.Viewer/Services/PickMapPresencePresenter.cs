@@ -21,6 +21,7 @@ internal sealed class PickMapPresencePresenter : IDisposable
     private readonly MapSplitServices _split;
     private readonly ITimeFormatProvider _timeFormat;
     private readonly Action<string> _selectDataset;
+    private readonly Action<Action> _dispatch;
     private IMapViewCapabilities? _pickedView;
     private bool _disposed;
 
@@ -28,16 +29,23 @@ internal sealed class PickMapPresencePresenter : IDisposable
     /// <param name="split">The maps and panes.</param>
     /// <param name="timeFormat">The Local/UTC setting, for the other maps' times.</param>
     /// <param name="selectDataset">Selects a dataset row in Datasets, by its session id (a hidden chip's click).</param>
+    /// <param name="dispatch">
+    /// Runs an update on the UI thread. A map's session can change what it
+    /// draws on any thread (<see cref="PickPresence.Changed"/>).
+    /// </param>
     public PickMapPresencePresenter(
         PickReportViewModel report,
         MapSplitServices split,
         ITimeFormatProvider timeFormat,
-        Action<string> selectDataset)
+        Action<string> selectDataset,
+        Action<Action> dispatch)
     {
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(split);
         ArgumentNullException.ThrowIfNull(timeFormat);
         ArgumentNullException.ThrowIfNull(selectDataset);
+        ArgumentNullException.ThrowIfNull(dispatch);
+        _dispatch = dispatch;
         _report = report;
         _split = split;
         _timeFormat = timeFormat;
@@ -46,6 +54,8 @@ internal sealed class PickMapPresencePresenter : IDisposable
         _report.PropertyChanged += OnReportChanged;
         _split.Split.LayoutChanged += OnChanged;
         _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
+        // A dataset shown or hidden in a pane changes the chips without a new pick.
+        _split.Picks.Changed += OnPresenceChanged;
         Update();
     }
 
@@ -72,6 +82,8 @@ internal sealed class PickMapPresencePresenter : IDisposable
     private void OnChanged(object? sender, EventArgs e) => Update();
 
     private void OnTimeFormatChanged(TimeFormat format) => Update();
+
+    private void OnPresenceChanged(object? sender, EventArgs e) => _dispatch(Update);
 
     /// <summary>Recomputes the chips and rows from the current pick and panes.</summary>
     public void Update()
@@ -136,5 +148,6 @@ internal sealed class PickMapPresencePresenter : IDisposable
         _report.PropertyChanged -= OnReportChanged;
         _split.Split.LayoutChanged -= OnChanged;
         _timeFormat.TimeFormatChanged -= OnTimeFormatChanged;
+        _split.Picks.Changed -= OnPresenceChanged;
     }
 }

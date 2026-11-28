@@ -1161,7 +1161,7 @@ internal sealed class DatasetSubLayer : ViewModelBase
     }
 }
 
-internal sealed class DatasetsViewModel : ViewModelBase
+internal sealed partial class DatasetsViewModel : ViewModelBase
 {
     private readonly IDatasetLoaderService _loader;
 

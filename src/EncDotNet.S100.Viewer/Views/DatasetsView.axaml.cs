@@ -1,3 +1,4 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -51,6 +52,65 @@ public partial class DatasetsView : UserControl
             item.Click += (_, _) => App.Services.GetService<Services.Sources.LiveFeedLibrary>()?.Subscribe(registration);
             flyout.Items.Add(item);
         }
+    }
+
+    /// <summary>
+    /// Fills the row menu's <b>Show in</b> with the panes (split map step 2
+    /// §2.6, D18): a checked item per pane that toggles the dataset there,
+    /// <b>Only Map n</b> per pane, and <b>Every map</b>. It is the keyboard
+    /// and automation path of the chips' click and Alt-click.
+    /// </summary>
+    private void OnRowContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        // Raised by a right-click and by the keyboard's context-menu key,
+        // before the row menu opens.
+        if (sender is Control { ContextMenu: { } menu, DataContext: DatasetEntry entry })
+            FillShowIn(menu, entry);
+    }
+
+    /// <summary>Fills <paramref name="menu"/>'s <b>Show in</b> submenu for <paramref name="entry"/>.</summary>
+    internal static void FillShowIn(ContextMenu menu, DatasetEntry entry)
+    {
+        if (menu.Items.OfType<MenuItem>().FirstOrDefault(i => AutomationProperties.GetAutomationId(i) == "Datasets.RowMenu.ShowIn") is not { } showIn)
+            return;
+        showIn.Items.Clear();
+        var chips = entry.PaneChips;
+        foreach (var chip in chips)
+        {
+            showIn.Items.Add(ShowInItem(
+                chip.Pane.Title,
+                "Datasets.RowMenu.ShowIn.Map",
+                chip.ToggleCommand,
+                isChecked: chip.IsShown == true));
+        }
+        if (chips.Count > 0)
+            showIn.Items.Add(new Separator());
+        foreach (var chip in chips)
+        {
+            showIn.Items.Add(ShowInItem(
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Menu_ShowOnlyInFormat, chip.Pane.Title),
+                "Datasets.RowMenu.ShowIn.Only",
+                chip.ShowOnlyCommand,
+                isChecked: null));
+        }
+        showIn.Items.Add(ShowInItem(
+            Strings.Menu_ShowInEveryMap,
+            "Datasets.RowMenu.ShowIn.Every",
+            new CommunityToolkit.Mvvm.Input.RelayCommand(() => entry.SetVisible(true)),
+            isChecked: null));
+    }
+
+    private static MenuItem ShowInItem(string header, string automationId, System.Windows.Input.ICommand command, bool? isChecked)
+    {
+        var item = new MenuItem { Header = header, Command = command };
+        if (isChecked is { } value)
+        {
+            item.ToggleType = MenuItemToggleType.CheckBox;
+            item.IsChecked = value;
+        }
+        AutomationProperties.SetAutomationId(item, automationId);
+        AutomationProperties.SetName(item, header);
+        return item;
     }
 
     private async void OnAddClick(object? sender, RoutedEventArgs e)

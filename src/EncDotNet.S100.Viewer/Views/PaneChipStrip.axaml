@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             x:Class="EncDotNet.S100.Viewer.Views.PaneChipStrip"
+             x:Name="Strip"
+             VerticalAlignment="Center">
+    <!-- A row's pane chips in reading order (split map step 2 §2.6, D18). -->
+    <ItemsControl ItemsSource="{Binding #Strip.Chips}">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="3" />
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:DatasetPaneChip">
+                <views:PaneChip Content="{Binding Number}"
+                                IsChecked="{Binding IsShown}"
+                                Command="{Binding ToggleCommand}"
+                                AltCommand="{Binding ShowOnlyCommand}"
+                                AutomationProperties.AutomationId="{Binding #Strip.ChipAutomationId}"
+                                AutomationProperties.Name="{Binding Name}"
+                                AutomationProperties.HelpText="{Binding Tooltip}"
+                                ToolTip.Tip="{Binding Tooltip}" />
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>
