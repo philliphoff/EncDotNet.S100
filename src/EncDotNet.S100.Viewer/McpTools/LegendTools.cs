@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Depth;
 using EncDotNet.S100.Viewer.Services.Legends;
 using ModelContextProtocol.Server;
 
@@ -80,40 +82,75 @@ internal sealed class GetLegendTool
 
     private readonly LegendService _service;
     private readonly PositionLegendService _position;
+    private readonly DepthBasisService _depthBasis;
+    private readonly MapViews _maps;
     private readonly IRouteEditInvoker _invoker;
 
-    public GetLegendTool(LegendService service, PositionLegendService position, IRouteEditInvoker invoker)
+    /// <summary>Creates the tool.</summary>
+    /// <param name="service">The Legend, which follows the active map.</param>
+    /// <param name="position">The position row (DEPTHS), which follows the active map.</param>
+    /// <param name="depthBasis">The depth basis, for another map's datum when no cell is at its centre.</param>
+    /// <param name="maps">The window's maps, for the map argument.</param>
+    /// <param name="invoker">Runs work on the UI thread.</param>
+    public GetLegendTool(LegendService service, PositionLegendService position, DepthBasisService depthBasis, MapViews maps, IRouteEditInvoker invoker)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(position);
+        ArgumentNullException.ThrowIfNull(depthBasis);
+        ArgumentNullException.ThrowIfNull(maps);
         ArgumentNullException.ThrowIfNull(invoker);
         _service = service;
         _position = position;
+        _depthBasis = depthBasis;
+        _maps = maps;
         _invoker = invoker;
     }
 
     /// <summary>Takes the current view, rebuilds the sections and the position row on the UI thread and returns them.</summary>
     /// <param name="all">True for every loaded product with a legend; false (default) for those in view.</param>
+    /// <param name="map">
+    /// The map to read, an id from <c>list_maps</c>; null for the active map,
+    /// which the Legend tab follows (split map step 2 §2.7).
+    /// </param>
     /// <param name="ct">Cancels the call.</param>
-    public async Task<ToolResult<LegendDto>> InvokeAsync(bool all = false, CancellationToken ct = default)
+    public async Task<ToolResult<LegendDto>> InvokeAsync(bool all = false, string? map = null, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        if (ViewerMapTargets.TryResolve(_maps, map, out var other) is { } error)
+            return ToolResult<LegendDto>.Err(error);
+        if (other is not null)
+            return ToolResult<LegendDto>.Ok(await ReadAsync(other, all, ct).ConfigureAwait(false));
+
         var position = await _invoker.InvokeAsync(() =>
         {
             _service.Refresh();
             return _position.RefreshAsync();
         }).ConfigureAwait(false);
         await position.WaitAsync(ct).ConfigureAwait(false);
-        var dto = await _invoker.InvokeAsync(() => ToDto(_service, _position.Current, all)).ConfigureAwait(false);
+        var dto = await _invoker.InvokeAsync(() => ToDto(_service, _service.Sections, _position.Current, all)).ConfigureAwait(false);
         return ToolResult<LegendDto>.Ok(dto);
     }
 
-    /// <summary>The wire shape of the service's state.</summary>
-    internal static LegendDto ToDto(LegendService service, PositionLegend position, bool all)
+    /// <summary>Builds the legend of a map that isn't active, from its own view and datasets.</summary>
+    private async Task<LegendDto> ReadAsync(IMapViewCapabilities view, bool all, CancellationToken ct)
+    {
+        var read = await _invoker.InvokeAsync(() =>
+        {
+            var viewport = view.Viewport.Current;
+            var sections = _service.SectionsFor(view.Id, view.DatasetSession.GetLayerStackEntries(), viewport);
+            var position = _position.ReadAsync(view.Id, viewport, _depthBasis.EvaluateFor(viewport));
+            return (sections, position);
+        }).ConfigureAwait(false);
+        var legend = await read.position.WaitAsync(ct).ConfigureAwait(false);
+        return await _invoker.InvokeAsync(() => ToDto(_service, read.sections, legend, all)).ConfigureAwait(false);
+    }
+
+    /// <summary>The wire shape of the service's state over <paramref name="sections"/>.</summary>
+    internal static LegendDto ToDto(LegendService service, IReadOnlyList<LegendSection> sections, PositionLegend position, bool all)
     {
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(sections);
         ArgumentNullException.ThrowIfNull(position);
-        var sections = service.Sections;
         return new LegendDto(
             service.IsTabShown,
             service.Palette.ToString(),
@@ -381,7 +418,7 @@ internal sealed class SetLegendTool
         }
         var result = await _invoker.InvokeAsync(() => new SetLegendResult(
             _tab.IsAllLoaded ? "all_loaded" : "in_view",
-            GetLegendTool.ToDto(_service, _position.Current, _tab.IsAllLoaded),
+            GetLegendTool.ToDto(_service, _service.Sections, _position.Current, _tab.IsAllLoaded),
             _find.Current is { } found ? LegendFindDto.From(found) : null)).ConfigureAwait(false);
         return ToolResult<SetLegendResult>.Ok(result);
     }
@@ -396,8 +433,9 @@ internal static class LegendMcpAdapter
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
             [Description("True to list every loaded product with a legend, in view or not (the Legend tab's All loaded); false or omitted for those in the map view.")] bool all = false,
+            [Description("The map to read, an id from list_maps such as 'map-2'; omit for the active map, which the Legend tab follows.")] string? map = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(all, ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(all, map, ct));
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = GetLegendTool.Name,
@@ -410,7 +448,10 @@ internal static class LegendMcpAdapter
                 + "sections in view; all: true lists every loaded one. Also returns whether the Legend tab is shown and how "
                 + "many loaded products are out of view, and the S-98 position legend at the view centre (the tab's fixed first "
                 + "row): depth unit, datum, safety contour, and the finest chart cell covering the centre with its edition, "
-                + "compilation scale, the display scale and any overscale; cell is omitted over no chart. Read-only; viewer-injected tool.",
+                + "compilation scale, the display scale and any overscale; cell is omitted over no chart. The Legend follows "
+                + "the active map: what it draws and its view. With the map split, 'map' reads another map's legend, from "
+                + "the datasets it draws and its view, without making it active; an unknown map fails with map_not_found. "
+                + "Read-only; viewer-injected tool.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

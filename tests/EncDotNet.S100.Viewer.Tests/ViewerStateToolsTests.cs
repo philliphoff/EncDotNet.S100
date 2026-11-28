@@ -193,7 +193,7 @@ public sealed class ViewerStateToolsTests
         var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
         var entry = new DatasetEntry("/data/route.gml", "S-421");
         datasets.Entries.Add(entry);
-        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, new MapSplitControllerAccessor(), Immediate));
 
         Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(entry.DisplayName, null, null), TestContext.Current.CancellationToken)).TryGetValue(out var none));
         Assert.Null(none!.ViewingGroups);
@@ -212,7 +212,7 @@ public sealed class ViewerStateToolsTests
         var entry = new DatasetEntry("/data/104US004SC1BO_20251217T12Z.h5", "S-104");
         entry.SetVisible(false);
         datasets.Entries.Add(entry);
-        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, new MapSplitControllerAccessor(), Immediate));
 
         var result = await tool.InvokeAsync(new SetDatasetStateRequest(entry.DisplayName, true, 0.5), TestContext.Current.CancellationToken);
 
@@ -228,7 +228,7 @@ public sealed class ViewerStateToolsTests
     public async Task Dataset_state_rejects_unknown_ids_and_bad_opacity()
     {
         var tool = new SetDatasetStateTool(new ViewerDatasetStateController(
-            new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate));
+            new DatasetsViewModel(new FakeDatasetLoaderService()), new MapSplitControllerAccessor(), Immediate));
 
         Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest("missing.h5", true, null), TestContext.Current.CancellationToken)).TryGetError(out var missing));
         Assert.Equal("dataset_not_found", missing!.Code);
@@ -246,7 +246,7 @@ public sealed class ViewerStateToolsTests
         datasets.Entries.Add(top);
         datasets.Entries.Add(middle);
         datasets.Entries.Add(bottom);
-        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, new MapSplitControllerAccessor(), Immediate));
 
         Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(bottom.DisplayName, null, null, "Front"), TestContext.Current.CancellationToken)).TryGetValue(out var front));
         Assert.Equal((0, 2, true), (front!.Position, front.PreviousPosition, front.Changed));
@@ -284,7 +284,7 @@ public sealed class ViewerStateToolsTests
             new ValidationFinding { RuleId = "R2", Severity = ValidationSeverity.Warning, Message = "b" },
             new ValidationFinding { RuleId = "R3", Severity = ValidationSeverity.Warning, Message = "c" }));
         datasets.SelectDataset(other);
-        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, new MapSplitControllerAccessor(), Immediate));
 
         var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "Validation", null), TestContext.Current.CancellationToken);
 
@@ -310,7 +310,7 @@ public sealed class ViewerStateToolsTests
         var grid = datasets.Add("/data/102CA0047600.h5", "S-102");
         grid.IsLoaded = true;
         datasets.InspectorTab = DatasetInspectorTab.Layers;
-        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, new MapSplitControllerAccessor(), Immediate));
 
         var result = await tool.InvokeAsync(new SelectDatasetRequest(grid.DisplayName, null, null), TestContext.Current.CancellationToken);
 
@@ -326,7 +326,7 @@ public sealed class ViewerStateToolsTests
     {
         var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
         var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
-        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, new MapSplitControllerAccessor(), Immediate));
 
         var pending = tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "validation", 30_000), TestContext.Current.CancellationToken);
         Assert.False(pending.IsCompleted);
@@ -343,7 +343,7 @@ public sealed class ViewerStateToolsTests
     {
         var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
         var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
-        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, new MapSplitControllerAccessor(), Immediate));
 
         var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, null, 0), TestContext.Current.CancellationToken);
 
@@ -358,7 +358,7 @@ public sealed class ViewerStateToolsTests
     {
         var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
         var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
-        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, new MapSplitControllerAccessor(), Immediate));
 
         Assert.True((await tool.InvokeAsync(new SelectDatasetRequest("missing.000", null, null), TestContext.Current.CancellationToken)).TryGetError(out var missing));
         Assert.Equal("dataset_not_found", missing!.Code);
@@ -465,9 +465,9 @@ public sealed class ViewerStateToolsTests
             ViewerStateMcpAdapters.Create(new StepTimeTool(timeline)),
             ViewerStateMcpAdapters.Create(new SetTimelineViewTool(timeline)),
             ViewerStateMcpAdapters.Create(new SetDatasetStateTool(new ViewerDatasetStateController(
-                new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate))),
+                new DatasetsViewModel(new FakeDatasetLoaderService()), new MapSplitControllerAccessor(), Immediate))),
             ViewerStateMcpAdapters.Create(new SelectDatasetTool(new ViewerDatasetStateController(
-                new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate))),
+                new DatasetsViewModel(new FakeDatasetLoaderService()), new MapSplitControllerAccessor(), Immediate))),
             ViewerStateMcpAdapters.Create(new ListNotificationsTool(notifications)),
             ViewerStateMcpAdapters.Create(new DismissNotificationTool(notifications)),
             ViewerStateMcpAdapters.Create(new SetTestClockTool(new AdjustableTimeProvider(inner: TimeProvider.System))),

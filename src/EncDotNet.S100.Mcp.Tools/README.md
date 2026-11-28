@@ -95,7 +95,7 @@ These read an `IDatasetCatalog` and never change it.
 
 | Class | MCP name | What it does |
 |---|---|---|
-| `ListDatasetsTool` | `list_datasets` | Lists the loaded datasets, with an optional product filter and a `GeoQuery` filter: a point keeps the datasets whose declared bounding box contains it, any other shape those whose bounding box intersects it. |
+| `ListDatasetsTool` | `list_datasets` | Lists the loaded datasets, with an optional product filter and a `GeoQuery` filter: a point keeps the datasets whose declared bounding box contains it, any other shape those whose bounding box intersects it. With an `IDatasetMapPresence`, each summary has `shownIn`: the host's maps that draw it. |
 | `ListSpecsTool` | `list_specs` | Lists the product specifications and what each tool supports for them. |
 | `ListTimeStepsTool` | `list_time_steps` | Lists the time steps of a time-varying dataset. |
 | `IdentifyFeaturesTool` | `identify_features` | Picks the features at a point, ranked by drawing priority where the dataset was portrayed (S-98 15.1), then point before curve before area, with exact containment for areas and a radius in metres for points and curves. S-101 features include the text of the files their `fileReference` attributes name. |

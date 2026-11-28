@@ -11,13 +11,21 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <param name="Active">Whether it's the active map (D4).</param>
 /// <param name="Folded">Whether its pane is folded to a strip (D17).</param>
 /// <param name="Viewport">What it shows, or <see langword="null"/> before it's laid out.</param>
+/// <param name="Datasets">What of the Datasets list it draws (split map step 2 §2.7).</param>
 internal sealed record MapPaneState(
     string Id,
     string Label,
     string? Name,
     bool Active,
     bool Folded,
-    MapViewportSnapshot? Viewport);
+    MapViewportSnapshot? Viewport,
+    MapDatasetsState Datasets);
+
+/// <summary>What of the Datasets list a map draws (split map step 2 §2.7, D28).</summary>
+/// <param name="Shown">How many datasets it draws.</param>
+/// <param name="Total">How many datasets the Datasets list holds.</param>
+/// <param name="Hidden">The ids of the datasets it doesn't draw, in Datasets-list order.</param>
+internal sealed record MapDatasetsState(int Shown, int Total, IReadOnlyList<string> Hidden);
 
 /// <summary>The window's maps (split map D28).</summary>
 /// <param name="Split">Whether the map is split into more than one pane.</param>
@@ -44,7 +52,9 @@ internal sealed record MapShownIn(string Map, bool Shown, string? Reason);
 /// <summary>
 /// Drives the window's split for MCP (split map D28, #1735): lists the maps,
 /// opens and closes the split, makes a map active, links the views and names
-/// a pane. Every call runs on the UI thread through the invoker it was given.
+/// a pane, and says which maps draw a dataset (step 2 §2.7, #1773). The
+/// async calls run on the UI thread through the invoker it was given; the
+/// others are for callers already on it.
 /// </summary>
 internal sealed class MapSplitController
 {
@@ -59,19 +69,23 @@ internal sealed class MapSplitController
 
     private readonly MapSplitViewModel _split;
     private readonly MapViews _views;
+    private readonly DatasetsViewModel _datasets;
     private readonly Func<Action, Task> _invoke;
 
     /// <summary>Creates the controller.</summary>
     /// <param name="split">The window's split.</param>
     /// <param name="views">The window's maps.</param>
+    /// <param name="datasets">The Datasets list, whose rows say which maps draw them.</param>
     /// <param name="invoke">Runs an action on the UI thread.</param>
-    public MapSplitController(MapSplitViewModel split, MapViews views, Func<Action, Task> invoke)
+    public MapSplitController(MapSplitViewModel split, MapViews views, DatasetsViewModel datasets, Func<Action, Task> invoke)
     {
         ArgumentNullException.ThrowIfNull(split);
         ArgumentNullException.ThrowIfNull(views);
+        ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(invoke);
         _split = split;
         _views = views;
+        _datasets = datasets;
         _invoke = invoke;
     }
 
@@ -153,8 +167,75 @@ internal sealed class MapSplitController
             }),
         ]);
 
+    /// <summary>
+    /// The ids of the maps that draw <paramref name="entry"/>, in reading
+    /// order (split map step 2 §2.7): it's visible in the map and the display
+    /// settings don't hide it. Call on the UI thread.
+    /// </summary>
+    /// <param name="entry">A row of the Datasets list.</param>
+    /// <returns>The map ids; empty when no map draws it.</returns>
+    public IReadOnlyList<string> ShownIn(DatasetEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return [.. _split.Panes.Where(pane => Draws(entry, pane.Id)).Select(pane => pane.Id.Value)];
+    }
+
+    /// <summary>
+    /// The maps that draw each dataset, by the ids <c>list_datasets</c>
+    /// reports (split map step 2 §2.7).
+    /// </summary>
+    /// <param name="datasetIds">Dataset ids.</param>
+    /// <returns>
+    /// One entry per id, in the same order: the ids of the maps that draw it,
+    /// in reading order, or <see langword="null"/> for an id the Datasets
+    /// list doesn't hold.
+    /// </returns>
+    public Task<IReadOnlyList<IReadOnlyList<string>?>> ShownInAsync(IReadOnlyList<string> datasetIds)
+    {
+        ArgumentNullException.ThrowIfNull(datasetIds);
+        return RunAsync<IReadOnlyList<IReadOnlyList<string>?>>(() =>
+        {
+            var byId = new Dictionary<string, DatasetEntry>(StringComparer.Ordinal);
+            foreach (var entry in _datasets.Entries)
+                byId.TryAdd(entry.DisplayName, entry);
+            return [.. datasetIds.Select(id => byId.TryGetValue(id, out var entry) ? ShownIn(entry) : null)];
+        });
+    }
+
+    /// <summary>The map with id <paramref name="map"/>, or <see langword="null"/>. Call on the UI thread.</summary>
+    /// <param name="map">A map id from <c>list_maps</c>.</param>
+    /// <returns>The map's id, or <see langword="null"/> when there's none.</returns>
+    public MapViewId? FindMap(string map) => FindPane(map)?.Id;
+
+    /// <summary>The error for an unknown map id, listing the maps there are. Call on the UI thread.</summary>
+    /// <param name="map">The unknown id.</param>
+    /// <returns>The error.</returns>
+    public MapNotFound NotFound(string map) => new(map, [.. _split.Panes.Select(p => p.Id.Value)]);
+
+    /// <summary>Whether the map draws the dataset: visible there, and not hidden by the display settings.</summary>
+    private static bool Draws(DatasetEntry entry, MapViewId map) => entry.IsVisibleIn(map) && !entry.IsHiddenByDisplay;
+
+    /// <summary>
+    /// Whether the map's session draws the dataset (D10): it holds it, active
+    /// and visible there, as <see cref="PickPresence.Draws"/> asks.
+    /// </summary>
     private static bool Draws(IMapViewCapabilities view, string? datasetId) =>
-        datasetId is not { Length: > 0 } id || view.DatasetSession.GetDataset(new MapDatasetId(id)) is not null;
+        datasetId is not { Length: > 0 } id
+        || view.DatasetSession.GetDataset(new MapDatasetId(id)) is { Dataset: { IsActive: true, IsVisible: true } };
+
+    private MapDatasetsState DatasetsOf(MapViewId map)
+    {
+        var hidden = new List<string>();
+        var total = 0;
+        foreach (var entry in _datasets.Entries)
+        {
+            total++;
+            if (!Draws(entry, map))
+                hidden.Add(entry.DisplayName);
+        }
+
+        return new MapDatasetsState(total - hidden.Count, total, hidden);
+    }
 
     private static bool InView(MapViewportSnapshot? viewport, double latitude, double longitude)
     {
@@ -175,8 +256,6 @@ internal sealed class MapSplitController
     private MapPaneViewModel? FindPane(string map) =>
         _split.Panes.FirstOrDefault(p => string.Equals(p.Id.Value, map, StringComparison.Ordinal));
 
-    private MapNotFound NotFound(string map) => new(map, [.. _split.Panes.Select(p => p.Id.Value)]);
-
     private MapSplitState State() => new(
         _split.IsSplit,
         _split.IsLinked,
@@ -188,7 +267,8 @@ internal sealed class MapSplitController
                 p.Name,
                 p.IsActive,
                 p.IsFolded,
-                p.View.Viewport.Current)),
+                p.View.Viewport.Current,
+                DatasetsOf(p.Id))),
         ]);
 
     private async Task<T> RunAsync<T>(Func<T> work)

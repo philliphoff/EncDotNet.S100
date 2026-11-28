@@ -243,8 +243,34 @@ internal sealed class LegendService : IDisposable
         // Counting a catalogue product's drawn symbols (D7) walks its display
         // list, so it's done while the tab shows, and when MCP asks.
         var catalogueKeys = takeView || _isTabShown;
-        Sections = [.. FromSources(), .. Build(_loader.CurrentStackEntries, catalogueKeys)];
+        // The Legend follows the active map (split map step 2 §2.6).
+        Sections =
+        [
+            .. FromSources(),
+            .. Build(_loader.CurrentStackEntries, catalogueKeys, _activeMap.Shows, _view, catalogueKeys ? ViewScale() : double.NaN),
+        ];
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Builds the sections the map <paramref name="map"/> draws, as MCP
+    /// <c>get_legend</c> with a map asks (split map step 2 §2.7): from that
+    /// map's layer stack, the datasets visible there and its view, with the
+    /// catalogue keys counted. <see cref="Sections"/> doesn't change. Call on
+    /// the UI thread.
+    /// </summary>
+    /// <param name="map">The map.</param>
+    /// <param name="stack">That map's layer stack, bottom first.</param>
+    /// <param name="viewport">That map's view, or null before it's laid out.</param>
+    /// <returns>Every loaded product with a legend, in draw order, top first.</returns>
+    public IReadOnlyList<LegendSection> SectionsFor(MapViewId map, IReadOnlyList<LayerStackEntry> stack, MapViewportSnapshot? viewport)
+    {
+        ArgumentNullException.ThrowIfNull(stack);
+        return
+        [
+            .. FromSources(),
+            .. Build(stack, catalogueKeys: true, entry => entry.IsVisibleIn(map), TimelineMapScope.ViewOf(viewport), ScaleOf(viewport)),
+        ];
     }
 
     private IEnumerable<LegendSection> FromSources()
@@ -260,9 +286,9 @@ internal sealed class LegendService : IDisposable
         }
     }
 
-    private IReadOnlyList<LegendSection> Build(IReadOnlyList<LayerStackEntry> stack, bool catalogueKeys)
+    private IReadOnlyList<LegendSection> Build(
+        IReadOnlyList<LayerStackEntry> stack, bool catalogueKeys, Func<DatasetEntry, bool> shows, GeoBounds? view, double scale)
     {
-        var scale = catalogueKeys ? ViewScale() : double.NaN;
         var byId = new Dictionary<string, DatasetEntry>(StringComparer.Ordinal);
         foreach (var entry in _datasets.Entries)
             byId.TryAdd(entry.Id.Value, entry);
@@ -276,13 +302,12 @@ internal sealed class LegendService : IDisposable
         {
             var item = stack[i];
             byId.TryGetValue(item.SourceDatasetId, out var dataset);
-            // The Legend follows the active map (split map step 2 §2.6).
-            if (dataset is not null && !_activeMap.Shows(dataset))
+            if (dataset is not null && !shows(dataset))
                 continue; // hidden there by the user, so not drawn
             if (LegendOf(item) is not { } sub)
             {
                 if (catalogueKeys && item.Item.Payload is VectorStackPayload vector && IsCatalogueProduct(vector))
-                    AddCatalogueKey(item, vector, dataset, scale, sections, order);
+                    AddCatalogueKey(item, vector, dataset, view, scale, sections, order);
                 continue;
             }
 
@@ -297,11 +322,11 @@ internal sealed class LegendService : IDisposable
             section.Add(item.SourceDatasetId, dataset, sub);
         }
 
-        return [.. order.Select(Finish).OfType<LegendSection>()];
+        return [.. order.Select(section => Finish(section, view)).OfType<LegendSection>()];
     }
 
     private void AddCatalogueKey(
-        LayerStackEntry item, VectorStackPayload vector, DatasetEntry? dataset, double scale,
+        LayerStackEntry item, VectorStackPayload vector, DatasetEntry? dataset, GeoBounds? view, double scale,
         Dictionary<string, SectionBuilder> sections, List<SectionBuilder> order)
     {
         var spec = vector.Result.Spec.Name ?? dataset?.ProductSpec ?? string.Empty;
@@ -317,7 +342,7 @@ internal sealed class LegendService : IDisposable
         }
 
         section.AddDataset(item.SourceDatasetId, dataset);
-        section.Key.Add(vector, item.SuppressedFeatures, _view, scale);
+        section.Key.Add(vector, item.SuppressedFeatures, view, scale);
     }
 
     /// <summary>
@@ -329,12 +354,15 @@ internal sealed class LegendService : IDisposable
         vector.Result.SymbolProvider is not null && vector.Result.SymbolTitleProvider is not null;
 
     /// <summary>The display scale (1:N) at the view's centre, or NaN before the first view.</summary>
-    private double ViewScale() =>
-        _viewport?.Current is { } view
+    private double ViewScale() => ScaleOf(_viewport?.Current);
+
+    /// <summary>The display scale (1:N) at the centre of <paramref name="view"/>, or NaN for none.</summary>
+    private static double ScaleOf(MapViewportSnapshot? view) =>
+        view is not null
             ? LazyLoading.LazyCellGate.ScaleDenominator(view.MercatorResolution, (view.MinLatitude + view.MaxLatitude) / 2)
             : double.NaN;
 
-    private LegendSection? Finish(SectionBuilder section)
+    private LegendSection? Finish(SectionBuilder section, GeoBounds? view)
     {
         if (section.Key is { } key)
         {
@@ -383,7 +411,7 @@ internal sealed class LegendService : IDisposable
             TimeState = timeState,
             DataDynamicity = kindOf?.DataDynamicity,
             IssueTime = kindOf?.IssueTime,
-            IsInView = datasets.Any(d => IsInView(d.Entry)),
+            IsInView = datasets.Any(d => IsInView(d.Entry, view)),
             IsExpanded = !_expanded.TryGetValue(section.Id, out var expanded) || expanded,
             Plane = section.Plane,
             Caption = section.Caption,
@@ -417,11 +445,11 @@ internal sealed class LegendService : IDisposable
     internal const string CatalogueGroupKey = "catalogue.symbols";
 
     /// <summary>True when the dataset meets the view, or when the view or its footprint isn't known.</summary>
-    private bool IsInView(DatasetEntry? entry) =>
-        _view is not { } view
+    private static bool IsInView(DatasetEntry? entry, GeoBounds? view) =>
+        view is not { } bounds
         || entry is null
         || TimelineMapScope.FootprintOf(entry) is not { } footprint
-        || footprint.Intersects(view);
+        || footprint.Intersects(bounds);
 
     /// <summary>
     /// The section a sub-layer belongs to: its product, or for a weather grid

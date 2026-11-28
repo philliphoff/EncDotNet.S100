@@ -92,13 +92,26 @@ public sealed class DepthBasisMcpToolTests
     {
         var loader = new FakeDatasetLoaderService();
         using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { }, scope: null, readDatum: Task.Run, predictions: FixedTidePredictions.None);
-        var tool = new GetDepthBasisTool(service, new InlineInvoker());
+        var tool = new GetDepthBasisTool(service, SplitMapMcpTestKit.NewViews(), new InlineInvoker());
 
-        var dto = Value(await tool.InvokeAsync(TestContext.Current.CancellationToken));
+        var dto = Value(await tool.InvokeAsync(ct: TestContext.Current.CancellationToken));
 
         Assert.Equal("none", dto.Kind);
         Assert.Equal(string.Empty, dto.Display);
         Assert.Empty(dto.DepthSources);
+    }
+
+    [Fact]
+    public async Task The_tool_refuses_an_unknown_map()
+    {
+        var loader = new FakeDatasetLoaderService();
+        using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { }, scope: null, readDatum: Task.Run, predictions: FixedTidePredictions.None);
+        var tool = new GetDepthBasisTool(service, SplitMapMcpTestKit.NewViews(), new InlineInvoker());
+
+        var result = await tool.InvokeAsync("map-9", TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.Equal("map_not_found", error.Code);
     }
 
     [Fact]

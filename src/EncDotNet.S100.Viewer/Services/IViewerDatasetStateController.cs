@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -15,15 +17,22 @@ internal interface IViewerDatasetStateController
     /// <summary>
     /// Applies <paramref name="visible"/>, <paramref name="opacity"/> and
     /// <paramref name="order"/> (each left unchanged when null) to the dataset
-    /// with <paramref name="id"/>.
+    /// with <paramref name="id"/>. With <paramref name="map"/>, the visibility
+    /// applies to that map only; without it, to every map (split map step 2
+    /// §2.7, Q6). Opacity and order are global.
     /// </summary>
     /// <param name="id">The dataset id, as <c>list_datasets</c> reports it.</param>
+    /// <param name="map">The map whose visibility to set, as <c>list_maps</c> reports it, or null for every map.</param>
     /// <param name="visible">Whether the dataset draws, or null to leave it.</param>
     /// <param name="opacity">Opacity in 0..1, or null to leave it.</param>
     /// <param name="order">A move in the draw order, as the Datasets list's move buttons and menu do, or null to leave it.</param>
     /// <param name="ct">A cancellation token.</param>
-    /// <returns>The state before and after, or null when no dataset has that id.</returns>
-    Task<DatasetStateOutcome?> SetStateAsync(string id, bool? visible, double? opacity, DatasetOrderMove? order = null, CancellationToken ct = default);
+    /// <returns>
+    /// The state before and after; <see cref="DatasetNotFound"/> when no
+    /// dataset has that id, <see cref="MapNotFound"/> when no map does.
+    /// </returns>
+    Task<ToolResult<DatasetStateOutcome>> SetStateAsync(
+        string id, string? map, bool? visible, double? opacity, DatasetOrderMove? order, CancellationToken ct = default);
 
     /// <summary>
     /// Selects the dataset with <paramref name="id"/> in the Datasets panel as
@@ -97,13 +106,14 @@ internal sealed record DatasetSelectionOutcome(
 /// <summary>A dataset's display state before and after a change.</summary>
 /// <param name="Id">The dataset id.</param>
 /// <param name="Spec">The product specification.</param>
-/// <param name="Visible">Whether the dataset draws, afterwards.</param>
+/// <param name="Visible">Whether the dataset is visible afterwards: in the map asked about, else in any map.</param>
 /// <param name="Opacity">The dataset's opacity, afterwards.</param>
-/// <param name="PreviousVisible">Whether the dataset drew, before.</param>
+/// <param name="PreviousVisible">Whether the dataset was visible before, as <paramref name="Visible"/> asks.</param>
 /// <param name="PreviousOpacity">The dataset's opacity, before.</param>
 /// <param name="Position">The dataset's row in the draw order, afterwards (0 paints on top).</param>
 /// <param name="PreviousPosition">The dataset's row in the draw order, before.</param>
 /// <param name="ViewingGroups">The dataset's own viewing-group filter, or <c>null</c>.</param>
+/// <param name="ShownIn">The ids of the maps that draw it afterwards, in reading order (split map step 2 §2.7).</param>
 internal sealed record DatasetStateOutcome(
     string Id,
     string Spec,
@@ -111,43 +121,74 @@ internal sealed record DatasetStateOutcome(
     double Opacity,
     bool PreviousVisible,
     double PreviousOpacity,
-    int Position = 0,
-    int PreviousPosition = 0,
-    ViewingGroupFilter? ViewingGroups = null);
+    int Position,
+    int PreviousPosition,
+    ViewingGroupFilter? ViewingGroups,
+    IReadOnlyList<string> ShownIn);
 
 /// <summary>Default <see cref="IViewerDatasetStateController"/> over <see cref="DatasetsViewModel"/>.</summary>
 internal sealed class ViewerDatasetStateController : IViewerDatasetStateController
 {
     private readonly DatasetsViewModel _datasets;
+    private readonly ICapabilityAccessor<MapSplitController> _maps;
     private readonly Func<Action, Task> _dispatch;
 
-    public ViewerDatasetStateController(DatasetsViewModel datasets, Func<Action, Task> dispatch)
+    /// <summary>Creates the controller.</summary>
+    /// <param name="datasets">The Datasets list.</param>
+    /// <param name="maps">The window's maps, once it has built them: resolves a map id and reports where a dataset is drawn.</param>
+    /// <param name="dispatch">Runs an action on the UI thread.</param>
+    public ViewerDatasetStateController(DatasetsViewModel datasets, ICapabilityAccessor<MapSplitController> maps, Func<Action, Task> dispatch)
     {
         ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(maps);
         ArgumentNullException.ThrowIfNull(dispatch);
         _datasets = datasets;
+        _maps = maps;
         _dispatch = dispatch;
     }
 
     /// <inheritdoc />
-    public async Task<DatasetStateOutcome?> SetStateAsync(
-        string id, bool? visible, double? opacity, DatasetOrderMove? order = null, CancellationToken ct = default)
+    public async Task<ToolResult<DatasetStateOutcome>> SetStateAsync(
+        string id, string? map, bool? visible, double? opacity, DatasetOrderMove? order, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(id);
         ct.ThrowIfCancellationRequested();
-        DatasetStateOutcome? outcome = null;
+        ToolResult<DatasetStateOutcome>? outcome = null;
         await _dispatch(() =>
         {
             var entry = Find(id);
             if (entry is null)
+            {
+                outcome = ToolResult<DatasetStateOutcome>.Err(new DatasetNotFound(new DatasetId(id)));
                 return;
+            }
 
-            var previousVisible = entry.IsVisibleAnywhere;
+            var maps = _maps.Current;
+            MapViewId? target = null;
+            if (map is not null)
+            {
+                target = maps?.FindMap(map);
+                if (target is null)
+                {
+                    outcome = ToolResult<DatasetStateOutcome>.Err(maps?.NotFound(map) ?? new MapNotFound(map, []));
+                    return;
+                }
+            }
+
+            bool VisibleNow() => target is { } one ? entry.IsVisibleIn(one) : entry.IsVisibleAnywhere;
+
+            var previousVisible = VisibleNow();
             var previousOpacity = entry.Opacity;
             var previousPosition = _datasets.Entries.IndexOf(entry);
-            // Without a map, visibility applies to every map (split map step 2, Q6).
+            // With a map, visibility applies to that map; without one, to
+            // every map (split map step 2 §2.7, Q6).
             if (visible is { } show)
-                entry.SetVisible(show);
+            {
+                if (target is { } one)
+                    entry.SetVisibleIn(one, show);
+                else
+                    entry.SetVisible(show);
+            }
             if (opacity is { } alpha)
                 entry.Opacity = alpha;
             var move = order switch
@@ -159,11 +200,12 @@ internal sealed class ViewerDatasetStateController : IViewerDatasetStateControll
                 _ => null,
             };
             move?.Execute(entry);
-            outcome = new DatasetStateOutcome(
-                entry.DisplayName, entry.ProductSpec, entry.IsVisibleAnywhere, entry.Opacity, previousVisible, previousOpacity,
-                _datasets.Entries.IndexOf(entry), previousPosition, entry.ViewingGroups);
+            outcome = ToolResult<DatasetStateOutcome>.Ok(new DatasetStateOutcome(
+                entry.DisplayName, entry.ProductSpec, VisibleNow(), entry.Opacity, previousVisible, previousOpacity,
+                _datasets.Entries.IndexOf(entry), previousPosition, entry.ViewingGroups,
+                maps?.ShownIn(entry) ?? []));
         }).ConfigureAwait(false);
-        return outcome;
+        return outcome ?? throw new InvalidOperationException("The dispatcher didn't run the change.");
     }
 
     /// <inheritdoc />

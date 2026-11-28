@@ -2,6 +2,7 @@ using System.ComponentModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Depth;
 using ModelContextProtocol.Server;
 
@@ -47,22 +48,38 @@ internal sealed class GetDepthBasisTool
     public const string Name = "get_depth_basis";
 
     private readonly DepthBasisService _service;
+    private readonly MapViews _maps;
     private readonly IRouteEditInvoker _invoker;
 
-    public GetDepthBasisTool(DepthBasisService service, IRouteEditInvoker invoker)
+    /// <summary>Creates the tool.</summary>
+    /// <param name="service">The status bar's depth basis, which follows the active map.</param>
+    /// <param name="maps">The window's maps, for the map argument.</param>
+    /// <param name="invoker">Runs work on the UI thread.</param>
+    public GetDepthBasisTool(DepthBasisService service, MapViews maps, IRouteEditInvoker invoker)
     {
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(maps);
         ArgumentNullException.ThrowIfNull(invoker);
         _service = service;
+        _maps = maps;
         _invoker = invoker;
     }
 
     /// <summary>Recomputes the basis on the UI thread and returns it.</summary>
-    public async Task<ToolResult<DepthBasisDto>> InvokeAsync(CancellationToken ct = default)
+    /// <param name="map">
+    /// The map to read, an id from <c>list_maps</c>; null for the active map,
+    /// which the status bar follows (split map step 2 §2.7).
+    /// </param>
+    /// <param name="ct">Cancels the call.</param>
+    public async Task<ToolResult<DepthBasisDto>> InvokeAsync(string? map = null, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        if (ViewerMapTargets.TryResolve(_maps, map, out var other) is { } error)
+            return ToolResult<DepthBasisDto>.Err(error);
         var dto = await _invoker.InvokeAsync(() =>
         {
+            if (other is not null)
+                return ToDto(_service.EvaluateFor(other.Viewport.Current));
             _service.Refresh();
             return ToDto(_service.Current);
         }).ConfigureAwait(false);
@@ -150,8 +167,10 @@ internal static class DepthBasisMcpAdapter
     public static McpServerTool Create(GetDepthBasisTool inner)
     {
         ArgumentNullException.ThrowIfNull(inner);
-        var del = (CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(ct));
+        var del = (
+            [Description("The map to read, an id from list_maps such as 'map-2'; omit for the active map, which the status bar follows.")] string? map = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(map, ct));
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = GetDepthBasisTool.Name,
@@ -162,7 +181,9 @@ internal static class DepthBasisMcpAdapter
                 + "when S-104 water level is in view (reason 'not_applied'), the depth sources and S-104 water-level sources "
                 + "in view with their vertical datums, whether those datums agree, and display, the indicator's text exactly "
                 + "as the user reads it. Use it to report whether a picture or a clearance the user sees is on charted or "
-                + "adjusted depths. Read-only; viewer-injected tool.",
+                + "adjusted depths. The indicator follows the active map's view; with the map split, 'map' reads another "
+                + "map's view without making it active, and an unknown map fails with map_not_found. Read-only; "
+                + "viewer-injected tool.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

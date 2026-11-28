@@ -12,13 +12,14 @@ namespace EncDotNet.S100.Viewer.Tests;
 internal static class TestMcpServerHost
 {
     public static McpServerHost Create(IDatasetCatalog catalog, ViewerSettings settings) =>
-        Create(catalog, settings, new StaticCapabilityAccessor<IMapDrawState>(new NothingHidden()), toolGroups: []);
+        Create(catalog, settings, new StaticCapabilityAccessor<IMapDrawState>(new NothingHidden()), new NoMaps(), toolGroups: []);
 
     /// <summary>Builds a host serving <paramref name="toolGroups"/>, whose queries follow <paramref name="drawStates"/>.</summary>
     public static McpServerHost Create(
         IDatasetCatalog catalog,
         ViewerSettings settings,
         ICapabilityAccessor<IMapDrawState> drawStates,
+        IDatasetMapPresence presence,
         IReadOnlyList<McpTools.Groups.IViewerMcpToolGroup> toolGroups) =>
         new(
             catalog,
@@ -26,7 +27,16 @@ internal static class TestMcpServerHost
             new ViewerPassageRouteProvider(new RoutesService(new ClockViewTime(TimeProvider.System)), new DispatcherRouteEditInvoker()),
             new EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache(new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory()),
             drawStates,
+            presence,
             toolGroups);
+
+    /// <summary>A host whose maps draw nothing it knows of.</summary>
+    internal sealed class NoMaps : IDatasetMapPresence
+    {
+        public Task<IReadOnlyList<IReadOnlyList<string>?>> ShownInAsync(
+            IReadOnlyList<DatasetId> datasets, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<IReadOnlyList<string>?>>([.. datasets.Select(_ => (IReadOnlyList<string>?)null)]);
+    }
 
     internal sealed class NothingHidden : IMapDrawState
     {

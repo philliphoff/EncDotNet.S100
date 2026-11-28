@@ -30,12 +30,15 @@ public sealed record ListDatasetsRequest(
 /// <param name="Spec">Product specification (name and edition) the dataset declares.</param>
 /// <param name="Bounds">Geographic extent of the dataset (decimal degrees, WGS-84).</param>
 /// <param name="TimeRange">UTC time interval covered by the dataset; null for static products such as S-102.</param>
+/// <param name="Aml">NATO Additional Military Layers facts when the dataset is AML; otherwise null.</param>
+/// <param name="ShownIn">The ids of the host's maps that draw the dataset, or null in a host without maps.</param>
 public sealed record DatasetSummary(
     [property: Description("Stable dataset identifier; pass back into other tools.")] DatasetId Id,
     [property: Description("Product specification (name and edition) the dataset declares.")] SpecRef Spec,
     [property: Description("Geographic extent of the dataset in decimal degrees, WGS-84.")] BoundingBox Bounds,
     [property: Description("UTC time interval covered by the dataset; null for static products such as S-102.")] TimeRange? TimeRange,
-    [property: Description("NATO Additional Military Layers facts when the dataset is AML (military overlay data, not a chart); otherwise null.")] AmlDatasetSummary? Aml = null);
+    [property: Description("NATO Additional Military Layers facts when the dataset is AML (military overlay data, not a chart); otherwise null.")] AmlDatasetSummary? Aml = null,
+    [property: Description("In a host with maps (the SoundCharts viewer), the ids of the maps that draw the dataset, in reading order (list_maps); empty when none does. Null in a host without maps (s100 mcp serve).")] IReadOnlyList<string>? ShownIn = null);
 
 /// <summary>Result of <see cref="ListDatasetsTool"/>.</summary>
 /// <param name="Datasets">Page of dataset summaries, in catalog order.</param>
@@ -67,16 +70,24 @@ public sealed class ListDatasetsTool
     public const string Name = "list_datasets";
 
     private readonly IDatasetCatalog _catalog;
+    private readonly IDatasetMapPresence? _presence;
 
     /// <summary>Creates a new <see cref="ListDatasetsTool"/>.</summary>
-    public ListDatasetsTool(IDatasetCatalog catalog)
+    /// <param name="catalog">The datasets to list.</param>
+    /// <param name="presence">
+    /// Which of the host's maps draw each dataset, filling
+    /// <see cref="DatasetSummary.ShownIn"/>; <see langword="null"/> in a host
+    /// without maps.
+    /// </param>
+    public ListDatasetsTool(IDatasetCatalog catalog, IDatasetMapPresence? presence = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
+        _presence = presence;
     }
 
     /// <summary>Executes the tool.</summary>
-    public Task<ToolResult<ListDatasetsResult>> InvokeAsync(
+    public async Task<ToolResult<ListDatasetsResult>> InvokeAsync(
         ListDatasetsRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -85,7 +96,7 @@ public sealed class ListDatasetsTool
 
         if (request.Query is { } query && GeoQueryValidator.Validate(query) is { } err)
         {
-            return Task.FromResult(ToolResult<ListDatasetsResult>.Err(err));
+            return ToolResult<ListDatasetsResult>.Err(err);
         }
 
         var pageSize = Math.Clamp(request.PageSize, 1, 500);
@@ -124,6 +135,15 @@ public sealed class ListDatasetsTool
             pageBuilder.Add(filtered[skip + i]);
         }
 
+        if (_presence is not null && pageBuilder.Count > 0)
+        {
+            var shownIn = await _presence
+                .ShownInAsync([.. pageBuilder.Select(d => d.Id)], cancellationToken)
+                .ConfigureAwait(false);
+            for (var i = 0; i < pageBuilder.Count && i < shownIn.Count; i++)
+                pageBuilder[i] = pageBuilder[i] with { ShownIn = shownIn[i] };
+        }
+
         var hasMore = skip + take < totalCount;
         var highest = AmlProtectiveMarking.Highest(filtered.Select(d => d.Aml?.ProtectiveMarking));
         var result = new ListDatasetsResult(
@@ -134,7 +154,7 @@ public sealed class ListDatasetsTool
             hasMore,
             highest?.DisplayText);
 
-        return Task.FromResult(ToolResult<ListDatasetsResult>.Ok(result));
+        return ToolResult<ListDatasetsResult>.Ok(result);
     }
 
     private static bool SpecMatches(SpecRef actual, SpecRef filter)

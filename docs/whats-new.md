@@ -14,6 +14,18 @@ month. For package versions and release assets, see
   as S-101. See [Open an NIS directly](nis-to-s57.md#open-an-nis-directly)
   ([#1777](https://github.com/philliphoff/EncDotNet.S100/issues/1777)).
 
+- **A dataset subset per split map.** Each map of a split shows its own
+  subset of the loaded datasets, such as S-57 in one map and S-101 in the
+  other. While split, each Datasets row has a number chip per map in place
+  of its eye. Over MCP, `set_dataset_state` takes `map` to show or hide a
+  dataset in one map (without it, `visible` applies to every map; `opacity`
+  and `order` stay global and refuse `map`). `list_maps` reports each map's
+  `datasets` (`shown`, `total` and the `hidden` ids), and `list_datasets` and
+  `set_dataset_state` report `shownIn`. `get_legend` and `get_depth_basis`
+  take `map`, and a pick's `shownIn` reports `dataset_hidden` for a map that
+  hides the dataset. `s100 mcp serve` still refuses `map`
+  ([#1773](https://github.com/philliphoff/EncDotNet.S100/issues/1773)).
+
 - **Rename a split map.** Double-click a map's name in its header, or choose
   **Rename map…** in the **Split map** menu, to name it, such as **S-57** or
   **Low water**. Enter saves it, Esc cancels, and an empty name goes

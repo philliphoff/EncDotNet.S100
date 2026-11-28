@@ -70,6 +70,14 @@ public sealed class LegendServiceTests
         public PositionLegendService Position(LegendService legend) =>
             new(Loader, Datasets, Viewport, ActiveMap, new FixedMariner(), depthBasis: null, legend, action => action(), read => Task.FromResult(read()));
 
+        /// <summary>The depth basis over the fixture's loader and view, recomputed inline.</summary>
+        public EncDotNet.S100.Viewer.Services.Depth.DepthBasisService DepthBasis() =>
+            new(Loader, Viewport, new ClockViewTime(Clock), EncDotNet.S100.Viewer.Services.Depth.NoWaterLevelAdjustment.Instance,
+                scope: null, action => action(), read => Task.FromResult(read()), FixedTidePredictions.None);
+
+        /// <summary>The window's maps, empty: the legend tools read the active map.</summary>
+        public MapViews Maps { get; } = SplitMapMcpTestKit.NewViews();
+
         private sealed class FixedMariner : IMarinerSettingsProvider
         {
             public MarinerSettings Current => MarinerSettings.Default;
@@ -189,6 +197,42 @@ public sealed class LegendServiceTests
 
         f.ActiveMap.Activate(FakeViewportSet.First);
         Assert.Equal("S-111", Assert.Single(service.Sections).Id);
+    }
+
+    [Fact]
+    public void Sections_for_another_map_use_its_datasets_and_view_and_leave_the_active_sections()
+    {
+        // Split map step 2 §2.7: get_legend with a map that isn't active.
+        var f = new Fixture();
+        var second = new MapViewId("map-2");
+        var currents = f.Add("111US00_a.h5", "S-111", 40, -75, 41, -74);
+        f.Add("codsus.txt", "CODSUS", 10, 10, 11, 11);
+        currents.SetVisibleIn(second, false);
+        var stack = new[]
+        {
+            VectorEntry("111US00_a.h5", "S-111", "s111.arrows", "Surface currents: 111US00_a.h5", S98DisplayPlane.DynamicArrows, CurrentLegend),
+            VectorEntry("codsus.txt", "CODSUS", "weather.fronts", "Surface analysis: codsus.txt", S98DisplayPlane.OtherChartOverlays,
+                [new LineLegendEntry(new LegendLineSample { Color = "#0000FF", Width = 1 }, "Cold front")]),
+        };
+        f.Loader.SetEntries(stack);
+        f.Viewport.Publish(40.2, -74.8, 40.8, -74.2);
+        using var service = f.Create();
+
+        var sections = service.SectionsFor(second, stack, new MapViewportSnapshot
+        {
+            MinLatitude = 10.2,
+            MinLongitude = 10.2,
+            MaxLatitude = 10.8,
+            MaxLongitude = 10.8,
+            MercatorResolution = 10,
+        });
+
+        var only = Assert.Single(sections);
+        Assert.Equal("CODSUS", only.Spec);
+        Assert.True(only.IsInView);
+        // The active map's legend is unchanged: it draws both, and its view meets the currents.
+        Assert.Equal(2, service.Sections.Count);
+        Assert.Equal("S-111", Assert.Single(service.InViewSections).Id);
     }
 
     [Fact]

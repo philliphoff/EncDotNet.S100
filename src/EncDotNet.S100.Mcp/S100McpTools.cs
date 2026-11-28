@@ -65,13 +65,17 @@ public static class S100McpTools
     /// <see cref="EncDotNet.S100.Hosting.IMapCapabilityAccessor{TCapability}"/>
     /// (a host with several maps) lets the tool's <c>map</c> argument name one.
     /// </param>
+    /// <param name="datasetMapPresence">
+    /// Which of the host's maps draw each dataset, so <c>list_datasets</c>
+    /// reports <c>shownIn</c>, or <c>null</c> when the host has no maps.
+    /// </param>
     /// <returns>
     /// The tools in a stable order. Tool names are the <c>Name</c> constants on
     /// the corresponding <c>EncDotNet.S100.Mcp.Tools</c> types (e.g.
     /// <c>list_datasets</c>, <c>describe_feature</c>, <c>sample</c>);
     /// host-supplied tools must not collide with them.
     /// </returns>
-    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null, RouteCheckSourceCache? routeCheckSources = null, EncDotNet.S100.Hosting.ICapabilityAccessor<IMapDrawState>? mapDrawState = null)
+    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null, RouteCheckSourceCache? routeCheckSources = null, EncDotNet.S100.Hosting.ICapabilityAccessor<IMapDrawState>? mapDrawState = null, IDatasetMapPresence? datasetMapPresence = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var transforms = new ProjNetCrsTransformFactory();
@@ -79,7 +83,7 @@ public static class S100McpTools
         var checkRoute = new CheckRouteTool(catalog, passageRoutes, routeCheckSources, TimeProvider.System);
 
         return S100McpServerToolFactory.CreateTools(
-            new ListDatasetsTool(catalog),
+            new ListDatasetsTool(catalog, datasetMapPresence),
             new DescribeFeatureTool(catalog),
             new DescribeFeatureTypeTool(),
             new SampleTool(catalog, transforms, routeCheckSources, TimeProvider.System),

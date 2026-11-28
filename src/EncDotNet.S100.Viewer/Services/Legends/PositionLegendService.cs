@@ -133,7 +133,7 @@ internal sealed class PositionLegendService : IDisposable
         _legend = legend;
         _post = post;
         _read = read;
-        Current = Build(cell: null, view: null);
+        Current = Build(cell: null, view: null, basis: depthBasis?.Current);
 
         _legend.Changed += OnInputChanged;
         _mariner.Changed += OnMarinerChanged;
@@ -192,35 +192,34 @@ internal sealed class PositionLegendService : IDisposable
             _depthBasis.Changed -= OnInputChanged;
     }
 
+    /// <summary>
+    /// Reads the legend at the centre of <paramref name="view"/> as the map
+    /// <paramref name="map"/> draws it (MCP <c>get_legend</c> with a map,
+    /// split map step 2 §2.7), without changing <see cref="Current"/>. Call
+    /// on the UI thread.
+    /// </summary>
+    /// <param name="map">The map whose visible chart cells count.</param>
+    /// <param name="view">That map's view.</param>
+    /// <param name="basis">That map's depth basis, for the datum when no cell is at the centre; null for none.</param>
+    /// <returns>The legend.</returns>
+    public async Task<PositionLegend> ReadAsync(MapViewId map, MapViewportSnapshot? view, DepthBasis? basis)
+    {
+        var cell = await ReadCellAsync(view, entry => entry.IsVisibleIn(map));
+        return Build(cell, view, basis);
+    }
+
     private async Task RunAsync()
     {
         do
         {
             _again = false;
             var view = _viewport?.Current;
-            PositionLegendCell? cell = null;
-            if (Centre(view) is var (latitude, longitude))
-            {
-                var processors = _loader.AcquireProcessors();
-                try
-                {
-                    var candidates = Candidates(processors);
-                    cell = candidates.Count == 0 ? null : await _read(() => CellAt(candidates, latitude, longitude));
-                }
-                catch (Exception)
-                {
-                    // A cell whose features can't be read leaves the centre without a chart.
-                    cell = null;
-                }
-                finally
-                {
-                    processors.Dispose();
-                }
-            }
+            // DEPTHS follows the active map (split map step 2 §2.6).
+            var cell = await ReadCellAsync(view, _activeMap.Shows);
 
             if (_disposed)
                 return;
-            var next = Build(cell, view);
+            var next = Build(cell, view, _depthBasis?.Current);
             if (next != Current)
             {
                 Current = next;
@@ -230,8 +229,30 @@ internal sealed class PositionLegendService : IDisposable
         while (_again && !_disposed);
     }
 
+    private async Task<PositionLegendCell?> ReadCellAsync(MapViewportSnapshot? view, Func<DatasetEntry, bool> shows)
+    {
+        if (Centre(view) is not var (latitude, longitude))
+            return null;
+        var processors = _loader.AcquireProcessors();
+        try
+        {
+            var candidates = Candidates(processors, shows);
+            return candidates.Count == 0 ? null : await _read(() => CellAt(candidates, latitude, longitude));
+        }
+        catch (Exception)
+        {
+            // A cell whose features can't be read leaves the centre without a chart.
+            return null;
+        }
+        finally
+        {
+            processors.Dispose();
+        }
+    }
+
     /// <summary>The drawn chart cells, top of the Datasets list first.</summary>
-    private List<(DatasetEntry Entry, IChartDepthCell Cell)> Candidates(DatasetProcessorSnapshot processors)
+    private List<(DatasetEntry Entry, IChartDepthCell Cell)> Candidates(
+        DatasetProcessorSnapshot processors, Func<DatasetEntry, bool> shows)
     {
         var order = new Dictionary<DatasetEntry, int>();
         for (var i = 0; i < _datasets.Entries.Count; i++)
@@ -240,8 +261,7 @@ internal sealed class PositionLegendService : IDisposable
         var cells = new List<(DatasetEntry Entry, IChartDepthCell Cell)>();
         foreach (var (entry, processor) in processors)
         {
-            // DEPTHS follows the active map (split map step 2 §2.6).
-            if (processor is IChartDepthCell cell && _activeMap.Shows(entry) && _loader.GetActive(entry.Id.Value))
+            if (processor is IChartDepthCell cell && shows(entry) && _loader.GetActive(entry.Id.Value))
                 cells.Add((entry, cell));
         }
         cells.Sort((a, b) => Order(a.Entry).CompareTo(Order(b.Entry)));
@@ -271,7 +291,7 @@ internal sealed class PositionLegendService : IDisposable
         return null;
     }
 
-    private PositionLegend Build(PositionLegendCell? cell, MapViewportSnapshot? view)
+    private PositionLegend Build(PositionLegendCell? cell, MapViewportSnapshot? view, DepthBasis? basis)
     {
         var mariner = _mariner.Current;
         var centre = Centre(view);
@@ -286,7 +306,7 @@ internal sealed class PositionLegendService : IDisposable
             datum = cell.DatumCode;
             hasDatum = true;
         }
-        else if (_depthBasis?.Current.DepthSources is { Count: > 0 } sources
+        else if (basis?.DepthSources is { Count: > 0 } sources
                  && sources.Select(s => s.VerticalDatumCode).Distinct().Count() == 1)
         {
             datum = sources[0].VerticalDatumCode;

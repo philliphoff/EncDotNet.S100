@@ -79,6 +79,13 @@ public sealed class S100McpServerOptions
     public EncDotNet.S100.Hosting.ICapabilityAccessor<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>? MapDrawState { get; init; }
 
     /// <summary>
+    /// Which of the host's maps draw each dataset, so the built-in
+    /// <c>list_datasets</c> tool reports <c>shownIn</c>. May be
+    /// <see langword="null"/> when the host has no maps.
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.Query.IDatasetMapPresence? DatasetMapPresence { get; init; }
+
+    /// <summary>
     /// The toolsets to serve (<see cref="McpToolsets"/>), or
     /// <see langword="null"/> for every toolset. Every tool, built-in or
     /// additional, must declare its toolset with
