@@ -108,8 +108,24 @@ internal sealed class DepthBasisService : IDisposable
     /// <summary>Recomputes the basis now and raises <see cref="Changed"/>.</summary>
     public void Refresh()
     {
+        Current = Evaluate(_viewport?.Current, out var waterLevelLoaded);
+        WaterLevelLoaded = waterLevelLoaded;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Computes the basis over another map's view, as MCP
+    /// <c>get_depth_basis</c> with a map asks (split map step 2 §2.7),
+    /// without changing <see cref="Current"/>. Call on the UI thread.
+    /// </summary>
+    /// <param name="viewport">The map's view, or null before it's laid out.</param>
+    /// <returns>The basis over that view.</returns>
+    public DepthBasis EvaluateFor(MapViewportSnapshot? viewport) => Evaluate(viewport, out _);
+
+    private DepthBasis Evaluate(MapViewportSnapshot? viewport, out bool waterLevelLoaded)
+    {
         var datasets = new List<DepthBasisDataset>();
-        var waterLevelLoaded = false;
+        waterLevelLoaded = false;
         using (var processors = _loader.AcquireProcessors())
         {
             foreach (var (entry, processor) in processors)
@@ -121,15 +137,13 @@ internal sealed class DepthBasisService : IDisposable
             }
         }
 
-        var view = TimelineMapScope.ViewOf(_viewport?.Current);
-        Current = DepthBasisEvaluator.Evaluate(new DepthBasisInputs(
+        var view = TimelineMapScope.ViewOf(viewport);
+        return DepthBasisEvaluator.Evaluate(new DepthBasisInputs(
             datasets,
             view,
             _viewTime.Current,
             _adjustment,
             _predictions.For(view)));
-        WaterLevelLoaded = waterLevelLoaded;
-        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <inheritdoc />

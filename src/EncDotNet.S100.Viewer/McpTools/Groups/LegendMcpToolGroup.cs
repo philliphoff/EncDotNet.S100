@@ -1,5 +1,6 @@
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Depth;
 using EncDotNet.S100.Viewer.Services.Legends;
 using EncDotNet.S100.Viewer.ViewModels.Legends;
 using ModelContextProtocol.Server;
@@ -14,9 +15,22 @@ internal sealed class LegendMcpToolGroup : IViewerMcpToolGroup
     private readonly LegendViewModel _tab;
     private readonly IViewerUiControllerAccessor _ui;
     private readonly LegendFindService _find;
+    private readonly DepthBasisService _depthBasis;
+    private readonly MapViews _maps;
 
-    public LegendMcpToolGroup(LegendService legend, PositionLegendService position, LegendViewModel tab, IViewerUiControllerAccessor ui, LegendFindService find)
+    public LegendMcpToolGroup(
+        LegendService legend,
+        PositionLegendService position,
+        LegendViewModel tab,
+        IViewerUiControllerAccessor ui,
+        LegendFindService find,
+        DepthBasisService depthBasis,
+        MapViews maps)
     {
+        ArgumentNullException.ThrowIfNull(depthBasis);
+        ArgumentNullException.ThrowIfNull(maps);
+        _depthBasis = depthBasis;
+        _maps = maps;
         ArgumentNullException.ThrowIfNull(find);
         _find = find;
         ArgumentNullException.ThrowIfNull(legend);
@@ -38,7 +52,7 @@ internal sealed class LegendMcpToolGroup : IViewerMcpToolGroup
     private IEnumerable<McpServerTool> CreateGroupTools()
     {
         var invoker = new DispatcherRouteEditInvoker();
-        yield return LegendMcpAdapter.Create(new GetLegendTool(_legend, _position, invoker));
+        yield return LegendMcpAdapter.Create(new GetLegendTool(_legend, _position, _depthBasis, _maps, invoker));
         yield return LegendMcpAdapter.Create(new SetLegendTool(_legend, _position, _tab, _ui, invoker, _find));
     }
 }

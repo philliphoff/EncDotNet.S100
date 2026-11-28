@@ -301,7 +301,7 @@ public sealed class MapDatasetVisibilityTests
         var entry = f.Datasets.Add("/tmp/a.000", "S-57");
         f.Split();
         entry.SetVisibleIn(Map2, false);
-        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(f.Datasets, Immediate));
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(f.Datasets, new MapSplitControllerAccessor(), Immediate));
 
         var result = await tool.InvokeAsync(
             new SetDatasetStateRequest(entry.DisplayName, true, null), TestContext.Current.CancellationToken);

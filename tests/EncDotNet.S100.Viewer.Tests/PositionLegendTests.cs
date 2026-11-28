@@ -258,7 +258,7 @@ public sealed class PositionLegendTests : IDisposable
         var entry = Cell("101US00TEST", (0, 0, 0.1, 0.1), 22_000, 12_000);
         using var legend = _f.Create();
         using var position = Position(legend);
-        var tool = new GetLegendTool(legend, position, new InlineInvoker());
+        var tool = new GetLegendTool(legend, position, _f.DepthBasis(), _f.Maps, new InlineInvoker());
 
         // get_legend takes the current view, without waiting for pan end.
         _f.Viewport.Publish(0.04, 0.04, 0.06, 0.06);

@@ -294,9 +294,127 @@ public sealed class SplitMapMcpToolsTests
         Assert.Null(all["map"]);
     }
 
-    private static void DrawWarnings(TestMap map) =>
+    [Fact]
+    public async Task Set_dataset_state_with_a_map_hides_the_dataset_in_that_map_only()
+    {
+        await using var f = await StartAsync();
+        var entry = f.Datasets.Add("/tmp/warnings", "S-124");
+
+        var state = Json(await f.CallAsync(
+            "set_dataset_state", Args(("datasetId", entry.DisplayName), ("visible", false), ("map", "map-2")), Ct));
+
+        Assert.False(entry.IsVisibleIn(new MapViewId("map-2")));
+        Assert.True(entry.IsVisibleIn(new MapViewId("map-1")));
+        Assert.False(state["visible"]!.GetValue<bool>());
+        Assert.True(state["previousVisible"]!.GetValue<bool>());
+        Assert.True(state["changed"]!.GetValue<bool>());
+        Assert.Equal(["map-1"], state["shownIn"]!.AsArray().Select(m => m!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Set_dataset_state_without_a_map_applies_to_every_map()
+    {
+        // Split map step 2, Q6.
+        await using var f = await StartAsync();
+        var entry = f.Datasets.Add("/tmp/warnings", "S-124");
+        entry.SetVisibleIn(new MapViewId("map-2"), false);
+
+        var shown = Json(await f.CallAsync(
+            "set_dataset_state", Args(("datasetId", entry.DisplayName), ("visible", true)), Ct));
+        Assert.Equal(["map-1", "map-2"], shown["shownIn"]!.AsArray().Select(m => m!.GetValue<string>()));
+
+        var hidden = Json(await f.CallAsync(
+            "set_dataset_state", Args(("datasetId", entry.DisplayName), ("visible", false)), Ct));
+        Assert.False(hidden["visible"]!.GetValue<bool>());
+        Assert.Empty(hidden["shownIn"]!.AsArray());
+        Assert.False(entry.IsVisibleAnywhere);
+    }
+
+    [Theory]
+    [InlineData("opacity", 0.5)]
+    [InlineData("order", "up")]
+    public async Task Set_dataset_state_refuses_a_global_property_with_a_map(string property, object value)
+    {
+        await using var f = await StartAsync();
+        var entry = f.Datasets.Add("/tmp/warnings", "S-124");
+
+        var result = await f.CallAsync(
+            "set_dataset_state", Args(("datasetId", entry.DisplayName), (property, value), ("map", "map-2")), Ct);
+
+        Assert.Equal("invalid_argument", ErrorCode(result));
+        Assert.Equal(1.0, entry.Opacity);
+        Assert.True(entry.IsVisibleIn(new MapViewId("map-2")));
+    }
+
+    [Fact]
+    public async Task Set_dataset_state_refuses_an_unknown_map()
+    {
+        await using var f = await StartAsync();
+        var entry = f.Datasets.Add("/tmp/warnings", "S-124");
+
+        var result = await f.CallAsync(
+            "set_dataset_state", Args(("datasetId", entry.DisplayName), ("visible", false), ("map", "map-9")), Ct);
+
+        Assert.Equal("map_not_found", ErrorCode(result));
+        Assert.True(entry.IsVisibleAnywhere);
+    }
+
+    [Fact]
+    public async Task List_maps_reports_what_each_map_draws()
+    {
+        await using var f = await StartAsync();
+        var a = f.Datasets.Add("/tmp/a.000", "S-57");
+        var b = f.Datasets.Add("/tmp/b.000", "S-57");
+        a.SetVisibleIn(new MapViewId("map-2"), false);
+
+        var list = Json(await f.CallAsync("list_maps", null, Ct));
+
+        var one = list["maps"]![0]!["datasets"]!;
+        Assert.Equal(2, one["shown"]!.GetValue<int>());
+        Assert.Equal(2, one["total"]!.GetValue<int>());
+        Assert.Empty(one["hidden"]!.AsArray());
+        var two = list["maps"]![1]!["datasets"]!;
+        Assert.Equal(1, two["shown"]!.GetValue<int>());
+        Assert.Equal(2, two["total"]!.GetValue<int>());
+        Assert.Equal([a.DisplayName], two["hidden"]!.AsArray().Select(h => h!.GetValue<string>()));
+        Assert.NotEqual(a.DisplayName, b.DisplayName);
+    }
+
+    [Fact]
+    public async Task List_datasets_reports_the_maps_that_draw_each_dataset()
+    {
+        await using var f = await StartAsync(catalog: WarningCatalog());
+        var entry = f.Datasets.Add("/tmp/warnings", "S-124");
+        Assert.Equal("warnings", entry.DisplayName);
+        entry.SetVisibleIn(new MapViewId("map-1"), false);
+
+        var list = Json(await f.CallAsync("list_datasets", null, Ct));
+
+        var dataset = Assert.Single(list["datasets"]!.AsArray())!;
+        Assert.Equal(["map-2"], dataset["shownIn"]!.AsArray().Select(m => m!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Pick_features_reports_dataset_hidden_for_a_map_that_hides_the_dataset()
+    {
+        await using var f = await StartAsync(catalog: WarningCatalog());
+        // Both maps hold the dataset, but Map 2 holds it hidden (step 2 §2.2).
+        DrawWarnings(f.Map("map-1"));
+        DrawWarnings(f.Map("map-2"), visible: false);
+        f.Map("map-1").Notifier.Publish(Viewport(0, 0));
+        f.Map("map-2").Notifier.Publish(Viewport(0, 0));
+
+        var pick = Json(await f.CallAsync("pick_features", Args(("latitude", 0.0), ("longitude", 0.0)), Ct));
+
+        var shownIn = pick["shownIn"]!.AsArray();
+        Assert.True(shownIn[0]!["shown"]!.GetValue<bool>());
+        Assert.False(shownIn[1]!["shown"]!.GetValue<bool>());
+        Assert.Equal("dataset_hidden", shownIn[1]!["reason"]!.GetValue<string>());
+    }
+
+    private static void DrawWarnings(TestMap map, bool visible = true) =>
         map.Session.SetDataset(
-            new MapDataset(new MapDatasetId("warnings"), "warnings", new DatasetMetadata { Spec = WarningSpec }),
+            new MapDataset(new MapDatasetId("warnings"), "warnings", new DatasetMetadata { Spec = WarningSpec }, isVisible: visible),
             minimumDisplayScale: null,
             maximumDisplayScale: null);
 

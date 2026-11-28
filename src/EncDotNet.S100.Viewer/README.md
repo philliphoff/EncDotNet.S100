@@ -575,7 +575,18 @@ they're drawn.
 Show two maps side by side, each panned and zoomed on its own, with the
 **Split map** button in the title bar, its menu, or **View** > **Split Map**
 (⌘\ on macOS, Ctrl+\ elsewhere). The new map opens where the map was
-looking. Both maps show the same datasets and time.
+looking, showing the same datasets. Both maps show the same time.
+
+Each map shows its own subset of the loaded datasets, so one map can show
+S-57 and the other S-101 over the same harbour. While the map is split, each
+Datasets row's eye becomes one number chip per map: a filled chip means the
+map draws the dataset. Click a chip to show or hide the dataset in that map;
+Alt-click shows it in that map only. The Datasets header's count opens a
+checklist for the active map. A dataset hidden in one map stays loaded, and
+the other map, route checks and UKC still use it. The Legend and DEPTHS follow
+the active map. A pick on a feature that one map hides is drawn there as a
+ghost, and Object information says where it's hidden. Opacity, draw order and
+the display settings are the same in both maps.
 
 While the map is split, each map has a header with its number, such as
 **Map 2**, and a close button; closing either map keeps the other. **Close
@@ -601,7 +612,9 @@ start SoundCharts.
 
 An agent can split, drive and link the maps over MCP: `list_maps`,
 `set_split_map`, `set_active_map`, `set_map_link` and `set_map_name`, and a
-`map` argument on the map tools. See the
+`map` argument on the map tools. `set_dataset_state` with `map` shows or hides
+a dataset in one map, and `list_maps` and `list_datasets` report what each map
+draws. See the
 [MCP server](../../docs/mcp-server.md#split-map-tools) page.
 
 ### Basemap
@@ -2094,7 +2107,7 @@ running app:
 | `open_dataset`, `close_dataset`, `close_all_datasets` | Load a file or exchange set the same way the **File** menu does, and report its ID, bounding box and load time; unload datasets by ID. |
 | `create_route`, `list_routes`, `get_route`, `delete_route`, `append_waypoint`, `insert_waypoint`, `move_waypoint`, `delete_waypoint`, `set_leg_attributes`, `set_route_info`, `get_passage`, `set_passage`, `undo_route_edit`, `redo_route_edit`, `set_route_edit_mode`, `select_route_item`, `set_passage_card` | Build and edit routes, shown live in the **Routes** panel. Edits are undoable, with the viewer's own edits. |
 | `list_panels`, `set_panel` | List the dock panels and their state, and show or hide a panel by ID (such as `Datasets`, `LayerStack`, `PickReport` or `Timeline`). |
-| `list_maps`, `set_split_map`, `set_active_map`, `set_map_link`, `set_map_name` | Split the map, list the panes with their views, make one active, link their views and name them. The map tools take a `map` id to act on a pane other than the active one. |
+| `list_maps`, `set_split_map`, `set_active_map`, `set_map_link`, `set_map_name` | Split the map, list the panes with their views and the datasets each draws, make one active, link their views and name them. The map tools, `get_legend` and `get_depth_basis` take a `map` id to act on a pane other than the active one, and `set_dataset_state` takes one to show or hide a dataset in that pane only. |
 
 The [MCP server](../../docs/mcp-server.md) page has the full tool list, which
 tools change state, and an agent walkthrough.

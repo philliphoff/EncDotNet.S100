@@ -67,6 +67,8 @@ A host with its own live set of datasets, such as a viewer, implements
 | `IdleTimeout` | 10 minutes | How long an idle session is kept. |
 | `AdditionalTools` | `null` | Host tools to serve alongside the built-in tools. See [Add host tools](#add-host-tools). |
 | `PassageRoutes` | `null` | The host's routes, so `check_route` can check a route as well as a polyline. |
+| `MapDrawState` | `null` | What the host's map draws (its view time and hidden features), so `identify_features` matches it. A host with several maps passes an `IMapCapabilityAccessor<IMapDrawState>`, so the tool's `map` argument can name one. |
+| `DatasetMapPresence` | `null` | Which of the host's maps draw each dataset (`IDatasetMapPresence`), so `list_datasets` reports `shownIn`. Leave it `null` in a host without maps. |
 | `Toolsets` | `null` (all) | The toolsets to serve. See [Toolsets](#toolsets). |
 
 ### Server members

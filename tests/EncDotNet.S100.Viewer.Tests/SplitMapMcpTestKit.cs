@@ -211,13 +211,11 @@ internal sealed class SplitMapMcpFixture : IAsyncDisposable
         Panes = new TestPaneHost(Views);
         Split = new MapSplitViewModel(Views, Panes, () => { });
         Split.Restore(saved: null, restoreViews: true);
+        // A new pane starts from the active pane's datasets (step 2 §2.2).
+        Visibility = new MapDatasetVisibility(Views, Datasets);
         ControllerAccessor = new MapSplitControllerAccessor
         {
-            Current = new MapSplitController(Split, Views, action =>
-            {
-                action();
-                return Task.CompletedTask;
-            }),
+            Current = new MapSplitController(Split, Views, Datasets, Immediate),
         };
         WindowActivity = new FakeRenderActivity();
         Settle = new EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor(_ => { });
@@ -239,6 +237,9 @@ internal sealed class SplitMapMcpFixture : IAsyncDisposable
             McpTools.PerfHarnessMcpAdapters.Create(new McpTools.FlingTool(ViewportAccessor, Settle.MarkTrigger)));
         var presentation = new TestToolGroup(
             [.. EncDotNet.S100.Mcp.MutableTools.S100MutableTools.Create(renderer: RendererAccessor)]);
+        var datasetState = new TestToolGroup(
+            McpTools.ViewerStateMcpAdapters.Create(new McpTools.SetDatasetStateTool(
+                new ViewerDatasetStateController(Datasets, ControllerAccessor, Immediate))));
 
         _dir = Path.Combine(Path.GetTempPath(), "EncDotNet.S100.Viewer.Tests", $"split-mcp-{Guid.NewGuid():N}");
         var settings = new ViewerSettings
@@ -248,8 +249,15 @@ internal sealed class SplitMapMcpFixture : IAsyncDisposable
             McpPort = 0,
             McpConfiguredFromCommandLine = true,
         };
-        _host = TestMcpServerHost.Create(Catalog, settings, drawStates, [mapGroup, diagnostics, presentation]);
+        _host = TestMcpServerHost.Create(
+            Catalog, settings, drawStates, new ViewerDatasetMapPresence(ControllerAccessor), [mapGroup, diagnostics, presentation, datasetState]);
     }
+
+    /// <summary>The Datasets list: which datasets each map draws.</summary>
+    public DatasetsViewModel Datasets { get; } = new(new FakeDatasetLoaderService());
+
+    /// <summary>Seeds a new pane's visibility from the active pane's, as the window does.</summary>
+    public MapDatasetVisibility Visibility { get; }
 
     public MapCapabilityAccessor<IMapViewportController> ViewportAccessor { get; }
 
@@ -298,7 +306,14 @@ internal sealed class SplitMapMcpFixture : IAsyncDisposable
         if (_client is not null)
             await _client.DisposeAsync();
         await _host.DisposeAsync();
+        Visibility.Dispose();
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
+    }
+
+    private static Task Immediate(Action action)
+    {
+        action();
+        return Task.CompletedTask;
     }
 
     private sealed class EmptyCatalog : EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog

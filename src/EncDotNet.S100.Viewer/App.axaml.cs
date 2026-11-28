@@ -599,7 +599,8 @@ public partial class App : Application
                 sp.GetRequiredService<EcdisDisplayPanelViewModel>(),
                 sp.GetRequiredService<ViewerSettingsService>(),
                 displayCombinations,
-                depthBasis),
+                depthBasis,
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViews>()),
             new McpTools.Groups.DiagnosticsMcpToolGroup(
                 sp.GetRequiredService<IRenderActivityMonitor>(),
                 perfHarness,
@@ -613,7 +614,10 @@ public partial class App : Application
                 displayCombinations),
             new McpTools.Groups.ViewerStateMcpToolGroup(
                 timeline,
-                new ViewerDatasetStateController(sp.GetRequiredService<DatasetsViewModel>(), UiThread.InvokeAsync),
+                new ViewerDatasetStateController(
+                    sp.GetRequiredService<DatasetsViewModel>(),
+                    sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapSplitControllerAccessor>(),
+                    UiThread.InvokeAsync),
                 new ViewerNotificationController(
                     sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>(),
                     UiThread.InvokeAsync),
@@ -681,7 +685,9 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel>(),
                 sp.GetRequiredService<IViewerUiControllerAccessor>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>(),
+                depthBasis,
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViews>()),
             new McpTools.Groups.ChartReferenceMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceNavigator>()),
@@ -1709,6 +1715,8 @@ public partial class App : Application
             new McpTools.ViewerPassageRouteProvider(sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(), new McpTools.DispatcherRouteEditInvoker()),
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
             sp.GetRequiredService<ICapabilityAccessor<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>>(),
+            new EncDotNet.S100.Viewer.Services.ViewerDatasetMapPresence(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapSplitControllerAccessor>()),
             CreateMcpToolGroups(sp),
             sp.GetService<ILoggerFactory>()));
         // The settled signal and process metrics behind the perf harness's MCP

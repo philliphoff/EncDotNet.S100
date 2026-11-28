@@ -93,16 +93,21 @@ internal static class ViewerStateMcpAdapters
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
             [Description("Dataset id, as list_datasets reports it.")] string datasetId,
-            [Description("True shows the dataset on the map, false hides it; omit to leave it.")] bool? visible = null,
-            [Description("Opacity in 0..1; omit to leave it.")] double? opacity = null,
-            [Description("Move in the draw order: 'up', 'down', 'front' or 'back'; omit to leave it.")] string? order = null,
+            [Description("True shows the dataset, false hides it: in the map named by 'map', else in every map; omit to leave it.")] bool? visible = null,
+            [Description("Opacity in 0..1, the same in every map; omit to leave it. Can't be paired with map.")] double? opacity = null,
+            [Description("Move in the draw order, the same in every map: 'up', 'down', 'front' or 'back'; omit to leave it. Can't be paired with map.")] string? order = null,
+            [Description("The map to show or hide the dataset in, an id from list_maps such as 'map-2'; omit for every map.")] string? map = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetDatasetStateRequest(datasetId, visible, opacity, order), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetDatasetStateRequest(datasetId, visible, opacity, order, map), ct));
         return Tool(del, SetDatasetStateTool.Name,
             "Shows or hides a loaded dataset, sets its opacity and moves it in the draw order, as the eye icon, opacity "
             + "control and move buttons in the Datasets list do. Some datasets load hidden (e.g. gridded S-104 water-level surfaces, or duplicate variants in an "
-            + "exchange set); use this to switch them on. With no change given it only reports the "
-            + "current state. Returns the state before and after. Mutating; viewer-injected tool.");
+            + "exchange set); use this to switch them on. With the map split, each map draws its own subset: 'map' shows "
+            + "or hides the dataset in that map only, as a row's number chip does; without 'map', 'visible' applies to "
+            + "every map, as the eye does with one map. Opacity and order are the same in every map, so pairing them "
+            + "with 'map' fails with invalid_argument; an unknown map fails with map_not_found. With no change given it "
+            + "only reports the current state. Returns the state before and after ('visible' is for the named map, else "
+            + "any map) and 'shownIn', the ids of the maps that draw it. Mutating; viewer-injected tool.");
     }
 
     /// <summary>Creates <c>select_dataset</c>.</summary>

@@ -240,7 +240,7 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
         SplitMapControls.DataContext = _split;
         // The MCP map tools (list_maps, set_split_map and the rest; D28, #1735).
         App.Services.GetRequiredService<MapSplitControllerAccessor>().Current =
-            new MapSplitController(_split, _mapViews, UiThread.InvokeAsync);
+            new MapSplitController(_split, _mapViews, _viewModel.Datasets, UiThread.InvokeAsync);
         // View › Split Map: ⌘\ is the macOS menu item's; Ctrl+\ elsewhere (D1).
         KeyBindings.Add(new KeyBinding
         {

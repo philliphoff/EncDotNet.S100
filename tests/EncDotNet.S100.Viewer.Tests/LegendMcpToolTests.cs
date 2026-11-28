@@ -24,7 +24,7 @@ public sealed class LegendMcpToolTests
     }
 
     private static GetLegendTool Tool(LegendServiceTests.Fixture f, LegendService service) =>
-        new(service, f.Position(service), new InlineInvoker());
+        new(service, f.Position(service), f.DepthBasis(), f.Maps, new InlineInvoker());
 
     private static LegendServiceTests.Fixture TwoProducts()
     {
@@ -72,6 +72,18 @@ public sealed class LegendMcpToolTests
         Assert.Equal(["swatch", "area"], group.Rows.Select(r => r.Kind));
         Assert.Equal(["0–1 kn", "Eddy"], group.Rows.Select(r => r.Label));
         Assert.Equal("#D0E8FF", group.Rows[0].Color);
+    }
+
+    [Fact]
+    public async Task An_unknown_map_is_refused()
+    {
+        var f = TwoProducts();
+        using var service = f.Create();
+
+        var result = await Tool(f, service).InvokeAsync(map: "map-9", ct: TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.Equal("map_not_found", error.Code);
     }
 
     [Fact]

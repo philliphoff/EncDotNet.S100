@@ -37,6 +37,55 @@ public class ListDatasetsToolTests
     }
 
     [Fact]
+    public async Task Reports_no_shownIn_in_a_host_without_maps()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S124("alpha"));
+        var tool = new ListDatasetsTool(catalog);
+
+        var result = await tool.InvokeAsync(new ListDatasetsRequest(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Null(Assert.Single(value.Datasets).ShownIn);
+    }
+
+    [Fact]
+    public async Task Reports_the_maps_that_draw_each_dataset_on_the_page()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S124("alpha"));
+        catalog.Add(LoadedDatasetFactory.S124("beta"));
+        var presence = new FakePresence(new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["alpha"] = ["map-1", "map-2"],
+            ["beta"] = [],
+        });
+        var tool = new ListDatasetsTool(catalog, presence);
+
+        var result = await tool.InvokeAsync(new ListDatasetsRequest(PageSize: 1, Page: 1), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        var summary = Assert.Single(value.Datasets);
+        Assert.Equal(new DatasetId("beta"), summary.Id);
+        Assert.Empty(summary.ShownIn!);
+        // Only the page is asked about.
+        Assert.Equal([new DatasetId("beta")], Assert.Single(presence.Asked));
+    }
+
+    private sealed class FakePresence(IReadOnlyDictionary<string, IReadOnlyList<string>> shownIn) : EncDotNet.S100.Datasets.Pipelines.Query.IDatasetMapPresence
+    {
+        public List<IReadOnlyList<DatasetId>> Asked { get; } = [];
+
+        public Task<IReadOnlyList<IReadOnlyList<string>?>> ShownInAsync(
+            IReadOnlyList<DatasetId> datasets, CancellationToken cancellationToken = default)
+        {
+            Asked.Add(datasets);
+            return Task.FromResult<IReadOnlyList<IReadOnlyList<string>?>>(
+                [.. datasets.Select(d => shownIn.TryGetValue(d.Value, out var maps) ? maps : null)]);
+        }
+    }
+
+    [Fact]
     public async Task Returns_all_specs_when_no_filter()
     {
         var catalog = new FakeDatasetCatalog();

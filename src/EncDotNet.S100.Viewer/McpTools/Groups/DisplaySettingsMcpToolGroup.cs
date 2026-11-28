@@ -12,12 +12,17 @@ internal sealed class DisplaySettingsMcpToolGroup : IViewerMcpToolGroup
     private readonly EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService _displayCombinations;
     private readonly EncDotNet.S100.Viewer.Services.Depth.DepthBasisService _depthBasis;
 
+    private readonly Services.MapViews _maps;
+
     public DisplaySettingsMcpToolGroup(
         EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel ecdisDisplay,
         Services.ViewerSettingsService settings,
         EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService displayCombinations,
-        EncDotNet.S100.Viewer.Services.Depth.DepthBasisService depthBasis)
+        EncDotNet.S100.Viewer.Services.Depth.DepthBasisService depthBasis,
+        Services.MapViews maps)
     {
+        ArgumentNullException.ThrowIfNull(maps);
+        _maps = maps;
         ArgumentNullException.ThrowIfNull(ecdisDisplay);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(displayCombinations);
@@ -58,6 +63,6 @@ internal sealed class DisplaySettingsMcpToolGroup : IViewerMcpToolGroup
         yield return DisplayCombinationMcpAdapters.Create(new ListDisplayCombinationsTool(_displayCombinations, UiThread.InvokeAsync));
         yield return DisplayCombinationMcpAdapters.Create(new SetDisplayCombinationTool(_displayCombinations, UiThread.InvokeAsync));
 
-        yield return DepthBasisMcpAdapter.Create(new GetDepthBasisTool(_depthBasis, new DispatcherRouteEditInvoker()));
+        yield return DepthBasisMcpAdapter.Create(new GetDepthBasisTool(_depthBasis, _maps, new DispatcherRouteEditInvoker()));
     }
 }

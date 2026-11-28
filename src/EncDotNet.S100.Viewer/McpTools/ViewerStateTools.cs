@@ -150,14 +150,15 @@ internal sealed record TimelineLaneDto(
 internal sealed record DatasetStateDto(
     [property: Description("Dataset id, as list_datasets reports it.")] string Id,
     [property: Description("Product specification, e.g. 'S-104'.")] string Spec,
-    [property: Description("Whether the dataset draws, after the call.")] bool Visible,
+    [property: Description("Whether the dataset is visible after the call: in the map named by 'map', else in any map.")] bool Visible,
     [property: Description("Dataset opacity in 0..1, after the call.")] double Opacity,
-    [property: Description("Whether the dataset drew, before the call.")] bool PreviousVisible,
+    [property: Description("Whether the dataset was visible before the call, as 'visible' asks.")] bool PreviousVisible,
     [property: Description("Dataset opacity in 0..1, before the call.")] double PreviousOpacity,
     [property: Description("True when the call changed anything.")] bool Changed,
-    [property: Description("Row in the draw order after the call; 0 paints on top.")] int Position = 0,
-    [property: Description("Row in the draw order before the call.")] int PreviousPosition = 0,
-    [property: Description("The dataset's own viewing-group filter on top of the display settings, or null for none. Check route sets it on a received S-421 route's dataset to keep only its action points.")] DatasetViewingGroupsDto? ViewingGroups = null);
+    [property: Description("Row in the draw order after the call; 0 paints on top.")] int Position,
+    [property: Description("Row in the draw order before the call.")] int PreviousPosition,
+    [property: Description("The dataset's own viewing-group filter on top of the display settings, or null for none. Check route sets it on a received S-421 route's dataset to keep only its action points.")] DatasetViewingGroupsDto? ViewingGroups,
+    [property: Description("The ids of the maps that draw the dataset after the call, in reading order (list_maps): visible there and not hidden by the display settings. Empty when no map draws it.")] IReadOnlyList<string> ShownIn);
 
 /// <summary>A dataset's own viewing-group filter (see <see cref="ViewingGroupFilter"/>).</summary>
 [Description("A dataset's own viewing-group filter, applied on top of the map-wide display settings.")]
@@ -405,12 +406,15 @@ internal sealed partial class SetViewTimeTool(IViewerTimelineController timeline
 // ---------------------------------------------------------------------------
 
 /// <summary>Request for <see cref="SetDatasetStateTool"/>.</summary>
-internal sealed record SetDatasetStateRequest(string DatasetId, bool? Visible, double? Opacity, string? Order = null);
+internal sealed record SetDatasetStateRequest(string DatasetId, bool? Visible, double? Opacity, string? Order = null, string? Map = null);
 
 /// <summary>
 /// Shows or hides a loaded dataset and sets its opacity (MCP
 /// <c>set_dataset_state</c>), as the Datasets list's eye icon does. With
-/// neither value supplied it only reports the current state.
+/// neither value supplied it only reports the current state. With a map it
+/// shows or hides the dataset in that map only, as a row's number chip does
+/// (split map step 2 §2.7); opacity and order are global, so they can't be
+/// paired with a map.
 /// </summary>
 internal sealed class SetDatasetStateTool(IViewerDatasetStateController datasets)
 {
@@ -427,6 +431,11 @@ internal sealed class SetDatasetStateTool(IViewerDatasetStateController datasets
             return ToolResult<DatasetStateDto>.Err(new InvalidArgument("datasetId", "value is required; call list_datasets for the ids"));
         if (request.Opacity is { } opacity && (double.IsNaN(opacity) || opacity < 0 || opacity > 1))
             return ToolResult<DatasetStateDto>.Err(new InvalidArgument("opacity", "must be between 0 and 1"));
+        var map = string.IsNullOrWhiteSpace(request.Map) ? null : request.Map.Trim();
+        if (map is not null && request.Opacity is not null)
+            return ToolResult<DatasetStateDto>.Err(new InvalidArgument("opacity", "is the same in every map, so it can't be set with map; call again without map"));
+        if (map is not null && !string.IsNullOrWhiteSpace(request.Order))
+            return ToolResult<DatasetStateDto>.Err(new InvalidArgument("order", "is the same in every map, so it can't be set with map; call again without map"));
 
         DatasetOrderMove? order = null;
         if (!string.IsNullOrWhiteSpace(request.Order))
@@ -438,9 +447,12 @@ internal sealed class SetDatasetStateTool(IViewerDatasetStateController datasets
         }
 
         var id = request.DatasetId.Trim();
-        var outcome = await _datasets.SetStateAsync(id, request.Visible, request.Opacity, order, ct).ConfigureAwait(false);
-        if (outcome is null)
-            return ToolResult<DatasetStateDto>.Err(new DatasetNotFound(new DatasetId(id)));
+        var result = await _datasets.SetStateAsync(id, map, request.Visible, request.Opacity, order, ct).ConfigureAwait(false);
+        if (result.TryGetError(out var error))
+            return ToolResult<DatasetStateDto>.Err(error);
+        if (!result.TryGetValue(out var outcome))
+            throw new InvalidOperationException("A tool result holds neither a value nor an error.");
+
         return ToolResult<DatasetStateDto>.Ok(new DatasetStateDto(
             outcome.Id,
             outcome.Spec,
@@ -452,7 +464,8 @@ internal sealed class SetDatasetStateTool(IViewerDatasetStateController datasets
                 || outcome.Position != outcome.PreviousPosition,
             outcome.Position,
             outcome.PreviousPosition,
-            DatasetViewingGroupsDto.From(outcome.ViewingGroups)));
+            DatasetViewingGroupsDto.From(outcome.ViewingGroups),
+            outcome.ShownIn));
     }
 }
 

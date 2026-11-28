@@ -30,6 +30,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IPassageRouteProvider _passageRoutes;
     private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache _routeCheckSources;
     private readonly ICapabilityAccessor<IMapDrawState> _mapDrawState;
+    private readonly IDatasetMapPresence _datasetMapPresence;
     private readonly IReadOnlyList<IViewerMcpToolGroup> _toolGroups;
     private readonly ILoggerFactory? _loggers;
     private readonly ILogger _logger;
@@ -43,6 +44,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     /// <param name="passageRoutes">The viewer's routes, as the shared passage tools read them.</param>
     /// <param name="routeCheckSources">The route-check sources shared with the viewer's own route checks.</param>
     /// <param name="mapDrawState">What each map draws now, so the server's queries match the map (the active one, or the one a query names).</param>
+    /// <param name="datasetMapPresence">Which maps draw each dataset, for <c>list_datasets</c>' <c>shownIn</c>.</param>
     /// <param name="toolGroups">The viewer's own tools, created afresh each time the server starts.</param>
     /// <param name="loggers">Logs the server's start, stop and port conflicts.</param>
     public McpServerHost(
@@ -51,6 +53,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         IPassageRouteProvider passageRoutes,
         EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache routeCheckSources,
         ICapabilityAccessor<IMapDrawState> mapDrawState,
+        IDatasetMapPresence datasetMapPresence,
         IReadOnlyList<IViewerMcpToolGroup> toolGroups,
         ILoggerFactory? loggers = null)
     {
@@ -59,12 +62,14 @@ internal sealed class McpServerHost : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(passageRoutes);
         ArgumentNullException.ThrowIfNull(routeCheckSources);
         ArgumentNullException.ThrowIfNull(mapDrawState);
+        ArgumentNullException.ThrowIfNull(datasetMapPresence);
         ArgumentNullException.ThrowIfNull(toolGroups);
         _catalog = catalog;
         _settings = settings;
         _passageRoutes = passageRoutes;
         _routeCheckSources = routeCheckSources;
         _mapDrawState = mapDrawState;
+        _datasetMapPresence = datasetMapPresence;
         _toolGroups = toolGroups;
         _loggers = loggers;
         _logger = loggers?.CreateLogger<McpServerHost>()
@@ -146,6 +151,7 @@ internal sealed class McpServerHost : IAsyncDisposable
             PassageRoutes = _passageRoutes,
             RouteCheckSources = _routeCheckSources,
             MapDrawState = _mapDrawState,
+            DatasetMapPresence = _datasetMapPresence,
             Toolsets = toolsets,
         };
         var next = new S100McpServer(_catalog, options, _loggers);

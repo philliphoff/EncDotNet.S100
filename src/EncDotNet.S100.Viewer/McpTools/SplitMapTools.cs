@@ -16,6 +16,13 @@ internal sealed record MapViewportDto(
     [property: Description("Centre longitude, decimal degrees, in the continuous frame the map shows.")] double CenterLongitude,
     [property: Description("The 1:N scale the status bar shows for this map, or null when the map isn't laid out.")] double? ScaleDenominator);
 
+/// <summary>What of the Datasets list a map draws, as <c>list_maps</c> reports it.</summary>
+[Description("What of the Datasets list a map draws.")]
+internal sealed record MapDatasetsDto(
+    [property: Description("How many datasets the map draws: visible in it (set_dataset_state with map) and not hidden by the display settings.")] int Shown,
+    [property: Description("How many datasets the Datasets list holds.")] int Total,
+    [property: Description("The ids of the datasets the map doesn't draw, as list_datasets reports them, in Datasets-list order (usually the shorter list).")] IReadOnlyList<string> Hidden);
+
 /// <summary>One map, as <c>list_maps</c> reports it.</summary>
 [Description("One map of the window.")]
 internal sealed record MapDto(
@@ -25,7 +32,8 @@ internal sealed record MapDto(
     [property: Description("Whether it's the active map: the one the map tools act on when given no map, and the one the status bar, Legend and keyboard follow.")] bool Active,
     [property: Description("Whether the panes' views are linked (set_map_link).")] bool Linked,
     [property: Description("Whether the pane is folded to a strip because the window is too narrow or the user folded it.")] bool Folded,
-    [property: Description("What the map shows, or null before it's laid out.")] MapViewportDto? Viewport);
+    [property: Description("What the map shows, or null before it's laid out.")] MapViewportDto? Viewport,
+    [property: Description("What of the Datasets list the map draws: each map draws its own subset (set_dataset_state with map).")] MapDatasetsDto Datasets);
 
 /// <summary>The window's maps (<c>list_maps</c> and the split tools' result).</summary>
 [Description("The window's maps.")]
@@ -130,7 +138,8 @@ internal sealed class SplitMapTools
         state.Split,
         state.Linked,
         state.Active,
-        [.. state.Maps.Select(m => new MapDto(m.Id, m.Label, m.Name, m.Active, state.Linked, m.Folded, ToDto(m.Viewport)))]);
+        [.. state.Maps.Select(m => new MapDto(m.Id, m.Label, m.Name, m.Active, state.Linked, m.Folded, ToDto(m.Viewport),
+            new MapDatasetsDto(m.Datasets.Shown, m.Datasets.Total, m.Datasets.Hidden)))]);
 
     private static MapViewportDto? ToDto(MapViewportSnapshot? viewport)
     {
@@ -165,7 +174,7 @@ internal sealed class SplitMapTools
 internal static class SplitMapMcpAdapters
 {
     private const string MapListNote =
-        " Returns what list_maps returns: split, linked, active and each map's id, label, name, active, linked, folded and viewport.";
+        " Returns what list_maps returns: split, linked, active and each map's id, label, name, active, linked, folded, viewport and datasets.";
 
     /// <summary>Creates the five tools.</summary>
     /// <param name="inner">The tools.</param>
@@ -177,14 +186,17 @@ internal static class SplitMapMcpAdapters
         yield return Tool(
             (CancellationToken ct = default) => McpAdapterShared.DispatchAsync(inner.ListMapsAsync),
             SplitMapTools.ListMapsName,
-            "Lists the live viewer's maps. With the map split (set_split_map), each pane is a map with its own view; "
-            + "in this release every map shows the same datasets at the same time. Each map has an opaque, stable 'id' "
+            "Lists the live viewer's maps. With the map split (set_split_map), each pane is a map with its own view "
+            + "and its own subset of the loaded datasets (set_dataset_state with map); every map shows the same time. "
+            + "Each map has an opaque, stable 'id' "
             + "(such as 'map-2') to pass as the 'map' argument of the map tools (set_viewport, fling, pick_features, "
             + "render_to_image, identify_features, await_settled, await_render_idle, get_render_stats); its 'label' "
             + "('Map 1', 'Map 2' in reading order); its 'name' (set_map_name); whether it's 'active' (the map those "
             + "tools act on when given no map, which the status bar and Legend follow); 'linked'; 'folded' (its pane "
             + "folded to a strip); and its 'viewport' (south, west, north, east, centerLatitude, centerLongitude, "
-            + "scaleDenominator). Also returns 'split', 'linked' and the 'active' id. Read-only; viewer-injected tool.");
+            + "scaleDenominator); and its 'datasets': how many of the Datasets list it draws ('shown' of 'total') and "
+            + "the ids it doesn't draw ('hidden'). Also returns 'split', 'linked' and the 'active' id. Read-only; "
+            + "viewer-injected tool.");
 
         yield return Tool(
             ([Description("The map to make active: an id from list_maps, such as 'map-2'.")] string map,
@@ -201,8 +213,9 @@ internal static class SplitMapMcpAdapters
             "Splits the live viewer's map into two side-by-side panes, or closes the split, as the title bar's Split "
             + "Map button and View › Split Map do. Opening copies the active map's view to the new pane, which becomes "
             + "active; closing keeps the active map and its view, and turns the link off. Opening a split map, or closing "
-            + "one that isn't, changes nothing. Each pane then has its own view; in this release every pane shows the "
-            + "same datasets at the same time. A command-line (--mcp) session doesn't save the split." + MapListNote
+            + "one that isn't, changes nothing. Each pane then has its own view; the new pane starts with the active "
+            + "map's datasets shown and hidden, and set_dataset_state with map changes one pane's. Every pane shows the "
+            + "same time. A command-line (--mcp) session doesn't save the split." + MapListNote
             + " Mutating; viewer-injected tool.");
 
         yield return Tool(
