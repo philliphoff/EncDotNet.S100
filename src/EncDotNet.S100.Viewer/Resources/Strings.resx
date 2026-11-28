@@ -10602,6 +10602,34 @@
     <value>Rename {0}</value>
     <comment>Pane header: the name editor's accessible name and the title's tooltip; {0} is "Map 2" (D19)</comment>
   </data>
+  <data name="SplitMap_DatasetCountFormat" xml:space="preserve">
+    <value>{0} of {1} datasets</value>
+    <comment>Pane header: how many loaded datasets this pane's map shows; opens the pane's checklist (split map step 2 §2.6, D18)</comment>
+  </data>
+  <data name="SplitMap_DatasetChecklistToolTipFormat" xml:space="preserve">
+    <value>Choose the datasets {0} shows</value>
+    <comment>Pane header: the dataset count's tooltip and help text; {0} is the pane's title, e.g. "Map 2" (D18)</comment>
+  </data>
+  <data name="SplitMap_DatasetChecklistHeadingFormat" xml:space="preserve">
+    <value>Shown in {0}</value>
+    <comment>Pane checklist: the heading over the rows; {0} is the pane's title, e.g. "Map 2" (D18)</comment>
+  </data>
+  <data name="SplitMap_DatasetChecklistSetCountFormat" xml:space="preserve">
+    <value>{0} of {1} shown</value>
+    <comment>Pane checklist: an exchange set row's second line, how many of its datasets this pane shows (Q5)</comment>
+  </data>
+  <data name="SplitMap_DatasetChecklistEmpty" xml:space="preserve">
+    <value>No datasets loaded</value>
+    <comment>Pane checklist: shown in place of the rows when nothing is loaded</comment>
+  </data>
+  <data name="SplitMap_OpenDatasets" xml:space="preserve">
+    <value>Open Datasets</value>
+    <comment>Pane checklist: the last item; opens the left dock's Datasets tab (D18)</comment>
+  </data>
+  <data name="SplitMap_OpenDatasetsToolTip" xml:space="preserve">
+    <value>Choose what every map shows in the Datasets tab</value>
+    <comment>Pane checklist: Open Datasets' tooltip (D18)</comment>
+  </data>
   <data name="Menu_SplitMap" xml:space="preserve">
     <value>Split Map</value>
     <comment>View › Split Map (⌘\) (D1)</comment>

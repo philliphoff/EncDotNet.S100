@@ -18,6 +18,7 @@ namespace EncDotNet.S100.Viewer.Views;
 public partial class MapPane : UserControl
 {
     private MapPaneViewModel? _pane;
+    private MapPaneDatasetsViewModel? _datasets;
 
     /// <summary>Creates the pane.</summary>
     public MapPane()
@@ -42,19 +43,27 @@ public partial class MapPane : UserControl
     internal Panel HudSlot => HudHost;
 
     /// <summary>
-    /// Binds the header and the folded strip to the pane's view-model and
-    /// names the pane's controls for UI automation after its map id.
+    /// Binds the header and the folded strip to the pane's view-model, the
+    /// header's dataset count and checklist to <paramref name="datasets"/>
+    /// (D18), and names the pane's controls for UI automation after its map id.
     /// </summary>
     /// <param name="pane">The pane's view-model.</param>
-    internal void Bind(MapPaneViewModel pane)
+    /// <param name="datasets">The pane's dataset count and checklist.</param>
+    internal void Bind(MapPaneViewModel pane, MapPaneDatasetsViewModel datasets)
     {
         ArgumentNullException.ThrowIfNull(pane);
+        ArgumentNullException.ThrowIfNull(datasets);
         if (_pane is not null)
             _pane.PropertyChanged -= OnPanePropertyChanged;
+        if (_datasets is not null)
+            _datasets.PropertyChanged -= OnDatasetsPropertyChanged;
         _pane = pane;
+        _datasets = datasets;
         Header.DataContext = pane;
         FoldStrip.DataContext = pane;
+        DatasetsButton.DataContext = datasets;
         pane.PropertyChanged += OnPanePropertyChanged;
+        datasets.PropertyChanged += OnDatasetsPropertyChanged;
         MapContent.IsVisible = !pane.IsFolded;
 
         var prefix = AutomationPrefix(pane);
@@ -65,6 +74,8 @@ public partial class MapPane : UserControl
         AutomationProperties.SetAutomationId(FoldStrip, $"{prefix}.FoldStrip");
         AutomationProperties.SetAutomationId(TitleText, $"{prefix}.Title");
         AutomationProperties.SetAutomationId(NameEditor, $"{prefix}.NameEditor");
+        AutomationProperties.SetAutomationId(DatasetsButton, $"{prefix}.Datasets");
+        AutomationProperties.SetAutomationId(OpenDatasetsButton, $"{prefix}.Datasets.Open");
     }
 
     /// <summary>
@@ -92,6 +103,26 @@ public partial class MapPane : UserControl
         else if (e.PropertyName == nameof(MapPaneViewModel.IsRenaming) && pane.IsRenaming)
             // The editor shows on this layout pass; focus it once it can take focus.
             Dispatcher.UIThread.Post(FocusNameEditor, DispatcherPriority.Loaded);
+    }
+
+    // Open Datasets closes the checklist from the view-model.
+    private void OnDatasetsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MapPaneDatasetsViewModel.IsOpen) && _datasets is { IsOpen: false })
+            DatasetsButton.Flyout?.Hide();
+    }
+
+    // The rows are built when the checklist opens and followed while it's open.
+    private void OnDatasetsFlyoutOpened(object? sender, EventArgs e)
+    {
+        if (_datasets is not null)
+            _datasets.IsOpen = true;
+    }
+
+    private void OnDatasetsFlyoutClosed(object? sender, EventArgs e)
+    {
+        if (_datasets is not null)
+            _datasets.IsOpen = false;
     }
 
     private void FocusNameEditor()

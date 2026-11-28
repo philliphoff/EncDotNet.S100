@@ -292,6 +292,9 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
             _mapLayoutSaver.Dispose();
             _datasetVisibility.Dispose();
             _timelinePanes.Dispose();
+            foreach (var paneDatasets in _paneDatasets.Values)
+                paneDatasets.Dispose();
+            _paneDatasets.Clear();
             _windowLifetimeCancellation.Cancel();
             _windowLifetimeCancellation.Dispose();
             App.Services.GetRequiredService<DatasetProcessorOwner>().Dispose();

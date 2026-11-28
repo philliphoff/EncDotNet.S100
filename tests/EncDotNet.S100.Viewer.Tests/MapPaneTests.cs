@@ -33,6 +33,9 @@ public sealed class MapPaneTests
 
     private static MapSplitViewModel TwoPanes() => TwoPanes(() => { });
 
+    internal static MapPaneDatasetsViewModel NoDatasets(MapPaneViewModel pane) =>
+        new(pane, new DatasetsViewModel(new FakeDatasetLoaderService()), _ => false, () => { }, action => action());
+
     private static MapSplitViewModel TwoPanes(Action requestSave)
     {
         var views = new MapViews(
@@ -50,8 +53,8 @@ public sealed class MapPaneTests
     {
         var left = new MapPane();
         var right = new MapPane();
-        left.Bind(split.Panes[0]);
-        right.Bind(split.Panes[1]);
+        left.Bind(split.Panes[0], NoDatasets(split.Panes[0]));
+        right.Bind(split.Panes[1], NoDatasets(split.Panes[1]));
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
         Grid.SetColumn(right, 1);
         grid.Children.Add(left);
@@ -133,7 +136,7 @@ public sealed class MapPaneTests
         var split = TwoPanes();
         split.CloseSplit();
         var pane = new MapPane();
-        pane.Bind(split.Panes[0]);
+        pane.Bind(split.Panes[0], NoDatasets(split.Panes[0]));
         using var host = ViewHost.Show(pane, width: 600, height: 400);
 
         Assert.False(host.IsShown("MapPane.map-2.Header"));
@@ -274,8 +277,8 @@ public sealed class MapPaneTests
         var split = TwoPanes();
         var left = new MapPane();
         var right = new MapPane();
-        left.Bind(split.Panes[0]);
-        right.Bind(split.Panes[1]);
+        left.Bind(split.Panes[0], NoDatasets(split.Panes[0]));
+        right.Bind(split.Panes[1], NoDatasets(split.Panes[1]));
         var rename = new MenuItem { Header = "Rename map…", Command = split.RenameActiveCommand };
         var menuButton = new Button { Content = "▾", Flyout = new MenuFlyout { Items = { rename } } };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,*") };
