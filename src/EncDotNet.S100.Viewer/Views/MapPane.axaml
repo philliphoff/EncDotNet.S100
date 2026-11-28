@@ -49,6 +49,10 @@
         <Style Selector="ToggleButton.paneLink:checked /template/ ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
+        <!-- D18, Q5: an exchange set's checklist row reads as a group. -->
+        <Style Selector="TextBlock.setRow">
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
         <Style Selector="TextBlock.paneTitle">
             <Setter Property="Opacity" Value="0.7" />
         </Style>
@@ -169,6 +173,95 @@
                                  VerticalAlignment="Center"
                                  VerticalContentAlignment="Center"
                                  LostFocus="OnNameEditorLostFocus" />
+                        <!-- D18: "2 of 4 datasets" for this pane's map; it
+                             opens the pane's checklist (one tri-state row
+                             per exchange set, then the loose datasets, Q5).
+                             MapPane.Bind sets its DataContext. -->
+                        <Button x:Name="DatasetsButton"
+                                AutomationProperties.AutomationId="MapPane.Datasets"
+                                x:DataType="vm:MapPaneDatasetsViewModel"
+                                AutomationProperties.Name="{Binding CountText}"
+                                AutomationProperties.HelpText="{Binding CountToolTip}"
+                                ToolTip.Tip="{Binding CountToolTip}"
+                                Classes="Ghost"
+                                Height="20" MinHeight="0" MinWidth="0"
+                                Padding="5,0"
+                                VerticalAlignment="Center"
+                                VerticalContentAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="3">
+                                <TextBlock Text="{Binding CountText}"
+                                           FontSize="11"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource AccentBrush}" />
+                                <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource AccentBrush}" />
+                            </StackPanel>
+                            <Button.Flyout>
+                                <Flyout Placement="BottomEdgeAlignedLeft"
+                                        Opened="OnDatasetsFlyoutOpened"
+                                        Closed="OnDatasetsFlyoutClosed">
+                                    <StackPanel x:DataType="vm:MapPaneDatasetsViewModel"
+                                                MinWidth="240" MaxWidth="360"
+                                                Spacing="2">
+                                        <TextBlock Text="{Binding Heading}"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Opacity="0.7"
+                                                   Margin="2,0,2,4" />
+                                        <TextBlock Text="{x:Static loc:Strings.SplitMap_DatasetChecklistEmpty}"
+                                                   IsVisible="{Binding IsEmpty}"
+                                                   FontSize="12"
+                                                   Opacity="0.7"
+                                                   Margin="2,0,2,4" />
+                                        <ScrollViewer MaxHeight="360"
+                                                      HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsControl x:Name="DatasetRows"
+                                                          ItemsSource="{Binding Rows}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:MapPaneDatasetRow">
+                                                        <!-- The box sets its own next value; the row
+                                                             works out the real one from its state. -->
+                                                        <CheckBox AutomationProperties.AutomationId="MapPane.Datasets.Row"
+                                                                  AutomationProperties.Name="{Binding Label}"
+                                                                  AutomationProperties.HelpText="{Binding Detail}"
+                                                                  ToolTip.Tip="{Binding Detail}"
+                                                                  IsThreeState="False"
+                                                                  IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                                  Margin="0,1">
+                                                            <StackPanel Spacing="0">
+                                                                <TextBlock Text="{Binding Label}"
+                                                                           FontSize="12"
+                                                                           Classes.setRow="{Binding IsExchangeSet}"
+                                                                           TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Text="{Binding Detail}"
+                                                                           FontSize="10.5"
+                                                                           Opacity="0.6"
+                                                                           TextTrimming="CharacterEllipsis" />
+                                                            </StackPanel>
+                                                        </CheckBox>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                        <Separator Margin="0,4" />
+                                        <Button x:Name="OpenDatasetsButton"
+                                                AutomationProperties.AutomationId="MapPane.Datasets.Open"
+                                                AutomationProperties.Name="{x:Static loc:Strings.SplitMap_OpenDatasets}"
+                                                Classes="Ghost"
+                                                ToolTip.Tip="{x:Static loc:Strings.SplitMap_OpenDatasetsToolTip}"
+                                                Command="{Binding OpenDatasetsCommand}"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Left"
+                                                Padding="4,2">
+                                            <TextBlock Text="{x:Static loc:Strings.SplitMap_OpenDatasets}"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource AccentBrush}" />
+                                        </Button>
+                                    </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
                     </StackPanel>
                 </DockPanel>
             </Panel>

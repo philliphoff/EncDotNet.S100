@@ -15,6 +15,8 @@ namespace EncDotNet.S100.Viewer;
 // side, which one is active, and the window chrome placed against them.
 public partial class MainWindow
 {
+    private readonly Dictionary<MapViewId, MapPaneDatasetsViewModel> _paneDatasets = [];
+
     /// <inheritdoc />
     IMapViewCapabilities IMapPaneHost.OpenPane(MapViewId id, MapPaneViewport? viewport)
     {
@@ -58,6 +60,8 @@ public partial class MainWindow
         if (view is not MapView mapView || !_paneViews.Remove(mapView.Id))
             return;
 
+        if (_paneDatasets.Remove(mapView.Id, out var datasets))
+            datasets.Dispose();
         var pane = mapView.Pane;
         MapOverlayColumn.Children.Remove(pane.NavigationPanel);
         pane.HudSlot.Children.Remove(TimeHud);
@@ -151,7 +155,7 @@ public partial class MainWindow
         foreach (var pane in panes)
         {
             if (_paneViews.TryGetValue(pane.Id, out var view) && view.Pane.Header.DataContext != pane)
-                view.Pane.Bind(pane);
+                view.Pane.Bind(pane, PaneDatasets(pane));
         }
 
         // D8: the rightmost unfolded pane's zoom buttons and compass sit in the
@@ -331,6 +335,37 @@ public partial class MainWindow
         _viewModel.StatusBar.StatusMapLabel = _split.IsSplit
             ? _split.Panes.FirstOrDefault(p => ReferenceEquals(p.View, _statusFocus.Current))?.Label ?? string.Empty
             : string.Empty;
+
+    /// <summary>
+    /// The header count and checklist of <paramref name="pane"/> (split map
+    /// step 2 §2.6, D18), made once per map and disposed with its pane.
+    /// </summary>
+    private MapPaneDatasetsViewModel PaneDatasets(MapPaneViewModel pane)
+    {
+        if (_paneDatasets.TryGetValue(pane.Id, out var existing))
+            return existing;
+        var routes = App.Services.GetRequiredService<ReceivedRoutesService>();
+        var datasets = new MapPaneDatasetsViewModel(
+            pane,
+            _viewModel.Datasets,
+            // A received route is drawn in every pane or none (Q4).
+            drawnInEveryMap: entry => routes.RouteOf(entry) is not null,
+            openDatasets: OpenDatasetsTab,
+            dispatch: UiThread.RunOrPost);
+        _paneDatasets[pane.Id] = datasets;
+        return datasets;
+    }
+
+    /// <summary>The checklist's Open Datasets (D18): the left dock's Datasets panel, on its Datasets tab.</summary>
+    private void OpenDatasetsTab()
+    {
+        // Selecting the tab the open dock already shows closes the dock (the
+        // activity bar's toggle), so only select it when it isn't showing.
+        var layout = _viewModel.Layout;
+        if (!layout.IsLeftDockOpen || layout.SelectedLeftTabId != "Datasets")
+            layout.SelectTab("Datasets");
+        _viewModel.Datasets.ActiveTabIndex = DatasetsViewModel.DatasetsTabIndex;
+    }
 
     /// <summary>
     /// A "Hidden in" chip in Object information was clicked (D11): selects
